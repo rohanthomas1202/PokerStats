@@ -55,6 +55,8 @@ struct SettingsView: View {
                 }
             }
         }
+        .scrollContentBackground(.hidden)
+        .background(Color.pokerBackground)
         .navigationTitle("Settings")
         .onAppear {
             viewModel.loadSettings(from: modelContext)

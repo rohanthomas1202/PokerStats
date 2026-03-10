@@ -46,7 +46,7 @@ struct SessionHistoryView: View {
                 Text("\(agg.sessions) sessions")
                 Spacer()
                 Text(CurrencyFormatter.formatSigned(agg.profit))
-                    .foregroundStyle(agg.profit >= 0 ? .green : .red)
+                    .foregroundStyle(agg.profit >= 0 ? Color.pokerProfit : Color.pokerLoss)
                 Spacer()
                 Text("\(Int(agg.hours))h played")
             }
@@ -71,6 +71,7 @@ struct SessionHistoryView: View {
                 }
             }
             .listStyle(.insetGrouped)
+            .scrollContentBackground(.hidden)
         }
     }
 }

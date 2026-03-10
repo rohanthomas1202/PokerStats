@@ -4,7 +4,12 @@ struct SessionRowView: View {
     let session: Session
 
     var body: some View {
-        HStack {
+        HStack(spacing: 8) {
+            // Profit/Loss indicator bar
+            RoundedRectangle(cornerRadius: 2)
+                .fill(session.netProfit >= 0 ? Color.pokerProfit : Color.pokerLoss)
+                .frame(width: 4)
+
             // Date
             VStack(alignment: .leading, spacing: 2) {
                 Text(DateFormatting.formatMonthDay(session.startTime))
@@ -36,7 +41,7 @@ struct SessionRowView: View {
                 Text(CurrencyFormatter.formatSigned(session.netProfit))
                     .font(.subheadline)
                     .fontWeight(.bold)
-                    .foregroundStyle(session.netProfit >= 0 ? .green : .red)
+                    .foregroundStyle(session.netProfit >= 0 ? Color.pokerProfit : Color.pokerLoss)
 
                 HStack(spacing: 4) {
                     Text(DurationFormatter.format(session.duration))

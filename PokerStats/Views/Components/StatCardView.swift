@@ -4,33 +4,68 @@ struct StatCardView: View {
     let title: String
     let value: String
     var subtitle: String? = nil
-    var valueColor: Color = .primary
+    var valueColor: Color = .pokerTextPrimary
+    var statDef: StatDefinition? = nil
+    var rangeValue: Double? = nil
+    var rangeGoodRange: ClosedRange<Double>? = nil
+    var rangeIsInverted: Bool = false
 
     var body: some View {
         VStack(spacing: 4) {
-            Text(title)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
+            HStack(spacing: 4) {
+                Text(title)
+                    .font(.caption)
+                    .foregroundStyle(Color.pokerTextSecondary)
+                    .lineLimit(1)
 
-            Text(value)
-                .font(.title3)
-                .fontWeight(.bold)
-                .foregroundStyle(valueColor)
+                if let statDef {
+                    StatHelpButton(definition: statDef)
+                }
+            }
+
+            // Split value: number vs "%" suffix
+            if value.hasSuffix("%"), let numPart = value.dropLast().description as String? {
+                HStack(alignment: .firstTextBaseline, spacing: 1) {
+                    Text(numPart)
+                        .font(.title3)
+                        .fontWeight(.bold)
+                        .foregroundStyle(valueColor)
+                    Text("%")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(Color.pokerTextSecondary)
+                }
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
+            } else {
+                Text(value)
+                    .font(.title3)
+                    .fontWeight(.bold)
+                    .foregroundStyle(valueColor)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
 
             if let subtitle {
                 Text(subtitle)
                     .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(Color.pokerTextTertiary)
                     .lineLimit(1)
+            }
+
+            if let rangeGoodRange {
+                RangeBarView(
+                    value: rangeValue,
+                    goodRange: rangeGoodRange,
+                    isInverted: rangeIsInverted
+                )
+                .padding(.top, 2)
             }
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 12)
         .padding(.horizontal, 8)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .pokerCard()
     }
 }
 
@@ -54,23 +89,24 @@ struct StatGaugeView: View {
         VStack(spacing: 6) {
             ZStack {
                 Circle()
-                    .stroke(Color.secondary.opacity(0.2), lineWidth: 6)
+                    .stroke(Color.pokerTextTertiary.opacity(0.3), lineWidth: 8)
 
                 Circle()
                     .trim(from: 0, to: gaugeValue)
-                    .stroke(gaugeColor, style: StrokeStyle(lineWidth: 6, lineCap: .round))
+                    .stroke(gaugeColor, style: StrokeStyle(lineWidth: 8, lineCap: .round))
                     .rotationEffect(.degrees(-90))
                     .animation(.easeInOut(duration: 0.5), value: gaugeValue)
 
                 Text(displayValue)
                     .font(.system(.callout, design: .rounded))
                     .fontWeight(.bold)
+                    .foregroundStyle(Color.pokerTextPrimary)
             }
-            .frame(width: 60, height: 60)
+            .frame(width: 80, height: 80)
 
             Text(title)
                 .font(.caption2)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.pokerTextSecondary)
                 .lineLimit(1)
         }
     }
@@ -78,9 +114,9 @@ struct StatGaugeView: View {
     private var gaugeColor: Color {
         guard let value else { return .gray }
         if value < 0.2 { return .blue }
-        if value < 0.4 { return .green }
+        if value < 0.4 { return .pokerProfit }
         if value < 0.6 { return .orange }
-        return .red
+        return .pokerLoss
     }
 }
 
@@ -97,15 +133,16 @@ struct EmptyStateView: View {
         VStack(spacing: 16) {
             Image(systemName: icon)
                 .font(.system(size: 48))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.pokerTextSecondary)
 
             Text(title)
                 .font(.title3)
                 .fontWeight(.semibold)
+                .foregroundStyle(Color.pokerTextPrimary)
 
             Text(message)
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.pokerTextSecondary)
                 .multilineTextAlignment(.center)
 
             if let actionTitle, let action {
@@ -114,7 +151,7 @@ struct EmptyStateView: View {
                         .fontWeight(.semibold)
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background(Color.accentColor)
+                        .background(Color.pokerAccent)
                         .foregroundStyle(.white)
                         .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
@@ -135,7 +172,7 @@ struct CurrencyField: View {
     var body: some View {
         HStack {
             Text(prefix)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.pokerTextSecondary)
                 .font(.title2)
 
             TextField(title, text: $text)
@@ -144,7 +181,11 @@ struct CurrencyField: View {
                 .fontWeight(.semibold)
         }
         .padding()
-        .background(Color(.systemGray6))
+        .background(Color.pokerCard)
         .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.pokerCardBorder, lineWidth: 1)
+        )
     }
 }

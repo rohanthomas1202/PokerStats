@@ -78,11 +78,11 @@ struct SessionDetailView: View {
             Text(CurrencyFormatter.formatSigned(session.netProfit))
                 .font(.system(.title, design: .rounded))
                 .fontWeight(.bold)
-                .foregroundStyle(session.netProfit >= 0 ? .green : .red)
+                .foregroundStyle(session.netProfit >= 0 ? Color.pokerProfit : Color.pokerLoss)
 
             Text("\(DateFormatting.formatFull(session.startTime)) - \(DurationFormatter.format(session.duration))")
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.pokerTextSecondary)
 
             if !session.location.isEmpty {
                 Text(session.location)
@@ -104,7 +104,7 @@ struct SessionDetailView: View {
             }
         }
         .padding()
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .pokerCard()
     }
 
     // MARK: - Stats Card
@@ -112,41 +112,95 @@ struct SessionDetailView: View {
     private var statsCard: some View {
         let stats = vm.stats
         return VStack(spacing: 12) {
-            Text("Session Stats")
-                .font(.headline)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            HStack {
+                Text("Session Stats")
+                    .font(.headline)
+                PlayStyleLabelView(
+                    style: PlayStyle.classify(vpip: stats.vpip, pfr: stats.pfr)
+                )
+                Spacer()
+            }
 
             if stats.totalHands > 0 {
+                // Play style chart (small)
+                PlayStyleChartView(vpip: stats.vpip, pfr: stats.pfr)
+                    .scaleEffect(0.6)
+                    .frame(height: 150)
+
+                // 2-column stat grid with range bars and help icons
                 LazyVGrid(columns: [
-                    GridItem(.flexible()),
                     GridItem(.flexible()),
                     GridItem(.flexible())
                 ], spacing: 12) {
-                    StatCardView(title: "Hands", value: "\(stats.totalHands)")
-                    StatCardView(title: "VPIP", value: ComputedStats.formatPercent(stats.vpip))
-                    StatCardView(title: "PFR", value: ComputedStats.formatPercent(stats.pfr))
-                    StatCardView(title: "Fold to 3B", value: ComputedStats.formatPercent(stats.foldTo3BetPercent))
-                    StatCardView(title: "C-Bet", value: ComputedStats.formatPercent(stats.cBetPercent))
-                    StatCardView(title: "WTSD", value: ComputedStats.formatPercent(stats.wtsdPercent))
-                    StatCardView(title: "W$SD", value: ComputedStats.formatPercent(stats.wsdPercent))
                     StatCardView(
-                        title: "Folded",
-                        value: ComputedStats.formatPercent(
-                            stats.totalHands > 0
-                            ? Double(stats.handsFolded) / Double(stats.totalHands)
-                            : nil
-                        )
+                        title: "VPIP",
+                        value: ComputedStats.formatPercent(stats.vpip),
+                        statDef: .vpip,
+                        rangeValue: stats.vpip,
+                        rangeGoodRange: StatDefinition.vpip.goodRange
                     )
+                    StatCardView(
+                        title: "PFR",
+                        value: ComputedStats.formatPercent(stats.pfr),
+                        statDef: .pfr,
+                        rangeValue: stats.pfr,
+                        rangeGoodRange: StatDefinition.pfr.goodRange
+                    )
+                    StatCardView(
+                        title: "C-Bet",
+                        value: ComputedStats.formatPercent(stats.cBetPercent),
+                        statDef: .cBet,
+                        rangeValue: stats.cBetPercent,
+                        rangeGoodRange: StatDefinition.cBet.goodRange
+                    )
+                    StatCardView(
+                        title: "WTSD",
+                        value: ComputedStats.formatPercent(stats.wtsdPercent),
+                        statDef: .wtsd,
+                        rangeValue: stats.wtsdPercent,
+                        rangeGoodRange: StatDefinition.wtsd.goodRange
+                    )
+                }
+
+                // Secondary stats
+                HStack(spacing: 8) {
+                    StatCardView(title: "Hands", value: "\(stats.totalHands)")
+                    StatCardView(
+                        title: "Fold to 3B",
+                        value: ComputedStats.formatPercent(stats.foldTo3BetPercent),
+                        statDef: .foldTo3Bet
+                    )
+                    StatCardView(
+                        title: "W$SD",
+                        value: ComputedStats.formatPercent(stats.wsdPercent),
+                        statDef: .wsd
+                    )
+                }
+
+                // ROI display
+                if session.status == .completed && session.totalInvested > 0 {
+                    let roi = (session.netProfit / session.totalInvested) * 100
+                    HStack {
+                        Text("Session ROI")
+                            .font(.caption)
+                            .foregroundStyle(Color.pokerTextSecondary)
+                        Spacer()
+                        Text(String(format: "%+.1f%%", roi))
+                            .font(.subheadline)
+                            .fontWeight(.bold)
+                            .foregroundStyle(roi >= 0 ? Color.pokerProfit : Color.pokerLoss)
+                    }
+                    .padding(.top, 4)
                 }
             } else {
                 Text("No hands logged for this session")
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.pokerTextSecondary)
                     .padding()
             }
         }
         .padding()
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .pokerCard()
     }
 
     // MARK: - Hand Log
@@ -184,7 +238,7 @@ struct SessionDetailView: View {
 
                         if let result = hand.postflopResult {
                             Image(systemName: result.isWin ? "checkmark.circle.fill" : "xmark.circle.fill")
-                                .foregroundStyle(result.isWin ? .green : .red)
+                                .foregroundStyle(result.isWin ? Color.pokerProfit : Color.pokerLoss)
                                 .font(.caption)
                         }
                     }
@@ -197,7 +251,7 @@ struct SessionDetailView: View {
             }
         }
         .padding()
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .pokerCard()
     }
 
     private func preflopColor(_ action: PreflopAction) -> Color {
@@ -220,7 +274,7 @@ struct SessionDetailView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .pokerCard()
     }
 
     // MARK: - Edit Sheet

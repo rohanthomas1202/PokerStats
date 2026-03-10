@@ -9,6 +9,15 @@ final class DashboardViewModel {
     var recentSessions: [Session] = []
     var activeSession: Session?
 
+    var playStyle: PlayStyle? {
+        PlayStyle.classify(vpip: lifetimeStats.vpip, pfr: lifetimeStats.pfr)
+    }
+
+    var foldPercent: Double? {
+        guard lifetimeStats.totalHands > 0 else { return nil }
+        return Double(lifetimeStats.handsFolded) / Double(lifetimeStats.totalHands)
+    }
+
     func loadData(from context: ModelContext) {
         // Fetch all sessions
         let allDescriptor = FetchDescriptor<Session>(

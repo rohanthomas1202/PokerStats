@@ -16,17 +16,27 @@ struct DashboardView: View {
                         activeSessionBanner(activeSession)
                     }
 
+                    // Play Style section
+                    playStyleSection
+
                     // Financial summary
                     financialSummary
 
-                    // Playing stats gauges
-                    playingStats
+                    // Core stats 2-column grid
+                    coreStatsGrid
+
+                    // Secondary stats row
+                    secondaryStatsRow
+
+                    // Fold Frequency gauges
+                    foldFrequencySection
 
                     // Recent sessions
                     recentSessions
                 }
                 .padding()
             }
+            .background(Color.pokerBackground)
             .navigationTitle("PokerStats")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -58,11 +68,11 @@ struct DashboardView: View {
         } label: {
             HStack {
                 Circle()
-                    .fill(.green)
+                    .fill(Color.pokerProfit)
                     .frame(width: 10, height: 10)
                     .overlay {
                         Circle()
-                            .fill(.green.opacity(0.4))
+                            .fill(Color.pokerProfit.opacity(0.4))
                             .frame(width: 20, height: 20)
                     }
 
@@ -72,7 +82,7 @@ struct DashboardView: View {
                         .fontWeight(.semibold)
                     Text("\(session.stakes) \(session.gameType.displayName)")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.pokerTextSecondary)
                 }
 
                 Spacer()
@@ -85,12 +95,32 @@ struct DashboardView: View {
 
                 Image(systemName: "chevron.right")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.pokerTextSecondary)
             }
             .padding()
-            .background(.green.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
+            .background(Color.pokerProfit.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
         }
         .buttonStyle(.plain)
+    }
+
+    // MARK: - Play Style Section
+
+    private var playStyleSection: some View {
+        VStack(spacing: 12) {
+            HStack {
+                Text("Playing Tendencies")
+                    .font(.headline)
+                PlayStyleLabelView(style: viewModel.playStyle)
+                Spacer()
+            }
+
+            PlayStyleChartView(
+                vpip: viewModel.lifetimeStats.vpip,
+                pfr: viewModel.lifetimeStats.pfr
+            )
+        }
+        .padding()
+        .pokerCard(cornerRadius: 16)
     }
 
     // MARK: - Financial Summary
@@ -101,13 +131,13 @@ struct DashboardView: View {
             Text(ComputedStats.formatCurrency(viewModel.lifetimeStats.totalProfit))
                 .font(.system(.largeTitle, design: .rounded))
                 .fontWeight(.bold)
-                .foregroundStyle(viewModel.lifetimeStats.totalProfit >= 0 ? .green : .red)
+                .foregroundStyle(viewModel.lifetimeStats.totalProfit >= 0 ? Color.pokerProfit : Color.pokerLoss)
 
             Text("Total Profit/Loss")
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.pokerTextSecondary)
 
-            // Sub-metrics
+            // Sub-metrics 3-col
             HStack(spacing: 0) {
                 StatCardView(
                     title: "Hourly Rate",
@@ -124,45 +154,92 @@ struct DashboardView: View {
             }
         }
         .padding()
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+        .pokerCard(cornerRadius: 16)
     }
 
-    // MARK: - Playing Stats
+    // MARK: - Core Stats 2-Column Grid
 
-    private var playingStats: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Playing Tendencies")
+    private var coreStatsGrid: some View {
+        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+            StatCardView(
+                title: "VPIP",
+                value: ComputedStats.formatPercent(viewModel.lifetimeStats.vpip),
+                statDef: .vpip,
+                rangeValue: viewModel.lifetimeStats.vpip,
+                rangeGoodRange: StatDefinition.vpip.goodRange
+            )
+            StatCardView(
+                title: "PFR",
+                value: ComputedStats.formatPercent(viewModel.lifetimeStats.pfr),
+                statDef: .pfr,
+                rangeValue: viewModel.lifetimeStats.pfr,
+                rangeGoodRange: StatDefinition.pfr.goodRange
+            )
+            StatCardView(
+                title: "C-Bet",
+                value: ComputedStats.formatPercent(viewModel.lifetimeStats.cBetPercent),
+                statDef: .cBet,
+                rangeValue: viewModel.lifetimeStats.cBetPercent,
+                rangeGoodRange: StatDefinition.cBet.goodRange
+            )
+            StatCardView(
+                title: "WTSD",
+                value: ComputedStats.formatPercent(viewModel.lifetimeStats.wtsdPercent),
+                statDef: .wtsd,
+                rangeValue: viewModel.lifetimeStats.wtsdPercent,
+                rangeGoodRange: StatDefinition.wtsd.goodRange
+            )
+        }
+    }
+
+    // MARK: - Secondary Stats Row
+
+    private var secondaryStatsRow: some View {
+        HStack(spacing: 8) {
+            StatCardView(
+                title: "Fold to 3B",
+                value: ComputedStats.formatPercent(viewModel.lifetimeStats.foldTo3BetPercent),
+                statDef: .foldTo3Bet
+            )
+            StatCardView(
+                title: "W$SD",
+                value: ComputedStats.formatPercent(viewModel.lifetimeStats.wsdPercent),
+                statDef: .wsd
+            )
+            StatCardView(
+                title: "Hands",
+                value: "\(viewModel.lifetimeStats.totalHands)"
+            )
+        }
+    }
+
+    // MARK: - Fold Frequency Section
+
+    private var foldFrequencySection: some View {
+        VStack(spacing: 12) {
+            Text("Fold Frequency")
                 .font(.headline)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
-            HStack(spacing: 16) {
-                StatGaugeView(title: "VPIP", value: viewModel.lifetimeStats.vpip)
-                StatGaugeView(title: "PFR", value: viewModel.lifetimeStats.pfr)
-                StatGaugeView(title: "C-Bet", value: viewModel.lifetimeStats.cBetPercent)
-                StatGaugeView(title: "WTSD", value: viewModel.lifetimeStats.wtsdPercent)
+            HStack(spacing: 24) {
+                CircularGaugeView(
+                    title: "Preflop Fold",
+                    value: viewModel.foldPercent,
+                    emoji: "🃏",
+                    gradientColors: [.pokerProfit, .cyan]
+                )
+
+                CircularGaugeView(
+                    title: "Fold to 3-Bet",
+                    value: viewModel.lifetimeStats.foldTo3BetPercent,
+                    emoji: "🛡️",
+                    gradientColors: [.orange, .pokerLoss]
+                )
             }
             .frame(maxWidth: .infinity)
-
-            HStack(spacing: 0) {
-                StatCardView(
-                    title: "Hands",
-                    value: "\(viewModel.lifetimeStats.totalHands)"
-                )
-                StatCardView(
-                    title: "Folded",
-                    value: ComputedStats.formatPercent(
-                        viewModel.lifetimeStats.totalHands > 0
-                        ? Double(viewModel.lifetimeStats.handsFolded) / Double(viewModel.lifetimeStats.totalHands)
-                        : nil
-                    )
-                )
-                StatCardView(
-                    title: "W$SD",
-                    value: ComputedStats.formatPercent(viewModel.lifetimeStats.wsdPercent)
-                )
-            }
         }
         .padding()
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+        .pokerCard(cornerRadius: 16)
     }
 
     // MARK: - Recent Sessions
@@ -195,6 +272,8 @@ struct DashboardView: View {
                         navigationPath.append(session)
                     } label: {
                         SessionRowView(session: session)
+                            .padding()
+                            .pokerCard()
                     }
                     .buttonStyle(.plain)
                 }

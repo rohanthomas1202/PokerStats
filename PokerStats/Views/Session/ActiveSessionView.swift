@@ -76,10 +76,10 @@ struct ActiveSessionView: View {
                 VStack(spacing: 2) {
                     Text("Invested")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.pokerTextSecondary)
                     Text(CurrencyFormatter.format(viewModel.session.totalInvested))
                         .font(.headline)
-                        .foregroundStyle(.red)
+                        .foregroundStyle(Color.pokerLoss)
                 }
 
                 VStack(spacing: 2) {
@@ -93,31 +93,42 @@ struct ActiveSessionView: View {
         }
     }
 
-    // MARK: - Quick Stats Pills
+    // MARK: - Quick Stats Grid (2x2)
 
     private var quickStatsPills: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                statPill("VPIP", ComputedStats.formatPercent(viewModel.sessionStats.vpip))
-                statPill("PFR", ComputedStats.formatPercent(viewModel.sessionStats.pfr))
-                statPill("C-Bet", ComputedStats.formatPercent(viewModel.sessionStats.cBetPercent))
-                statPill("WTSD", ComputedStats.formatPercent(viewModel.sessionStats.wtsdPercent))
+        VStack(spacing: 8) {
+            HStack {
+                PlayStyleLabelView(
+                    style: PlayStyle.classify(
+                        vpip: viewModel.sessionStats.vpip,
+                        pfr: viewModel.sessionStats.pfr
+                    )
+                )
+                Spacer()
+            }
+
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                miniStatCard("VPIP", ComputedStats.formatPercent(viewModel.sessionStats.vpip))
+                miniStatCard("PFR", ComputedStats.formatPercent(viewModel.sessionStats.pfr))
+                miniStatCard("C-Bet", ComputedStats.formatPercent(viewModel.sessionStats.cBetPercent))
+                miniStatCard("WTSD", ComputedStats.formatPercent(viewModel.sessionStats.wtsdPercent))
             }
         }
     }
 
-    private func statPill(_ title: String, _ value: String) -> some View {
+    private func miniStatCard(_ title: String, _ value: String) -> some View {
         VStack(spacing: 2) {
             Text(value)
                 .font(.subheadline)
                 .fontWeight(.semibold)
+                .foregroundStyle(Color.pokerTextPrimary)
             Text(title)
                 .font(.caption2)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.pokerTextSecondary)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(Color(.systemGray6), in: Capsule())
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 10)
+        .pokerCard()
     }
 
     // MARK: - Recent Hands Feed
@@ -233,7 +244,7 @@ struct ActiveSessionView: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 20)
-            .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 16))
+            .background(Color.pokerAccent, in: RoundedRectangle(cornerRadius: 16))
             .foregroundStyle(.white)
         }
     }
@@ -254,7 +265,7 @@ struct ActiveSessionView: View {
                         .font(.headline)
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background(Color.accentColor)
+                        .background(Color.pokerAccent)
                         .foregroundStyle(.white)
                         .clipShape(RoundedRectangle(cornerRadius: 12))
                 }
@@ -294,7 +305,7 @@ struct ActiveSessionView: View {
                         Spacer()
                         Text(CurrencyFormatter.formatSigned(profit))
                             .fontWeight(.bold)
-                            .foregroundStyle(profit >= 0 ? .green : .red)
+                            .foregroundStyle(profit >= 0 ? Color.pokerProfit : Color.pokerLoss)
                     }
                     .font(.headline)
                 }

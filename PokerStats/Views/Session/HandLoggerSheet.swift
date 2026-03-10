@@ -90,7 +90,7 @@ struct HandLoggerSheet: View {
         HStack(spacing: 8) {
             ForEach(0..<totalSteps, id: \.self) { index in
                 Circle()
-                    .fill(index <= currentStepIndex ? Color.accentColor : Color(.systemGray4))
+                    .fill(index <= currentStepIndex ? Color.pokerAccent : Color.pokerTextTertiary)
                     .frame(width: 8, height: 8)
             }
         }

@@ -25,6 +25,7 @@ struct ContentView: View {
                 SessionHistoryView()
             }
         }
+        .background(Color.pokerBackground)
         .onAppear(perform: loadActiveSessions)
         .onChange(of: selectedTab) { _, _ in loadActiveSessions() }
     }

@@ -15,7 +15,7 @@ Each phase must build, pass tests, and include manual test steps before proceedi
 
 ---
 
-## Phase 1: Design System & Core Components
+## Phase 1: Design System & Core Components ✅ COMPLETE
 
 **Goal**: Replace the frosted-glass material theme with a pure dark theme. Create reusable components: range bars, help icons, play style labels.
 
@@ -68,7 +68,7 @@ Each phase must build, pass tests, and include manual test steps before proceedi
 
 ---
 
-## Phase 2: Dashboard Redesign & Play Style Chart
+## Phase 2: Dashboard Redesign & Play Style Chart ✅ COMPLETE
 
 **Goal**: Restructure Dashboard layout into 2-column stat grid. Add radar chart and circular gauges. Apply new layout to SessionDetail and EndSessionSummary.
 

@@ -12,7 +12,7 @@ struct StartSessionView: View {
                 VStack(spacing: 8) {
                     Image(systemName: "suit.club.fill")
                         .font(.system(size: 40))
-                        .foregroundStyle(Color.accentColor)
+                        .foregroundStyle(Color.pokerAccent)
                     Text("New Session")
                         .font(.title2)
                         .fontWeight(.bold)
@@ -48,8 +48,8 @@ struct StartSessionView: View {
                                         .padding(.vertical, 10)
                                         .background(
                                             viewModel.selectedStakes == stakes.rawValue
-                                                ? Color.accentColor
-                                                : Color(.systemGray5)
+                                                ? Color.pokerAccent
+                                                : Color.pokerCard
                                         )
                                         .foregroundStyle(
                                             viewModel.selectedStakes == stakes.rawValue
@@ -89,7 +89,7 @@ struct StartSessionView: View {
                         .font(.headline)
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background(viewModel.isValid ? Color.accentColor : Color.gray)
+                        .background(viewModel.isValid ? Color.pokerAccent : Color.gray)
                         .foregroundStyle(.white)
                         .clipShape(RoundedRectangle(cornerRadius: 14))
                 }
