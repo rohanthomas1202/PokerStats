@@ -114,7 +114,7 @@ Each phase must build, pass tests, and include manual test steps before proceedi
 
 ---
 
-## Phase 3: Trend Charts (Swift Charts)
+## Phase 3: Trend Charts (Swift Charts) ✅ COMPLETE
 
 **Goal**: Add a "Trends" tab with 4 charts: cumulative bankroll, VPIP/PFR rolling trends, profit by day-of-week, P&L distribution histogram.
 

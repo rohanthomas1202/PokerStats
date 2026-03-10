@@ -36,8 +36,12 @@ struct DashboardView: View {
                 }
                 .padding()
             }
-            .background(Color.pokerBackground)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .scrollBounceBehavior(.basedOnSize)
+            .background(Color.pokerBackground.ignoresSafeArea())
+            .toolbarBackground(Color.pokerBackground, for: .navigationBar)
             .navigationTitle("PokerStats")
+            .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     NavigationLink(value: "settings") {
@@ -262,7 +266,7 @@ struct DashboardView: View {
                         .font(.headline)
                     Spacer()
                     Button("See All") {
-                        selectedTab = 2
+                        selectedTab = 3
                     }
                     .font(.subheadline)
                 }

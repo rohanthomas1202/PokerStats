@@ -21,11 +21,15 @@ struct ContentView: View {
             }
             .badge(hasActiveSession ? Text("Live") : nil)
 
-            Tab("History", systemImage: "clock.fill", value: 2) {
+            Tab("Trends", systemImage: "chart.xyaxis.line", value: 2) {
+                TrendsView()
+            }
+
+            Tab("History", systemImage: "clock.fill", value: 3) {
                 SessionHistoryView()
             }
         }
-        .background(Color.pokerBackground)
+        .background(Color.pokerBackground.ignoresSafeArea())
         .onAppear(perform: loadActiveSessions)
         .onChange(of: selectedTab) { _, _ in loadActiveSessions() }
     }
