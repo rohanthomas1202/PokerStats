@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="https://img.icons8.com/color/96/000000/poker.png" alt="PokerStats Logo" width="80" height="80">
-</p>
-
 <h1 align="center">PokerStats</h1>
 
 <p align="center">
