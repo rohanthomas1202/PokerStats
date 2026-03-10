@@ -34,6 +34,14 @@ enum TrendCalculator {
         let count: Int
     }
 
+    struct MentalCorrelationPoint: Identifiable {
+        let id = UUID()
+        let metricType: MentalMetricType
+        let level: Int
+        let averageHourlyRate: Double
+        let sessionCount: Int
+    }
+
     // MARK: - Cumulative Bankroll
 
     /// Returns cumulative profit over completed sessions, sorted by start time.
@@ -144,5 +152,42 @@ enum TrendCalculator {
         }
 
         return buckets
+    }
+
+    // MARK: - Mental Correlation
+
+    /// Returns average hourly rate grouped by mental metric type and level.
+    /// Only includes completed sessions with non-nil mental data and valid hourly rates.
+    static func mentalCorrelation(sessions: [Session]) -> [MentalCorrelationPoint] {
+        let completed = sessions.filter { $0.status == .completed }
+        var points: [MentalCorrelationPoint] = []
+
+        for metricType in MentalMetricType.allCases {
+            var ratesByLevel: [Int: [Double]] = [:]
+
+            for session in completed {
+                let level: Int?
+                switch metricType {
+                case .tilt: level = session.tiltLevel
+                case .energy: level = session.energyLevel
+                case .focus: level = session.focusLevel
+                }
+
+                guard let lvl = level, let hourly = session.hourlyRate else { continue }
+                ratesByLevel[lvl, default: []].append(hourly)
+            }
+
+            for (level, rates) in ratesByLevel {
+                let avg = rates.reduce(0, +) / Double(rates.count)
+                points.append(MentalCorrelationPoint(
+                    metricType: metricType,
+                    level: level,
+                    averageHourlyRate: avg,
+                    sessionCount: rates.count
+                ))
+            }
+        }
+
+        return points.sorted { ($0.metricType.rawValue, $0.level) < ($1.metricType.rawValue, $1.level) }
     }
 }

@@ -8,6 +8,7 @@ final class DashboardViewModel {
     var lifetimeStats: ComputedStats = .empty
     var recentSessions: [Session] = []
     var activeSession: Session?
+    var mentalCorrelation: [TrendCalculator.MentalCorrelationPoint] = []
 
     var playStyle: PlayStyle? {
         PlayStyle.classify(vpip: lifetimeStats.vpip, pfr: lifetimeStats.pfr)
@@ -43,5 +44,17 @@ final class DashboardViewModel {
             hands: allHands,
             sessions: sessions
         )
+
+        // Compute mental correlation
+        mentalCorrelation = TrendCalculator.mentalCorrelation(sessions: sessions)
+    }
+
+    /// Best and worst tilt correlation insight (if enough data)
+    var mentalInsight: (calmRate: Double, tiltedRate: Double)? {
+        let tiltPoints = mentalCorrelation.filter { $0.metricType == .tilt }
+        guard let calm = tiltPoints.first(where: { $0.level == 1 }),
+              let tilted = tiltPoints.first(where: { $0.level >= 4 }),
+              calm.sessionCount >= 2, tilted.sessionCount >= 2 else { return nil }
+        return (calmRate: calm.averageHourlyRate, tiltedRate: tilted.averageHourlyRate)
     }
 }

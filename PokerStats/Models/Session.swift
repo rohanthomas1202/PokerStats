@@ -25,6 +25,11 @@ final class Session {
     var cashOut: Double
     var tipRake: Double
 
+    // Mental state tracking (1-5 scale, nil if not recorded)
+    var tiltLevel: Int?
+    var energyLevel: Int?
+    var focusLevel: Int?
+
     // Relationships
     @Relationship(deleteRule: .cascade, inverse: \Hand.session)
     var hands: [Hand]

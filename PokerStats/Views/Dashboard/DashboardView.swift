@@ -11,6 +11,21 @@ struct DashboardView: View {
         NavigationStack(path: $navigationPath) {
             ScrollView {
                 VStack(spacing: 20) {
+                    // Custom header
+                    HStack {
+                        Text("PokerStats")
+                            .font(.system(.largeTitle, design: .default))
+                            .fontWeight(.bold)
+                        Spacer()
+                        NavigationLink(value: "settings") {
+                            Image(systemName: "gearshape")
+                                .font(.title2)
+                                .foregroundStyle(Color.pokerTextSecondary)
+                                .frame(width: 44, height: 44)
+                                .background(Color.pokerCard, in: Circle())
+                        }
+                    }
+
                     // Active session banner
                     if let activeSession = viewModel.activeSession {
                         activeSessionBanner(activeSession)
@@ -31,6 +46,11 @@ struct DashboardView: View {
                     // Fold Frequency gauges
                     foldFrequencySection
 
+                    // Mental insights
+                    if viewModel.mentalInsight != nil {
+                        mentalInsightsCard
+                    }
+
                     // Recent sessions
                     recentSessions
                 }
@@ -39,16 +59,7 @@ struct DashboardView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .scrollBounceBehavior(.basedOnSize)
             .background(Color.pokerBackground.ignoresSafeArea())
-            .toolbarBackground(Color.pokerBackground, for: .navigationBar)
-            .navigationTitle("PokerStats")
-            .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    NavigationLink(value: "settings") {
-                        Image(systemName: "gearshape")
-                    }
-                }
-            }
+            .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: Session.self) { session in
                 SessionDetailView(session: session)
             }
@@ -244,6 +255,67 @@ struct DashboardView: View {
         }
         .padding()
         .pokerCard(cornerRadius: 16)
+    }
+
+    // MARK: - Mental Insights Card
+
+    @ViewBuilder
+    private var mentalInsightsCard: some View {
+        if let insight = viewModel.mentalInsight {
+            VStack(spacing: 12) {
+                HStack {
+                    Image(systemName: "brain.head.profile")
+                        .foregroundStyle(.purple)
+                    Text("Mental Insights")
+                        .font(.headline)
+                    Spacer()
+                }
+
+                HStack(spacing: 16) {
+                    VStack(spacing: 4) {
+                        Image(systemName: "flame.fill")
+                            .foregroundStyle(.green)
+                        Text("Calm")
+                            .font(.caption2)
+                            .foregroundStyle(Color.pokerTextSecondary)
+                        Text(ComputedStats.formatHourlyRate(insight.calmRate))
+                            .font(.subheadline)
+                            .fontWeight(.bold)
+                            .foregroundStyle(insight.calmRate >= 0 ? Color.pokerProfit : Color.pokerLoss)
+                        Text("/hr")
+                            .font(.caption2)
+                            .foregroundStyle(Color.pokerTextSecondary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .pokerCard()
+
+                    Text("vs")
+                        .font(.caption)
+                        .foregroundStyle(Color.pokerTextSecondary)
+
+                    VStack(spacing: 4) {
+                        Image(systemName: "flame.fill")
+                            .foregroundStyle(.red)
+                        Text("Tilted")
+                            .font(.caption2)
+                            .foregroundStyle(Color.pokerTextSecondary)
+                        Text(ComputedStats.formatHourlyRate(insight.tiltedRate))
+                            .font(.subheadline)
+                            .fontWeight(.bold)
+                            .foregroundStyle(insight.tiltedRate >= 0 ? Color.pokerProfit : Color.pokerLoss)
+                        Text("/hr")
+                            .font(.caption2)
+                            .foregroundStyle(Color.pokerTextSecondary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .pokerCard()
+                }
+            }
+            .padding()
+            .pokerCard(cornerRadius: 16)
+        }
     }
 
     // MARK: - Recent Sessions

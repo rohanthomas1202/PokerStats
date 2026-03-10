@@ -10,6 +10,9 @@ final class NewSessionViewModel {
     var customStakes: String = ""
     var location: String = ""
     var gameType: GameType = .cash
+    var tiltLevel: Int = 3
+    var energyLevel: Int = 3
+    var focusLevel: Int = 3
 
     var isValid: Bool {
         guard let amount = Double(buyInText), amount > 0 else { return false }
@@ -40,6 +43,9 @@ final class NewSessionViewModel {
             stakes: effectiveStakes,
             buyIn: buyInAmount
         )
+        session.tiltLevel = tiltLevel
+        session.energyLevel = energyLevel
+        session.focusLevel = focusLevel
         context.insert(session)
         try? context.save()
         return session

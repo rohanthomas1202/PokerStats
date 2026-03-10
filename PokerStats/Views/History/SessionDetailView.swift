@@ -20,6 +20,11 @@ struct SessionDetailView: View {
                 // Stats card
                 statsCard
 
+                // Mental state card
+                if session.tiltLevel != nil || session.energyLevel != nil || session.focusLevel != nil {
+                    mentalStateCard
+                }
+
                 // Hand log
                 handLogSection
 
@@ -201,6 +206,71 @@ struct SessionDetailView: View {
         }
         .padding()
         .pokerCard()
+    }
+
+    // MARK: - Mental State Card
+
+    private var mentalStateCard: some View {
+        VStack(spacing: 12) {
+            HStack {
+                Text("Mental State")
+                    .font(.headline)
+                Spacer()
+            }
+
+            HStack(spacing: 16) {
+                if let tilt = session.tiltLevel {
+                    mentalMetricBadge(type: .tilt, level: tilt)
+                }
+                if let energy = session.energyLevel {
+                    mentalMetricBadge(type: .energy, level: energy)
+                }
+                if let focus = session.focusLevel {
+                    mentalMetricBadge(type: .focus, level: focus)
+                }
+            }
+        }
+        .padding()
+        .pokerCard()
+    }
+
+    private func mentalMetricBadge(type: MentalMetricType, level: Int) -> some View {
+        VStack(spacing: 6) {
+            Image(systemName: type.icon)
+                .font(.title3)
+                .foregroundStyle(mentalColor(type: type, level: level))
+            Text("\(level)/5")
+                .font(.subheadline)
+                .fontWeight(.semibold)
+            Text(type.displayName)
+                .font(.caption2)
+                .foregroundStyle(Color.pokerTextSecondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 10)
+        .pokerCard()
+    }
+
+    private func mentalColor(type: MentalMetricType, level: Int) -> Color {
+        if type.higherIsBetter {
+            switch level {
+            case 1: return .red
+            case 2: return .orange
+            case 3: return .yellow
+            case 4: return .mint
+            case 5: return .green
+            default: return .gray
+            }
+        } else {
+            switch level {
+            case 1: return .green
+            case 2: return .mint
+            case 3: return .yellow
+            case 4: return .orange
+            case 5: return .red
+            default: return .gray
+            }
+        }
     }
 
     // MARK: - Hand Log

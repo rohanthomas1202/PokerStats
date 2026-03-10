@@ -13,14 +13,21 @@ final class ActiveSessionViewModel {
     var isShowingEndSession = false
     var isShowingNoteEditor = false
     var isShowingStaleAlert = false
+    var isShowingMentalCheck = false
 
     var rebuyAmountText: String = ""
     var sessionNotes: String = ""
+    var tiltLevel: Int = 3
+    var energyLevel: Int = 3
+    var focusLevel: Int = 3
 
     init(session: Session, modelContext: ModelContext) {
         self.session = session
         self.modelContext = modelContext
         self.sessionNotes = session.notes
+        self.tiltLevel = session.tiltLevel ?? 3
+        self.energyLevel = session.energyLevel ?? 3
+        self.focusLevel = session.focusLevel ?? 3
 
         // Check if session is stale on init
         if SessionRecoveryService.isSessionStale(session) {
@@ -94,6 +101,13 @@ final class ActiveSessionViewModel {
 
     func saveNotes() {
         session.notes = sessionNotes
+        try? modelContext.save()
+    }
+
+    func saveMentalLevels() {
+        session.tiltLevel = tiltLevel
+        session.energyLevel = energyLevel
+        session.focusLevel = focusLevel
         try? modelContext.save()
     }
 }

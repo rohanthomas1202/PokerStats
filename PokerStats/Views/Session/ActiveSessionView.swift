@@ -51,6 +51,16 @@ struct ActiveSessionView: View {
             endSessionSheet
                 .presentationDetents([.medium])
         }
+        .sheet(isPresented: $viewModel.isShowingMentalCheck) {
+            MentalCheckSheet(
+                tiltLevel: $viewModel.tiltLevel,
+                energyLevel: $viewModel.energyLevel,
+                focusLevel: $viewModel.focusLevel
+            ) {
+                viewModel.saveMentalLevels()
+            }
+            .presentationDetents([.medium])
+        }
         .alert("Session Still Active?", isPresented: $viewModel.isShowingStaleAlert) {
             Button("Continue Session") { }
             Button("End Session", role: .destructive) {
@@ -206,6 +216,15 @@ struct ActiveSessionView: View {
                     .font(.subheadline)
             }
             .buttonStyle(.bordered)
+
+            Button {
+                viewModel.isShowingMentalCheck = true
+            } label: {
+                Label("Check In", systemImage: "brain.head.profile")
+                    .font(.subheadline)
+            }
+            .buttonStyle(.bordered)
+            .tint(.purple)
 
             Button {
                 viewModel.isShowingNoteEditor.toggle()

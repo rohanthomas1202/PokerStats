@@ -126,6 +126,56 @@ enum SeatPosition: String, Codable, CaseIterable {
     }
 }
 
+// MARK: - Mental Metric Type
+
+enum MentalMetricType: String, CaseIterable, Identifiable {
+    case tilt
+    case energy
+    case focus
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .tilt: "Tilt"
+        case .energy: "Energy"
+        case .focus: "Focus"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .tilt: "flame.fill"
+        case .energy: "bolt.fill"
+        case .focus: "eye.fill"
+        }
+    }
+
+    var lowLabel: String {
+        switch self {
+        case .tilt: "Calm"
+        case .energy: "Tired"
+        case .focus: "Distracted"
+        }
+    }
+
+    var highLabel: String {
+        switch self {
+        case .tilt: "Tilted"
+        case .energy: "Energized"
+        case .focus: "Locked In"
+        }
+    }
+
+    /// Whether higher values are "good" (true for energy/focus, false for tilt)
+    var higherIsBetter: Bool {
+        switch self {
+        case .tilt: false
+        case .energy, .focus: true
+        }
+    }
+}
+
 // MARK: - Common Stakes
 
 enum CommonStakes: String, CaseIterable, Identifiable {

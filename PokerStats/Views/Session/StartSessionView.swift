@@ -79,6 +79,20 @@ struct StartSessionView: View {
                         .textFieldStyle(.roundedBorder)
                 }
 
+                // Mental State
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("How are you feeling?")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .foregroundStyle(.secondary)
+
+                    MentalMetricSlider(metricType: .tilt, value: $viewModel.tiltLevel)
+                    MentalMetricSlider(metricType: .energy, value: $viewModel.energyLevel)
+                    MentalMetricSlider(metricType: .focus, value: $viewModel.focusLevel)
+                }
+                .padding()
+                .pokerCard()
+
                 Spacer(minLength: 40)
 
                 // Start button
