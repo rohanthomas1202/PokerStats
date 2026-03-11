@@ -51,6 +51,11 @@ struct DashboardView: View {
                         mentalInsightsCard
                     }
 
+                    // Leak Finder card
+                    if viewModel.lifetimeStats.totalHands >= LeakFinder.minimumHands {
+                        leakFinderCard
+                    }
+
                     // Recent sessions
                     recentSessions
                 }
@@ -65,6 +70,8 @@ struct DashboardView: View {
             .navigationDestination(for: String.self) { route in
                 if route == "settings" {
                     SettingsView()
+                } else if route == "leakFinder" {
+                    LeakFinderView()
                 }
             }
             .onAppear {
@@ -314,6 +321,59 @@ struct DashboardView: View {
             }
             .padding()
             .pokerCard(cornerRadius: 16)
+        }
+    }
+
+    // MARK: - Leak Finder Card
+
+    private var leakFinderCard: some View {
+        NavigationLink(value: "leakFinder") {
+            HStack(spacing: 12) {
+                Circle()
+                    .fill(leakRatingColor)
+                    .frame(width: 40, height: 40)
+                    .overlay {
+                        Image(systemName: "stethoscope")
+                            .font(.callout)
+                            .foregroundStyle(.white)
+                    }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Leak Finder")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.white)
+                    Text(leakSummaryText)
+                        .font(.caption)
+                        .foregroundStyle(Color.pokerTextSecondary)
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundStyle(Color.pokerTextSecondary)
+            }
+            .padding()
+            .pokerCard(cornerRadius: 12)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var leakRatingColor: Color {
+        switch viewModel.overallLeakRating {
+        case .solid: .pokerProfit
+        case .needsWork: .yellow
+        case .leaking: .pokerLoss
+        }
+    }
+
+    private var leakSummaryText: String {
+        let leaks = viewModel.leakCount
+        if leaks == 0 {
+            return "Looking solid — no major leaks detected"
+        } else {
+            return "\(leaks) leak\(leaks == 1 ? "" : "s") found — tap to review"
         }
     }
 

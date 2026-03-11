@@ -10,7 +10,7 @@
   <img src="https://img.shields.io/badge/swiftui-latest-purple?style=flat-square" alt="SwiftUI">
   <img src="https://img.shields.io/badge/swiftdata-latest-green?style=flat-square" alt="SwiftData">
   <img src="https://img.shields.io/badge/dependencies-zero-brightgreen?style=flat-square" alt="Dependencies">
-  <img src="https://img.shields.io/badge/tests-54%20passing-success?style=flat-square" alt="Tests">
+  <img src="https://img.shields.io/badge/tests-91%20passing-success?style=flat-square" alt="Tests">
 </p>
 
 ---
@@ -61,15 +61,45 @@ All stats computed on-demand from raw hand data using pure functions:
 
 ### Dashboard
 - Lifetime P&L with hourly rate, hours played, and session count
-- Playing tendency gauges (VPIP, PFR, C-Bet, WTSD)
+- **Play style radar chart** — Diamond chart with TAG/LAG/ROCK/FISH quadrant classification
+- **2-column stat grid** with range bars and help icons for VPIP, PFR, C-Bet, WTSD
+- **Circular fold frequency gauges** for preflop fold % and fold-to-3-bet %
+- **Mental insights** — Calm vs Tilted hourly rate comparison
+- **Leak Finder card** — Quick leak count and overall health rating with tap-through to full analysis
 - Active session banner with live timer
 - Recent sessions at a glance
+
+### Trend Charts (Swift Charts)
+- **Cumulative bankroll** line chart over time
+- **Rolling VPIP/PFR** dual-line trend with configurable window
+- **Profit by day of week** bar chart (green/red)
+- **Session P&L distribution** histogram
+- Time filter: All Time, 30 days, 90 days, 6 months
+
+### Tilt & Energy Tracker
+- Self-report **tilt, energy, and focus** (1–5 scale) at session start and mid-session check-ins
+- **Mental correlation analysis** — hourly rate broken down by mental state level
+- Per-session mental state badges in session detail
+
+### Live Activities & Widgets
+- **Lock screen Live Activity** during active sessions with timer, hand count, and invested amount
+- **Dynamic Island** support (compact and expanded)
+- **Home screen widget** with lifetime P&L, sessions, and streak (small + medium sizes)
+
+### Leak Finder & Coaching Insights
+- **Automated stat analysis** comparing your play against optimal ranges
+- **Two reference profiles** — Full Ring (9-max) and 6-Max cash games
+- **Three-tier severity rating** — Healthy (green), Borderline (yellow), Leak (red)
+- **Actionable suggestions** for each stat with specific strategic advice
+- **Per-session insights** in session detail view (10+ hands required)
+- **Overall health assessment** — Solid, Needs Work, or Leaking
+- Minimum 20 hands required for lifetime analysis
 
 ### Session History
 - Full session list grouped by month
 - Search by location or stakes
 - Aggregate summary (total sessions, P&L, hours)
-- Detailed session view with per-session stats and hand log
+- Detailed session view with per-session stats, hand log, and session-specific leak insights
 
 ---
 
@@ -125,7 +155,7 @@ open PokerStats.xcodeproj
 
 ### 4. Select a simulator and run
 
-1. In Xcode, select **iPhone 16 Pro** (or any iOS 26+ simulator) from the device dropdown
+1. In Xcode, select **iPhone 17 Pro** (or any iOS 26+ simulator) from the device dropdown
 2. Press **Cmd + R** to build and run
 
 ### 5. Run tests
@@ -133,7 +163,7 @@ open PokerStats.xcodeproj
 ```bash
 xcodebuild test \
   -scheme PokerStats \
-  -destination 'platform=iOS Simulator,name=iPhone 16 Pro'
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
 ```
 
 Or in Xcode: **Cmd + U**
@@ -148,14 +178,15 @@ PokerStats/
 ├── PokerStats/
 │   ├── App/
 │   │   ├── PokerStatsApp.swift          # Entry point, ModelContainer setup
-│   │   └── ContentView.swift            # 3-tab navigation (Dashboard, Session, History)
+│   │   └── ContentView.swift            # 4-tab navigation (Dashboard, Session, Trends, History)
 │   │
 │   ├── Models/
 │   │   ├── Session.swift                # @Model: session with inline money tracking
 │   │   ├── Hand.swift                   # @Model: hand with computed stat flags
 │   │   ├── Settings.swift               # @Model: user preferences singleton
-│   │   ├── Enums.swift                  # GameType, SessionStatus, PreflopAction, etc.
-│   │   └── ComputedStats.swift          # Value type for aggregated statistics
+│   │   ├── Enums.swift                  # GameType, SessionStatus, PreflopAction, MentalMetricType, etc.
+│   │   ├── ComputedStats.swift          # Value type for aggregated statistics
+│   │   └── SessionActivityAttributes.swift # Live Activity attributes for active sessions
 │   │
 │   ├── ViewModels/
 │   │   ├── DashboardViewModel.swift     # Lifetime stats, recent sessions
@@ -164,6 +195,8 @@ PokerStats/
 │   │   ├── HandLoggerViewModel.swift    # State machine for hand entry flow
 │   │   ├── SessionListViewModel.swift   # History filtering and grouping
 │   │   ├── SessionDetailViewModel.swift # Single session stats + editing
+│   │   ├── TrendsViewModel.swift        # Trend chart data + time filtering
+│   │   ├── LeakFinderViewModel.swift    # Leak analysis, profile selection
 │   │   └── SettingsViewModel.swift      # Preferences management
 │   │
 │   ├── Views/
@@ -171,21 +204,38 @@ PokerStats/
 │   │   │   └── DashboardView.swift      # Main dashboard with stats and recent sessions
 │   │   ├── Session/
 │   │   │   ├── SessionTabView.swift     # Context-aware: start vs active session
-│   │   │   ├── StartSessionView.swift   # New session form
-│   │   │   ├── ActiveSessionView.swift  # Live session with hand logging
+│   │   │   ├── StartSessionView.swift   # New session form with mental sliders
+│   │   │   ├── ActiveSessionView.swift  # Live session with hand logging + check-in
 │   │   │   ├── HandLoggerSheet.swift    # Progressive disclosure hand entry
+│   │   │   ├── MentalCheckSheet.swift   # Mid-session tilt/energy/focus check-in
 │   │   │   └── EndSessionSummaryView.swift  # Session completion summary
 │   │   ├── History/
 │   │   │   ├── SessionHistoryView.swift # Searchable session list by month
 │   │   │   ├── SessionRowView.swift     # Compact session row component
-│   │   │   └── SessionDetailView.swift  # Detailed session with stats + hands
+│   │   │   └── SessionDetailView.swift  # Session stats, hand log, and per-session insights
+│   │   ├── Trends/
+│   │   │   └── TrendsView.swift         # 4 Swift Charts (bankroll, VPIP/PFR, day-of-week, P&L)
+│   │   ├── Analysis/
+│   │   │   └── LeakFinderView.swift     # Profile picker, health summary, insight cards
 │   │   ├── Settings/
 │   │   │   └── SettingsView.swift       # Defaults, data management, about
+│   │   ├── Theme/
+│   │   │   └── PokerTheme.swift         # Dark color palette, spacing tokens, card modifier
 │   │   └── Components/
-│   │       └── StatCardView.swift       # StatCardView, StatGaugeView, EmptyStateView, CurrencyField
+│   │       ├── StatCardView.swift       # StatCardView, StatGaugeView, EmptyStateView, CurrencyField
+│   │       ├── RangeBarView.swift       # Gradient bar with indicator dot and good-range overlay
+│   │       ├── StatHelpView.swift       # Stat definitions with help sheet
+│   │       ├── PlayStyleChartView.swift # Diamond radar chart (TAG/LAG/ROCK/FISH)
+│   │       ├── PlayStyleLabel.swift     # Play style classification + badge
+│   │       ├── CircularGaugeView.swift  # Gradient ring gauge with center text
+│   │       ├── MentalMetricSlider.swift # 5-dot tappable scale for tilt/energy/focus
+│   │       └── InsightCardView.swift    # Expandable leak insight with severity bar
 │   │
 │   ├── Services/
 │   │   ├── StatCalculator.swift         # Pure stat computation (all formulas)
+│   │   ├── TrendCalculator.swift        # Time-series data for charts + mental correlation
+│   │   ├── LeakFinder.swift             # Stat analysis vs optimal ranges, coaching insights
+│   │   ├── AppGroupContainer.swift      # Shared ModelContainer for widget extension
 │   │   └── SessionRecoveryService.swift # Active session crash recovery
 │   │
 │   ├── Repositories/
@@ -202,14 +252,23 @@ PokerStats/
 │   └── Preview Content/
 │       └── PreviewSampleData.swift      # Sample data for SwiftUI previews
 │
+├── PokerStatsWidgets/
+│   ├── PokerStatsWidgetBundle.swift     # Widget bundle (Live Activity + Home Screen)
+│   ├── PokerStatsLiveActivity.swift     # Lock screen + Dynamic Island live activity
+│   └── PokerStatsLifetimeWidget.swift   # Home screen widget (small + medium)
+│
 └── PokerStatsTests/
     ├── StatCalculatorTests.swift        # All stat formula tests + 3 worked examples
     ├── SessionTests.swift               # Session computed property tests
     ├── HandTests.swift                  # Hand computed flag tests
+    ├── PlayStyleTests.swift             # Play style classification tests
+    ├── TrendCalculatorTests.swift       # Trend chart data computation tests
+    ├── TiltTrackerTests.swift           # Mental correlation tests
+    ├── LeakFinderTests.swift            # Leak analysis, severity, profiles, edge cases
     └── TestHelpers.swift                # In-memory container + hand factories
 ```
 
-**Total: 32 source files | 4 test files | 54 tests**
+**Total: 48 source files | 7 test files | 91 tests**
 
 ---
 
@@ -263,6 +322,10 @@ The test suite covers all stat formulas with known-input/output validation and t
 | `StatCalculatorTests` | 30 | VPIP, PFR, Fold-to-3B, C-Bet, WTSD, W$SD, money stats, aggregation + 3 worked examples |
 | `HandTests` | 17 | All computed flags: voluntarilyPutMoneyIn, raisedPreflop, foldedPreflop, sawFlop, wentToShowdown, hadCBetOpportunity, actionSummary |
 | `SessionTests` | 7 | totalInvested, netProfit, hourlyRate, roi, isActive, nextHandNumber |
+| `PlayStyleTests` | 5 | TAG, Fish, Nit, Maniac classification + nil handling |
+| `TrendCalculatorTests` | 12 | Cumulative bankroll, rolling VPIP/PFR, day-of-week, P&L distribution, mental correlation |
+| `TiltTrackerTests` | 10 | Mental correlation computation, nil exclusion, averaging, edge cases |
+| `LeakFinderTests` | 10 | Tight player (all healthy), loose player (leaks), nil stats, boundaries, borderline, overall ratings, sorting, profile comparison |
 
 ### Worked Examples
 
@@ -274,7 +337,7 @@ The test suite covers all stat formulas with known-input/output validation and t
 
 ```bash
 # Command line
-xcodebuild test -scheme PokerStats -destination 'platform=iOS Simulator,name=iPhone 16 Pro'
+xcodebuild test -scheme PokerStats -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
 
 # Xcode
 Cmd + U
@@ -284,12 +347,12 @@ Cmd + U
 
 ## Roadmap
 
-- [ ] **Dark theme UI redesign** — Custom color palette, range bars, play style labels
-- [ ] **Play style radar chart** — Diamond chart (TAG/LAG/ROCK/FISH classification)
-- [ ] **Trend charts** — Bankroll over time, VPIP/PFR trends, profit by day-of-week (Swift Charts)
-- [ ] **Tilt & energy tracker** — Self-report mood/focus, correlate with hourly rate
-- [ ] **Live Activities** — Lock screen session timer + home screen widget
-- [ ] **Leak Finder** — Automated coaching insights comparing stats to optimal ranges
+- [x] **Dark theme UI redesign** — Custom color palette, range bars, play style labels
+- [x] **Play style radar chart** — Diamond chart (TAG/LAG/ROCK/FISH classification)
+- [x] **Trend charts** — Bankroll over time, VPIP/PFR trends, profit by day-of-week (Swift Charts)
+- [x] **Tilt & energy tracker** — Self-report mood/focus, correlate with hourly rate
+- [x] **Live Activities** — Lock screen session timer + home screen widget
+- [x] **Leak Finder** — Automated coaching insights comparing stats to optimal ranges
 - [ ] **Position tracking** — Per-position stat breakdowns (UTG, MP, CO, BTN, SB, BB)
 - [ ] **Tournament support** — Buy-ins, placements, ICM
 - [ ] **Data export** — CSV/JSON export via ShareLink

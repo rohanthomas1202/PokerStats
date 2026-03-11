@@ -9,6 +9,7 @@ final class DashboardViewModel {
     var recentSessions: [Session] = []
     var activeSession: Session?
     var mentalCorrelation: [TrendCalculator.MentalCorrelationPoint] = []
+    var leakInsights: [LeakInsight] = []
 
     var playStyle: PlayStyle? {
         PlayStyle.classify(vpip: lifetimeStats.vpip, pfr: lifetimeStats.pfr)
@@ -47,6 +48,21 @@ final class DashboardViewModel {
 
         // Compute mental correlation
         mentalCorrelation = TrendCalculator.mentalCorrelation(sessions: sessions)
+
+        // Compute leak insights
+        if lifetimeStats.totalHands >= LeakFinder.minimumHands {
+            leakInsights = LeakFinder.analyze(stats: lifetimeStats, profile: .sixMaxCash)
+        } else {
+            leakInsights = []
+        }
+    }
+
+    var leakCount: Int {
+        leakInsights.filter { $0.rating == .leak }.count
+    }
+
+    var overallLeakRating: OverallRating {
+        LeakFinder.overallRating(from: leakInsights)
     }
 
     /// Best and worst tilt correlation insight (if enough data)

@@ -20,6 +20,11 @@ struct SessionDetailView: View {
                 // Stats card
                 statsCard
 
+                // Per-session insights
+                if !sessionInsights.isEmpty {
+                    sessionInsightsCard
+                }
+
                 // Mental state card
                 if session.tiltLevel != nil || session.energyLevel != nil || session.focusLevel != nil {
                     mentalStateCard
@@ -271,6 +276,51 @@ struct SessionDetailView: View {
             default: return .gray
             }
         }
+    }
+
+    // MARK: - Session Insights
+
+    private var sessionInsights: [LeakInsight] {
+        LeakFinderViewModel.sessionInsights(session: session, profile: .sixMaxCash)
+    }
+
+    private var sessionInsightsCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "stethoscope")
+                    .foregroundStyle(.cyan)
+                Text("Session Insights")
+                    .font(.headline)
+                Spacer()
+            }
+
+            let leaks = sessionInsights.filter { $0.rating == .leak }
+            let borderline = sessionInsights.filter { $0.rating == .borderline }
+
+            if !leaks.isEmpty {
+                ForEach(leaks) { insight in
+                    InsightCardView(insight: insight)
+                }
+            }
+
+            if !borderline.isEmpty {
+                ForEach(borderline) { insight in
+                    InsightCardView(insight: insight)
+                }
+            }
+
+            if leaks.isEmpty && borderline.isEmpty {
+                HStack {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(Color.pokerProfit)
+                    Text("All stats within healthy ranges this session!")
+                        .font(.caption)
+                        .foregroundStyle(Color.pokerTextSecondary)
+                }
+            }
+        }
+        .padding()
+        .pokerCard()
     }
 
     // MARK: - Hand Log
