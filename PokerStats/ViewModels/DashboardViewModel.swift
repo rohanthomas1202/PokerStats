@@ -10,6 +10,7 @@ final class DashboardViewModel {
     var activeSession: Session?
     var mentalCorrelation: [TrendCalculator.MentalCorrelationPoint] = []
     var leakInsights: [LeakInsight] = []
+    var positionStats: [PositionStats] = []
 
     var playStyle: PlayStyle? {
         PlayStyle.classify(vpip: lifetimeStats.vpip, pfr: lifetimeStats.pfr)
@@ -45,6 +46,9 @@ final class DashboardViewModel {
             hands: allHands,
             sessions: sessions
         )
+
+        // Compute position stats
+        positionStats = StatCalculator.statsByPosition(hands: allHands)
 
         // Compute mental correlation
         mentalCorrelation = TrendCalculator.mentalCorrelation(sessions: sessions)

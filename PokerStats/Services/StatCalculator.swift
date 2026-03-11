@@ -63,6 +63,34 @@ enum StatCalculator {
         hands.filter(\.foldedPreflop).count
     }
 
+    // MARK: - Position-Filtered Stats
+
+    /// VPIP filtered by position. Returns nil if no hands at that position.
+    static func vpip(hands: [Hand], position: SeatPosition) -> Double? {
+        let filtered = hands.filter { $0.position == position }
+        return vpip(hands: filtered)
+    }
+
+    /// PFR filtered by position. Returns nil if no hands at that position.
+    static func pfr(hands: [Hand], position: SeatPosition) -> Double? {
+        let filtered = hands.filter { $0.position == position }
+        return pfr(hands: filtered)
+    }
+
+    /// Compute stats grouped by position, excluding .unknown.
+    static func statsByPosition(hands: [Hand]) -> [PositionStats] {
+        SeatPosition.allPlayable.compactMap { position in
+            let positionHands = hands.filter { $0.position == position }
+            guard !positionHands.isEmpty else { return nil }
+            return PositionStats(
+                position: position,
+                handCount: positionHands.count,
+                vpip: vpip(hands: positionHands),
+                pfr: pfr(hands: positionHands)
+            )
+        }
+    }
+
     // MARK: - Session-Level Stats
 
     /// Compute all stats from an array of hands and sessions.

@@ -20,6 +20,11 @@ struct SessionDetailView: View {
                 // Stats card
                 statsCard
 
+                // Position breakdown
+                if !vm.positionStats.isEmpty {
+                    positionBreakdownSection
+                }
+
                 // Per-session insights
                 if !sessionInsights.isEmpty {
                     sessionInsightsCard
@@ -278,6 +283,25 @@ struct SessionDetailView: View {
         }
     }
 
+    // MARK: - Position Breakdown
+
+    private var positionBreakdownSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Position Breakdown")
+                .font(.headline)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(vm.positionStats) { stats in
+                        PositionStatsCardView(stats: stats)
+                    }
+                }
+            }
+        }
+        .padding()
+        .pokerCard()
+    }
+
     // MARK: - Session Insights
 
     private var sessionInsights: [LeakInsight] {
@@ -342,6 +366,15 @@ struct SessionDetailView: View {
                             .fontWeight(.bold)
                             .foregroundStyle(.secondary)
                             .frame(width: 36, alignment: .leading)
+
+                        if hand.position != .unknown {
+                            Text(hand.position.displayName)
+                                .font(.caption2)
+                                .fontWeight(.semibold)
+                                .frame(width: 30, height: 20)
+                                .background(Color.pokerAccent.opacity(0.2))
+                                .clipShape(RoundedRectangle(cornerRadius: 4))
+                        }
 
                         Text(hand.preflopAction.shortName)
                             .font(.caption)

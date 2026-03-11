@@ -15,59 +15,74 @@ enum TestHelpers {
     // MARK: - Hand Factories
 
     /// Create a folded hand.
-    static func foldHand(number: Int = 1) -> Hand {
-        Hand(handNumber: number, preflopAction: .fold)
+    static func foldHand(number: Int = 1, position: SeatPosition = .unknown) -> Hand {
+        Hand(handNumber: number, preflopAction: .fold, position: position)
     }
 
     /// Create a hand where player called preflop and saw showdown.
-    static func callShowdownHand(number: Int = 1, won: Bool) -> Hand {
+    static func callShowdownHand(number: Int = 1, won: Bool, position: SeatPosition = .unknown) -> Hand {
         Hand(
             handNumber: number,
             preflopAction: .call,
-            postflopResult: won ? .wonAtShowdown : .lostAtShowdown
+            postflopResult: won ? .wonAtShowdown : .lostAtShowdown,
+            position: position
         )
     }
 
     /// Create a hand where player raised preflop, saw flop, and c-bet.
-    static func raiseWithCBetHand(number: Int = 1, cBet: Bool, result: PostflopResult) -> Hand {
+    static func raiseWithCBetHand(number: Int = 1, cBet: Bool, result: PostflopResult, position: SeatPosition = .unknown) -> Hand {
         Hand(
             handNumber: number,
             preflopAction: .raise,
             postflopResult: result,
-            didCBet: cBet
+            didCBet: cBet,
+            position: position
         )
     }
 
     /// Create a hand where player raised and faced a 3-bet.
-    static func raiseFaced3BetHand(number: Int = 1, response: ThreeBetResponse, result: PostflopResult? = nil) -> Hand {
+    static func raiseFaced3BetHand(number: Int = 1, response: ThreeBetResponse, result: PostflopResult? = nil, position: SeatPosition = .unknown) -> Hand {
         var postflop: PostflopResult? = result
         if response == .folded {
-            postflop = nil  // Can't have postflop result if folded to 3-bet
+            postflop = nil
         }
         return Hand(
             handNumber: number,
             preflopAction: .raise,
             faced3Bet: true,
             threeBetResponse: response,
-            postflopResult: postflop
+            postflopResult: postflop,
+            position: position
         )
     }
 
     /// Create a hand where player raised and won preflop.
-    static func raiseWonPreflopHand(number: Int = 1) -> Hand {
+    static func raiseWonPreflopHand(number: Int = 1, position: SeatPosition = .unknown) -> Hand {
         Hand(
             handNumber: number,
             preflopAction: .raise,
-            postflopResult: .wonPreflop
+            postflopResult: .wonPreflop,
+            position: position
         )
     }
 
     /// Create a hand where player called and won before showdown.
-    static func callWonBeforeShowdownHand(number: Int = 1) -> Hand {
+    static func callWonBeforeShowdownHand(number: Int = 1, position: SeatPosition = .unknown) -> Hand {
         Hand(
             handNumber: number,
             preflopAction: .call,
-            postflopResult: .wonBeforeShowdown
+            postflopResult: .wonBeforeShowdown,
+            position: position
+        )
+    }
+
+    /// Create a raise hand at a specific position.
+    static func raiseFromPosition(_ position: SeatPosition, number: Int = 1, result: PostflopResult = .wonPreflop) -> Hand {
+        Hand(
+            handNumber: number,
+            preflopAction: .raise,
+            postflopResult: result,
+            position: position
         )
     }
 

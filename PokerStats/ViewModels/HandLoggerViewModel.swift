@@ -8,9 +8,10 @@ import UIKit
 @MainActor
 final class HandLoggerViewModel {
     // Current step in the flow
-    var currentStep: LoggerStep = .preflop
+    var currentStep: LoggerStep = .position
 
     // Captured data
+    var selectedPosition: SeatPosition = .unknown
     var preflopAction: PreflopAction?
     var faced3Bet: Bool = false
     var threeBetResponse: ThreeBetResponse?
@@ -22,12 +23,21 @@ final class HandLoggerViewModel {
     var showNoteField: Bool = false
 
     enum LoggerStep: Equatable {
+        case position               // "Your Position"
         case preflop
         case threeBetQualifier      // "Faced a re-raise?"
         case threeBetResponse       // "Your response?" (fold/call/4bet)
         case postflopResult         // "How did the hand end?"
         case cBet                   // "Did you c-bet?"
         case done
+    }
+
+    // MARK: - Step 0: Position
+
+    func selectPosition(_ position: SeatPosition) {
+        selectedPosition = position
+        hapticFeedback()
+        currentStep = .preflop
     }
 
     // MARK: - Step 1: Preflop Action
@@ -107,8 +117,11 @@ final class HandLoggerViewModel {
 
     func goBack() {
         switch currentStep {
-        case .preflop:
+        case .position:
             break // Can't go back from first step
+        case .preflop:
+            selectedPosition = .unknown
+            currentStep = .position
         case .threeBetQualifier:
             preflopAction = nil
             currentStep = .preflop
@@ -136,7 +149,7 @@ final class HandLoggerViewModel {
     }
 
     var canGoBack: Bool {
-        currentStep != .preflop && currentStep != .done
+        currentStep != .position && currentStep != .done
     }
 
     // MARK: - Build Hand
@@ -152,14 +165,16 @@ final class HandLoggerViewModel {
             threeBetResponse: threeBetResponse,
             postflopResult: preflopAction == .fold ? nil : postflopResult,
             didCBet: didCBet,
-            notes: notes
+            notes: notes,
+            position: selectedPosition
         )
     }
 
     // MARK: - Reset
 
     func reset() {
-        currentStep = .preflop
+        currentStep = .position
+        selectedPosition = .unknown
         preflopAction = nil
         faced3Bet = false
         threeBetResponse = nil

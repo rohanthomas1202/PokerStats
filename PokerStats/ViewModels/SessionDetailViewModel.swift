@@ -26,6 +26,10 @@ final class SessionDetailViewModel {
         StatCalculator.computeSessionStats(session: session)
     }
 
+    var positionStats: [PositionStats] {
+        StatCalculator.statsByPosition(hands: session.hands)
+    }
+
     var sortedHands: [Hand] {
         session.hands.sorted { $0.handNumber < $1.handNumber }
     }

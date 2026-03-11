@@ -124,6 +124,34 @@ enum SeatPosition: String, Codable, CaseIterable {
     var displayName: String {
         rawValue
     }
+
+    var longName: String {
+        switch self {
+        case .sb: "Small Blind"
+        case .bb: "Big Blind"
+        case .utg: "Under the Gun"
+        case .mp: "Middle Position"
+        case .co: "Cutoff"
+        case .btn: "Button"
+        case .unknown: "Unknown"
+        }
+    }
+
+    var sortOrder: Int {
+        switch self {
+        case .sb: 0
+        case .bb: 1
+        case .utg: 2
+        case .mp: 3
+        case .co: 4
+        case .btn: 5
+        case .unknown: 6
+        }
+    }
+
+    static var allPlayable: [SeatPosition] {
+        [.sb, .bb, .utg, .mp, .co, .btn]
+    }
 }
 
 // MARK: - Mental Metric Type

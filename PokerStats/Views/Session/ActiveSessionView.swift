@@ -165,6 +165,15 @@ struct ActiveSessionView: View {
                                 .foregroundStyle(.secondary)
                                 .frame(width: 36, alignment: .leading)
 
+                            if hand.position != .unknown {
+                                Text(hand.position.displayName)
+                                    .font(.caption2)
+                                    .fontWeight(.semibold)
+                                    .frame(width: 30, height: 20)
+                                    .background(Color.pokerAccent.opacity(0.2))
+                                    .clipShape(RoundedRectangle(cornerRadius: 4))
+                            }
+
                             preflopBadge(hand.preflopAction)
 
                             Text(hand.actionSummary)

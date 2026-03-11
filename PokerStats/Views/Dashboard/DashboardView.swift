@@ -46,6 +46,11 @@ struct DashboardView: View {
                     // Fold Frequency gauges
                     foldFrequencySection
 
+                    // Position Breakdown
+                    if !viewModel.positionStats.isEmpty {
+                        positionBreakdownSection
+                    }
+
                     // Mental insights
                     if viewModel.mentalInsight != nil {
                         mentalInsightsCard
@@ -258,6 +263,25 @@ struct DashboardView: View {
                 )
             }
             .frame(maxWidth: .infinity)
+        }
+        .padding()
+        .pokerCard(cornerRadius: 16)
+    }
+
+    // MARK: - Position Breakdown
+
+    private var positionBreakdownSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Position Breakdown")
+                .font(.headline)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(viewModel.positionStats) { stats in
+                        PositionStatsCardView(stats: stats)
+                    }
+                }
+            }
         }
         .padding()
         .pokerCard(cornerRadius: 16)

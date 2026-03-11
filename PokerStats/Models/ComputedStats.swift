@@ -40,6 +40,17 @@ struct ComputedStats {
     )
 }
 
+// MARK: - Position Stats
+
+struct PositionStats: Identifiable {
+    let position: SeatPosition
+    let handCount: Int
+    let vpip: Double?
+    let pfr: Double?
+
+    var id: String { position.rawValue }
+}
+
 // MARK: - Formatting Helpers
 
 extension ComputedStats {

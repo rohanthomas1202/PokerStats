@@ -19,6 +19,8 @@ struct HandLoggerSheet: View {
                 // Current step content
                 Group {
                     switch viewModel.currentStep {
+                    case .position:
+                        positionStep
                     case .preflop:
                         preflopStep
                     case .threeBetQualifier:
@@ -98,17 +100,65 @@ struct HandLoggerSheet: View {
 
     private var totalSteps: Int {
         // Varies by path, approximate with max
-        5
+        6
     }
 
     private var currentStepIndex: Int {
         switch viewModel.currentStep {
-        case .preflop: 0
-        case .threeBetQualifier: 1
-        case .threeBetResponse: 2
-        case .postflopResult: viewModel.preflopAction == .call ? 1 : 2
-        case .cBet: 3
-        case .done: 4
+        case .position: 0
+        case .preflop: 1
+        case .threeBetQualifier: 2
+        case .threeBetResponse: 3
+        case .postflopResult: viewModel.preflopAction == .call ? 2 : 3
+        case .cBet: 4
+        case .done: 5
+        }
+    }
+
+    // MARK: - Step 0: Position
+
+    private var positionStep: some View {
+        VStack(spacing: 16) {
+            Text("Your Position")
+                .font(.title2)
+                .fontWeight(.bold)
+
+            Text("Where are you seated?")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                ForEach(SeatPosition.allPlayable, id: \.self) { position in
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            viewModel.selectPosition(position)
+                        }
+                    } label: {
+                        VStack(spacing: 4) {
+                            Text(position.displayName)
+                                .font(.title3)
+                                .fontWeight(.bold)
+                            Text(position.longName)
+                                .font(.caption2)
+                                .foregroundStyle(.white.opacity(0.7))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 60)
+                        .background(Color.pokerAccent, in: RoundedRectangle(cornerRadius: 12))
+                        .foregroundStyle(.white)
+                    }
+                }
+            }
+
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    viewModel.selectPosition(.unknown)
+                }
+            } label: {
+                Text("Skip")
+                    .font(.subheadline)
+                    .foregroundStyle(Color.pokerTextSecondary)
+            }
         }
     }
 
