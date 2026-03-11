@@ -6,17 +6,8 @@ struct PokerStatsApp: App {
     let container: ModelContainer
 
     init() {
-        let schema = Schema([
-            Session.self,
-            Hand.self,
-            Settings.self
-        ])
-        let config = ModelConfiguration(
-            "PokerStats",
-            schema: schema
-        )
         do {
-            container = try ModelContainer(for: schema, configurations: [config])
+            container = try AppGroupContainer.createSharedModelContainer()
         } catch {
             fatalError("Failed to create ModelContainer: \(error)")
         }

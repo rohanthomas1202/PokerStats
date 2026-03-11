@@ -185,7 +185,7 @@ Each phase must build, pass tests, and include manual test steps before proceedi
 
 ---
 
-## Phase 5: Live Activities & Widgets
+## Phase 5: Live Activities & Widgets ✅ COMPLETE
 
 **Goal**: Lock screen Live Activity during sessions. Home screen widget with lifetime P&L.
 

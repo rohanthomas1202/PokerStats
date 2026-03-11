@@ -1,3 +1,4 @@
+import ActivityKit
 import Foundation
 import SwiftData
 import Observation
@@ -21,6 +22,8 @@ final class ActiveSessionViewModel {
     var energyLevel: Int = 3
     var focusLevel: Int = 3
 
+    private var liveActivity: Activity<SessionActivityAttributes>?
+
     init(session: Session, modelContext: ModelContext) {
         self.session = session
         self.modelContext = modelContext
@@ -33,6 +36,9 @@ final class ActiveSessionViewModel {
         if SessionRecoveryService.isSessionStale(session) {
             isShowingStaleAlert = true
         }
+
+        // Resume or start Live Activity
+        resumeOrStartLiveActivity()
     }
 
     // MARK: - Computed Properties
@@ -67,6 +73,7 @@ final class ActiveSessionViewModel {
         hand.handNumber = session.nextHandNumber
         session.hands.append(hand)
         try? modelContext.save()
+        updateLiveActivity()
     }
 
     func deleteHand(_ hand: Hand) {
@@ -80,6 +87,7 @@ final class ActiveSessionViewModel {
         session.rebuys += amount
         rebuyAmountText = ""
         try? modelContext.save()
+        updateLiveActivity()
     }
 
     func endSession(cashOut: Double, tipRake: Double = 0) {
@@ -89,6 +97,7 @@ final class ActiveSessionViewModel {
         session.status = .completed
         session.notes = sessionNotes
         try? modelContext.save()
+        endLiveActivity()
     }
 
     func abandonSession() {
@@ -97,6 +106,7 @@ final class ActiveSessionViewModel {
         session.cashOut = 0
         session.notes = sessionNotes
         try? modelContext.save()
+        endLiveActivity()
     }
 
     func saveNotes() {
@@ -109,5 +119,77 @@ final class ActiveSessionViewModel {
         session.energyLevel = energyLevel
         session.focusLevel = focusLevel
         try? modelContext.save()
+    }
+
+    // MARK: - Live Activity
+
+    private func resumeOrStartLiveActivity() {
+        guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+
+        // Check if there's an existing activity for this session
+        let existing = Activity<SessionActivityAttributes>.activities.first { activity in
+            activity.attributes.startTime == session.startTime
+        }
+
+        if let existing {
+            liveActivity = existing
+            updateLiveActivity()
+        } else {
+            startLiveActivity()
+        }
+    }
+
+    func startLiveActivity() {
+        guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+
+        let attributes = SessionActivityAttributes(
+            stakes: session.stakes,
+            location: session.location,
+            startTime: session.startTime
+        )
+        let state = SessionActivityAttributes.ContentState(
+            handCount: session.handCount,
+            totalInvested: session.totalInvested
+        )
+
+        do {
+            let content = ActivityContent(state: state, staleDate: nil)
+            liveActivity = try Activity.request(
+                attributes: attributes,
+                content: content,
+                pushType: nil
+            )
+        } catch {
+            // Live Activity not available — silently ignore
+        }
+    }
+
+    func updateLiveActivity() {
+        guard let liveActivity else { return }
+
+        let state = SessionActivityAttributes.ContentState(
+            handCount: session.handCount,
+            totalInvested: session.totalInvested
+        )
+        let content = ActivityContent(state: state, staleDate: nil)
+
+        Task {
+            await liveActivity.update(content)
+        }
+    }
+
+    func endLiveActivity() {
+        guard let liveActivity else { return }
+
+        let finalState = SessionActivityAttributes.ContentState(
+            handCount: session.handCount,
+            totalInvested: session.totalInvested
+        )
+        let content = ActivityContent(state: finalState, staleDate: nil)
+
+        Task {
+            await liveActivity.end(content, dismissalPolicy: .default)
+        }
+        self.liveActivity = nil
     }
 }
