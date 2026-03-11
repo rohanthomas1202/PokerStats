@@ -111,6 +111,7 @@ struct StartSessionView: View {
             }
             .padding()
         }
+        .background(Color.pokerBackground)
         .navigationTitle("Session")
         .onAppear {
             viewModel.loadDefaults(from: modelContext)

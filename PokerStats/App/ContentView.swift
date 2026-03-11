@@ -29,7 +29,7 @@ struct ContentView: View {
                 SessionHistoryView()
             }
         }
-        .background(Color.pokerBackground.ignoresSafeArea())
+        .tint(Color.pokerAccent)
         .onAppear(perform: loadActiveSessions)
         .onChange(of: selectedTab) { _, _ in loadActiveSessions() }
     }

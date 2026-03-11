@@ -47,6 +47,7 @@ targets:
         SUPPORTS_MACCATALYST: NO
         SWIFT_STRICT_CONCURRENCY: complete
         SUPPORTS_LIVE_ACTIVITIES: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
 
   PokerStatsWidgets:
     type: app-extension

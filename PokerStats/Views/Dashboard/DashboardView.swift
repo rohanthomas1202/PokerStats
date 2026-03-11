@@ -56,10 +56,9 @@ struct DashboardView: View {
                 }
                 .padding()
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .scrollBounceBehavior(.basedOnSize)
-            .background(Color.pokerBackground.ignoresSafeArea())
-            .toolbar(.hidden, for: .navigationBar)
+            .background(Color.pokerBackground)
+            .toolbarVisibility(.hidden, for: .navigationBar)
             .navigationDestination(for: Session.self) { session in
                 SessionDetailView(session: session)
             }
