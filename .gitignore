@@ -53,6 +53,7 @@ playground.xcworkspace
 *.mobileprovision
 .env
 .env.*
+Secrets.plist
 
 # Claude Code
 .claude/

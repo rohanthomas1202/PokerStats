@@ -30,6 +30,20 @@ final class Session {
     var energyLevel: Int?
     var focusLevel: Int?
 
+    // Table configuration for auto position tracking (nil = disabled)
+    var tableConfigData: Data?
+
+    @Transient
+    var tableConfig: TableConfig? {
+        get {
+            guard let data = tableConfigData else { return nil }
+            return try? JSONDecoder().decode(TableConfig.self, from: data)
+        }
+        set {
+            tableConfigData = newValue.flatMap { try? JSONEncoder().encode($0) }
+        }
+    }
+
     // Relationships
     @Relationship(deleteRule: .cascade, inverse: \Hand.session)
     var hands: [Hand]

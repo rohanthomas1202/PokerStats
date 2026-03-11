@@ -4,6 +4,7 @@ import SwiftData
 @main
 struct PokerStatsApp: App {
     let container: ModelContainer
+    @State private var authService = AuthService()
 
     init() {
         do {
@@ -17,6 +18,10 @@ struct PokerStatsApp: App {
         WindowGroup {
             ContentView()
                 .preferredColorScheme(.dark)
+                .environment(authService)
+                .onAppear {
+                    authService.initialize()
+                }
         }
         .modelContainer(container)
     }

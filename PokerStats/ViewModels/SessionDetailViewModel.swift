@@ -1,6 +1,7 @@
 import Foundation
 import SwiftData
 import Observation
+import WidgetKit
 
 @Observable
 @MainActor
@@ -64,5 +65,6 @@ final class SessionDetailViewModel {
     func deleteSession() {
         modelContext.delete(session)
         try? modelContext.save()
+        WidgetCenter.shared.reloadAllTimelines()
     }
 }

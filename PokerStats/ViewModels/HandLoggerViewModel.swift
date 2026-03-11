@@ -22,6 +22,23 @@ final class HandLoggerViewModel {
     // UI state
     var showNoteField: Bool = false
 
+    // Auto-position tracking
+    var autoPosition: SeatPosition?
+    var isOverridingPosition: Bool = false
+    var tablePlayerCount: Int?
+
+    var isAutoPositionMode: Bool {
+        autoPosition != nil
+    }
+
+    /// Positions available for selection, filtered by table size if known.
+    var availablePositions: [SeatPosition] {
+        if let count = tablePlayerCount {
+            return SeatPosition.positions(forTableSize: count)
+        }
+        return SeatPosition.allPlayable
+    }
+
     enum LoggerStep: Equatable {
         case position               // "Your Position"
         case preflop
@@ -30,6 +47,24 @@ final class HandLoggerViewModel {
         case postflopResult         // "How did the hand end?"
         case cBet                   // "Did you c-bet?"
         case done
+    }
+
+    // MARK: - Auto Position
+
+    func configureAutoPosition(_ position: SeatPosition, playerCount: Int? = nil) {
+        autoPosition = position
+        selectedPosition = position
+        tablePlayerCount = playerCount
+        currentStep = .preflop
+    }
+
+    func overridePosition() {
+        isOverridingPosition = true
+    }
+
+    func confirmOverride(_ position: SeatPosition) {
+        selectedPosition = position
+        isOverridingPosition = false
     }
 
     // MARK: - Step 0: Position
@@ -120,6 +155,11 @@ final class HandLoggerViewModel {
         case .position:
             break // Can't go back from first step
         case .preflop:
+            if isAutoPositionMode {
+                // In auto mode, "back" from preflop opens the position override
+                overridePosition()
+                return
+            }
             selectedPosition = .unknown
             currentStep = .position
         case .threeBetQualifier:
@@ -149,7 +189,10 @@ final class HandLoggerViewModel {
     }
 
     var canGoBack: Bool {
-        currentStep != .position && currentStep != .done
+        if isAutoPositionMode {
+            return currentStep != .preflop && currentStep != .done
+        }
+        return currentStep != .position && currentStep != .done
     }
 
     // MARK: - Build Hand
@@ -182,6 +225,9 @@ final class HandLoggerViewModel {
         didCBet = nil
         notes = ""
         showNoteField = false
+        autoPosition = nil
+        isOverridingPosition = false
+        tablePlayerCount = nil
     }
 
     // MARK: - Haptics

@@ -1,6 +1,7 @@
 import Foundation
 import SwiftData
 import Observation
+import WidgetKit
 
 @Observable
 @MainActor
@@ -45,5 +46,6 @@ final class SettingsViewModel {
             // Silently fail for MVP — could add error reporting later
         }
         showDeleteAllSecondConfirmation = false
+        WidgetCenter.shared.reloadAllTimelines()
     }
 }

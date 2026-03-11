@@ -10,35 +10,50 @@ struct HandLoggerSheet: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 24) {
+                // Auto-position badge (when tracking enabled)
+                if viewModel.isAutoPositionMode {
+                    autoPositionBadge
+                        .padding(.top, 8)
+                }
+
                 // Progress indicator
                 progressDots
-                    .padding(.top, 8)
+                    .padding(.top, viewModel.isAutoPositionMode ? 0 : 8)
 
                 Spacer()
 
-                // Current step content
-                Group {
-                    switch viewModel.currentStep {
-                    case .position:
-                        positionStep
-                    case .preflop:
-                        preflopStep
-                    case .threeBetQualifier:
-                        threeBetQualifierStep
-                    case .threeBetResponse:
-                        threeBetResponseStep
-                    case .postflopResult:
-                        postflopResultStep
-                    case .cBet:
-                        cBetStep
-                    case .done:
-                        EmptyView()
+                // Position override overlay
+                if viewModel.isOverridingPosition {
+                    positionOverrideStep
+                        .transition(.asymmetric(
+                            insertion: .move(edge: .top).combined(with: .opacity),
+                            removal: .move(edge: .top).combined(with: .opacity)
+                        ))
+                } else {
+                    // Current step content
+                    Group {
+                        switch viewModel.currentStep {
+                        case .position:
+                            positionStep
+                        case .preflop:
+                            preflopStep
+                        case .threeBetQualifier:
+                            threeBetQualifierStep
+                        case .threeBetResponse:
+                            threeBetResponseStep
+                        case .postflopResult:
+                            postflopResultStep
+                        case .cBet:
+                            cBetStep
+                        case .done:
+                            EmptyView()
+                        }
                     }
+                    .transition(.asymmetric(
+                        insertion: .move(edge: .trailing).combined(with: .opacity),
+                        removal: .move(edge: .leading).combined(with: .opacity)
+                    ))
                 }
-                .transition(.asymmetric(
-                    insertion: .move(edge: .trailing).combined(with: .opacity),
-                    removal: .move(edge: .leading).combined(with: .opacity)
-                ))
 
                 Spacer()
 
@@ -100,18 +115,30 @@ struct HandLoggerSheet: View {
 
     private var totalSteps: Int {
         // Varies by path, approximate with max
-        6
+        viewModel.isAutoPositionMode ? 5 : 6
     }
 
     private var currentStepIndex: Int {
-        switch viewModel.currentStep {
-        case .position: 0
-        case .preflop: 1
-        case .threeBetQualifier: 2
-        case .threeBetResponse: 3
-        case .postflopResult: viewModel.preflopAction == .call ? 2 : 3
-        case .cBet: 4
-        case .done: 5
+        if viewModel.isAutoPositionMode {
+            switch viewModel.currentStep {
+            case .position: return 0
+            case .preflop: return 0
+            case .threeBetQualifier: return 1
+            case .threeBetResponse: return 2
+            case .postflopResult: return viewModel.preflopAction == .call ? 1 : 2
+            case .cBet: return 3
+            case .done: return 4
+            }
+        } else {
+            switch viewModel.currentStep {
+            case .position: return 0
+            case .preflop: return 1
+            case .threeBetQualifier: return 2
+            case .threeBetResponse: return 3
+            case .postflopResult: return viewModel.preflopAction == .call ? 2 : 3
+            case .cBet: return 4
+            case .done: return 5
+            }
         }
     }
 
@@ -128,7 +155,7 @@ struct HandLoggerSheet: View {
                 .foregroundStyle(.secondary)
 
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                ForEach(SeatPosition.allPlayable, id: \.self) { position in
+                ForEach(viewModel.availablePositions, id: \.self) { position in
                     Button {
                         withAnimation(.easeInOut(duration: 0.2)) {
                             viewModel.selectPosition(position)
@@ -344,6 +371,80 @@ struct HandLoggerSheet: View {
                 .frame(height: 70)
                 .background(color, in: RoundedRectangle(cornerRadius: 16))
                 .foregroundStyle(.white)
+        }
+    }
+
+    // MARK: - Auto Position Badge
+
+    private var autoPositionBadge: some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                viewModel.overridePosition()
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Text(viewModel.selectedPosition.displayName)
+                    .font(.subheadline)
+                    .fontWeight(.bold)
+                Image(systemName: "pencil")
+                    .font(.caption2)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 6)
+            .background(Color.pokerAccent.opacity(0.2), in: Capsule())
+            .foregroundStyle(Color.pokerAccent)
+        }
+    }
+
+    // MARK: - Position Override
+
+    private var positionOverrideStep: some View {
+        VStack(spacing: 16) {
+            Text("Change Position")
+                .font(.title2)
+                .fontWeight(.bold)
+
+            Text("Tap to correct your position")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                ForEach(viewModel.availablePositions, id: \.self) { position in
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            viewModel.confirmOverride(position)
+                        }
+                    } label: {
+                        VStack(spacing: 4) {
+                            Text(position.displayName)
+                                .font(.title3)
+                                .fontWeight(.bold)
+                            Text(position.longName)
+                                .font(.caption2)
+                                .foregroundStyle(.white.opacity(0.7))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 60)
+                        .background(
+                            position == viewModel.selectedPosition
+                                ? Color.pokerAccent
+                                : Color.pokerAccent.opacity(0.6),
+                            in: RoundedRectangle(cornerRadius: 12)
+                        )
+                        .foregroundStyle(.white)
+                    }
+                }
+            }
+
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    viewModel.isOverridingPosition = false
+                }
+            } label: {
+                Text("Cancel")
+                    .font(.subheadline)
+                    .foregroundStyle(Color.pokerTextSecondary)
+            }
         }
     }
 }

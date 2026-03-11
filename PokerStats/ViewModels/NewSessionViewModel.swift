@@ -13,6 +13,7 @@ final class NewSessionViewModel {
     var tiltLevel: Int = 3
     var energyLevel: Int = 3
     var focusLevel: Int = 3
+    var tableSize: Int = 6
 
     var isValid: Bool {
         guard let amount = Double(buyInText), amount > 0 else { return false }
@@ -46,6 +47,11 @@ final class NewSessionViewModel {
         session.tiltLevel = tiltLevel
         session.energyLevel = energyLevel
         session.focusLevel = focusLevel
+
+        // Set up table config for auto position tracking
+        let config = PositionTracker.createConfig(totalSeats: tableSize)
+        session.tableConfig = config
+
         context.insert(session)
         try? context.save()
         return session

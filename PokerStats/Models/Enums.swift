@@ -116,7 +116,10 @@ enum SeatPosition: String, Codable, CaseIterable {
     case sb = "SB"
     case bb = "BB"
     case utg = "UTG"
+    case utg1 = "UTG+1"
+    case lj = "LJ"
     case mp = "MP"
+    case hj = "HJ"
     case co = "CO"
     case btn = "BTN"
     case unknown = "?"
@@ -130,7 +133,10 @@ enum SeatPosition: String, Codable, CaseIterable {
         case .sb: "Small Blind"
         case .bb: "Big Blind"
         case .utg: "Under the Gun"
+        case .utg1: "Under the Gun +1"
+        case .lj: "Lojack"
         case .mp: "Middle Position"
+        case .hj: "Hijack"
         case .co: "Cutoff"
         case .btn: "Button"
         case .unknown: "Unknown"
@@ -142,15 +148,34 @@ enum SeatPosition: String, Codable, CaseIterable {
         case .sb: 0
         case .bb: 1
         case .utg: 2
-        case .mp: 3
-        case .co: 4
-        case .btn: 5
-        case .unknown: 6
+        case .utg1: 3
+        case .lj: 4
+        case .mp: 5
+        case .hj: 6
+        case .co: 7
+        case .btn: 8
+        case .unknown: 9
         }
     }
 
     static var allPlayable: [SeatPosition] {
-        [.sb, .bb, .utg, .mp, .co, .btn]
+        [.sb, .bb, .utg, .utg1, .lj, .mp, .hj, .co, .btn]
+    }
+
+    /// Positions ordered by distance from the button for a given table size.
+    /// Index 0 = BTN, index 1 = SB, index 2 = BB, then early → late position.
+    static func positions(forTableSize n: Int) -> [SeatPosition] {
+        switch n {
+        case 2: return [.btn, .bb]               // heads-up: BTN is also SB
+        case 3: return [.btn, .sb, .bb]
+        case 4: return [.btn, .sb, .bb, .utg]
+        case 5: return [.btn, .sb, .bb, .utg, .co]
+        case 6: return [.btn, .sb, .bb, .utg, .mp, .co]
+        case 7: return [.btn, .sb, .bb, .utg, .mp, .hj, .co]
+        case 8: return [.btn, .sb, .bb, .utg, .utg1, .mp, .hj, .co]
+        case 9: return [.btn, .sb, .bb, .utg, .utg1, .mp, .lj, .hj, .co]
+        default: return [.btn, .sb, .bb, .utg, .mp, .co] // fallback to 6-max
+        }
     }
 }
 

@@ -2,6 +2,7 @@ import ActivityKit
 import Foundation
 import SwiftData
 import Observation
+import WidgetKit
 
 @Observable
 @MainActor
@@ -15,6 +16,7 @@ final class ActiveSessionViewModel {
     var isShowingNoteEditor = false
     var isShowingStaleAlert = false
     var isShowingMentalCheck = false
+    var isShowingTableSetup = false
 
     var rebuyAmountText: String = ""
     var sessionNotes: String = ""
@@ -66,12 +68,50 @@ final class ActiveSessionViewModel {
             .map { $0 }
     }
 
+    /// Hero's current position based on table config, or nil if auto-tracking is disabled.
+    var currentHeroPosition: SeatPosition? {
+        guard let config = session.tableConfig, config.isCalibrated else { return nil }
+        let position = PositionTracker.heroPosition(config: config)
+        return position == .unknown ? nil : position
+    }
+
+    /// Whether auto position tracking is enabled and calibrated.
+    var isPositionTrackingActive: Bool {
+        session.tableConfig?.isCalibrated ?? false
+    }
+
+    /// Whether this is the first hand (position tracking enabled but not yet calibrated).
+    var needsPositionCalibration: Bool {
+        guard let config = session.tableConfig else { return false }
+        return !config.isCalibrated
+    }
+
     // MARK: - Actions
 
     func addHand(_ hand: Hand) {
         hand.session = session
         hand.handNumber = session.nextHandNumber
         session.hands.append(hand)
+
+        // Auto position tracking: calibrate on first hand, advance button on subsequent hands
+        if var config = session.tableConfig {
+            if !config.isCalibrated && hand.position != .unknown {
+                // First hand: infer button seat from hero's selected position
+                config.buttonSeatIndex = PositionTracker.inferButtonSeat(
+                    heroSeat: config.heroSeatIndex,
+                    heroPosition: hand.position,
+                    config: config
+                )
+                session.tableConfig = config
+            }
+
+            // Advance button for the next hand
+            if config.isCalibrated {
+                let advanced = PositionTracker.advanceButton(config: config)
+                session.tableConfig = advanced
+            }
+        }
+
         try? modelContext.save()
         updateLiveActivity()
     }
@@ -98,6 +138,7 @@ final class ActiveSessionViewModel {
         session.notes = sessionNotes
         try? modelContext.save()
         endLiveActivity()
+        WidgetCenter.shared.reloadAllTimelines()
     }
 
     func abandonSession() {
@@ -107,6 +148,7 @@ final class ActiveSessionViewModel {
         session.notes = sessionNotes
         try? modelContext.save()
         endLiveActivity()
+        WidgetCenter.shared.reloadAllTimelines()
     }
 
     func saveNotes() {
@@ -118,6 +160,35 @@ final class ActiveSessionViewModel {
         session.tiltLevel = tiltLevel
         session.energyLevel = energyLevel
         session.focusLevel = focusLevel
+        try? modelContext.save()
+    }
+
+    // MARK: - Table Management
+
+    func updateTableConfig(_ config: TableConfig) {
+        session.tableConfig = config
+        try? modelContext.save()
+    }
+
+    func removeTablePlayer(at seatIndex: Int) {
+        guard let config = session.tableConfig else { return }
+        let updated = PositionTracker.removePlayer(at: seatIndex, config: config)
+        session.tableConfig = updated
+        try? modelContext.save()
+    }
+
+    func addTablePlayer(at seatIndex: Int, name: String = "") {
+        guard let config = session.tableConfig else { return }
+        let updated = PositionTracker.addPlayer(at: seatIndex, name: name, config: config)
+        session.tableConfig = updated
+        try? modelContext.save()
+    }
+
+    func renameTablePlayer(at seatIndex: Int, name: String) {
+        guard var config = session.tableConfig else { return }
+        guard seatIndex >= 0, seatIndex < config.seats.count else { return }
+        config.seats[seatIndex].playerName = name
+        session.tableConfig = config
         try? modelContext.save()
     }
 

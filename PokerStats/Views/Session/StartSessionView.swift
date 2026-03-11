@@ -68,6 +68,41 @@ struct StartSessionView: View {
                     }
                 }
 
+                // Table Size
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Table Size")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .foregroundStyle(.secondary)
+
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach([2, 3, 4, 5, 6, 7, 8, 9], id: \.self) { size in
+                                Button {
+                                    viewModel.tableSize = size
+                                } label: {
+                                    Text(size == 2 ? "HU" : "\(size)-max")
+                                        .font(.subheadline)
+                                        .fontWeight(.medium)
+                                        .padding(.horizontal, 14)
+                                        .padding(.vertical, 10)
+                                        .background(
+                                            viewModel.tableSize == size
+                                                ? Color.pokerAccent
+                                                : Color.pokerCard
+                                        )
+                                        .foregroundStyle(
+                                            viewModel.tableSize == size
+                                                ? .white
+                                                : .primary
+                                        )
+                                        .clipShape(Capsule())
+                                }
+                            }
+                        }
+                    }
+                }
+
                 // Location
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Location (optional)")

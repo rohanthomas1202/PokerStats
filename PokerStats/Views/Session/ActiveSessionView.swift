@@ -61,6 +61,13 @@ struct ActiveSessionView: View {
             }
             .presentationDetents([.medium])
         }
+        .sheet(isPresented: $viewModel.isShowingTableSetup) {
+            if viewModel.session.tableConfig != nil {
+                TableSetupSheet(viewModel: viewModel)
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
+            }
+        }
         .alert("Session Still Active?", isPresented: $viewModel.isShowingStaleAlert) {
             Button("Continue Session") { }
             Button("End Session", role: .destructive) {
@@ -98,6 +105,29 @@ struct ActiveSessionView: View {
                         .foregroundStyle(.secondary)
                     Text("\(viewModel.handCount)")
                         .font(.headline)
+                }
+
+                if let config = viewModel.session.tableConfig {
+                    Button {
+                        viewModel.isShowingTableSetup = true
+                    } label: {
+                        VStack(spacing: 2) {
+                            Text("Table")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            HStack(spacing: 4) {
+                                if let pos = viewModel.currentHeroPosition {
+                                    Text(pos.displayName)
+                                        .font(.headline)
+                                        .foregroundStyle(Color.pokerAccent)
+                                } else {
+                                    Text("\(config.activePlayerCount)")
+                                        .font(.headline)
+                                }
+                            }
+                        }
+                    }
+                    .buttonStyle(.plain)
                 }
             }
         }
@@ -259,6 +289,13 @@ struct ActiveSessionView: View {
     private var logHandButton: some View {
         Button {
             handLogger.reset()
+            let playerCount = viewModel.session.tableConfig?.activePlayerCount
+            if let position = viewModel.currentHeroPosition {
+                handLogger.configureAutoPosition(position, playerCount: playerCount)
+            } else if let count = playerCount {
+                // First hand or uncalibrated: show positions for this table size
+                handLogger.tablePlayerCount = count
+            }
             viewModel.isShowingHandLogger = true
         } label: {
             VStack(spacing: 4) {

@@ -30,6 +30,48 @@ targets:
       properties:
         com.apple.security.application-groups:
           - group.com.rohanthomas.PokerStats
+        com.apple.developer.applesignin:
+          - Default
+    preBuildScripts:
+      - name: Generate Secrets.plist from .env
+        script: |
+          ENV_FILE="${SRCROOT}/.env"
+          PLIST_FILE="${SRCROOT}/PokerStats/Resources/Secrets.plist"
+          if [ ! -f "$ENV_FILE" ]; then
+            echo "warning: .env file not found at $ENV_FILE — creating Secrets.plist with placeholder values"
+            cat > "$PLIST_FILE" << 'PLISTEOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>SUPABASE_URL</key>
+            <string>https://YOUR_PROJECT_REF.supabase.co</string>
+            <key>SUPABASE_ANON_KEY</key>
+            <string>YOUR_ANON_KEY</string>
+            <key>GOOGLE_CLIENT_ID</key>
+            <string></string>
+          </dict>
+          </plist>
+          PLISTEOF
+            exit 0
+          fi
+          echo '<?xml version="1.0" encoding="UTF-8"?>' > "$PLIST_FILE"
+          echo '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' >> "$PLIST_FILE"
+          echo '<plist version="1.0">' >> "$PLIST_FILE"
+          echo '<dict>' >> "$PLIST_FILE"
+          while IFS='=' read -r key value; do
+            key=$(echo "$key" | xargs)
+            value=$(echo "$value" | xargs)
+            [ -z "$key" ] && continue
+            [[ "$key" == \#* ]] && continue
+            echo "  <key>$key</key>" >> "$PLIST_FILE"
+            echo "  <string>$value</string>" >> "$PLIST_FILE"
+          done < "$ENV_FILE"
+          echo '</dict>' >> "$PLIST_FILE"
+          echo '</plist>' >> "$PLIST_FILE"
+          echo "Generated Secrets.plist from .env"
+        outputFiles:
+          - $(SRCROOT)/PokerStats/Resources/Secrets.plist
     dependencies:
       - target: PokerStatsWidgets
     settings:
@@ -60,6 +102,7 @@ targets:
       - path: PokerStats/Models/Enums.swift
       - path: PokerStats/Models/ComputedStats.swift
       - path: PokerStats/Models/SessionActivityAttributes.swift
+      - path: PokerStats/Models/TableConfig.swift
       - path: PokerStats/Services/AppGroupContainer.swift
     entitlements:
       path: PokerStatsWidgets/PokerStatsWidgets.entitlements
