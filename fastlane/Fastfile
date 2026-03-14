@@ -1,0 +1,104 @@
+default_platform(:ios)
+
+SCREENSHOT_DEVICES = [
+  "iPhone 17 Pro Max",
+  "iPhone 17 Pro",
+  "iPhone 16e"
+]
+
+BUNDLE_ID = "com.rohanthomas.PokerStats"
+
+platform :ios do
+  desc "Generate App Store screenshots"
+  lane :screenshots do
+    sh("cd .. && xcodegen generate")
+
+    output_dir = File.expand_path("../fastlane/screenshots")
+    FileUtils.mkdir_p(output_dir)
+
+    # Build app and tests once (using first device)
+    UI.message("Building app and tests...")
+    sh("cd .. && xcodebuild -scheme PokerStats -project PokerStats.xcodeproj " \
+       "-destination 'platform=iOS Simulator,name=iPhone 17 Pro Max' " \
+       "build-for-testing 2>&1 | tail -5")
+
+    SCREENSHOT_DEVICES.each do |device|
+      UI.message("=== Capturing on #{device} ===")
+
+      # Boot simulator
+      sh("xcrun simctl boot '#{device}' 2>/dev/null || true")
+      sleep(2)
+
+      # Clean app data so seeding starts fresh
+      sh("xcrun simctl terminate '#{device}' #{BUNDLE_ID} 2>/dev/null || true")
+      sh("xcrun simctl uninstall '#{device}' #{BUNDLE_ID} 2>/dev/null || true")
+
+      # Override status bar for clean screenshots
+      sh("xcrun simctl status_bar '#{device}' override " \
+         "--time 09:41 --dataNetwork wifi --wifiMode active --wifiBars 3 " \
+         "--cellularMode active --operatorName '' --cellularBars 4 " \
+         "--batteryState charged --batteryLevel 100 2>/dev/null || true")
+
+      # Run UI tests — the test launches the app with --seed-screenshot-data,
+      # which seeds data on first launch, then captures all screenshots
+      sh("cd .. && xcodebuild -scheme PokerStats -project PokerStats.xcodeproj " \
+         "-destination 'platform=iOS Simulator,name=#{device}' " \
+         "-only-testing:PokerStatsUITests/ScreenshotTests/testCaptureAppStoreScreenshots " \
+         "test 2>&1 | tail -5")
+
+      # Copy screenshots from Fastlane cache to output
+      cache_dir = File.expand_path("~/Library/Caches/tools.fastlane/screenshots")
+      if File.directory?(cache_dir)
+        Dir.glob("#{cache_dir}/*.png").each do |file|
+          FileUtils.cp(file, output_dir)
+        end
+      end
+
+      sh("xcrun simctl shutdown '#{device}' 2>/dev/null || true")
+    end
+
+    # Resize screenshots to App Store Connect required dimensions
+    UI.message("Resizing screenshots to App Store dimensions...")
+    appstore_dir = File.join(output_dir, "appstore")
+    FileUtils.mkdir_p(appstore_dir)
+
+    # App Store 6.5" display: 1284x2778 (portrait) or 1242x2688
+    TARGET_WIDTH = 1284
+    TARGET_HEIGHT = 2778
+
+    Dir.glob("#{output_dir}/*.png").each do |file|
+      basename = File.basename(file)
+      dest = File.join(appstore_dir, basename)
+      FileUtils.cp(file, dest)
+      sh("sips -z #{TARGET_HEIGHT} #{TARGET_WIDTH} '#{dest}' --out '#{dest}' 2>/dev/null")
+    end
+
+    UI.success("Original screenshots: #{output_dir}")
+    UI.success("App Store sized (#{TARGET_WIDTH}x#{TARGET_HEIGHT}): #{appstore_dir}")
+  end
+
+  desc "Upload screenshots to App Store Connect"
+  lane :upload_screenshots do
+    deliver(
+      skip_binary_upload: true,
+      skip_metadata: true,
+      overwrite_screenshots: true
+    )
+  end
+
+  desc "Deploy to TestFlight"
+  lane :beta do
+    sh("cd .. && xcodegen generate")
+    increment_build_number
+    build_app(scheme: "PokerStats")
+    upload_to_testflight
+  end
+
+  desc "Deploy to App Store"
+  lane :release do
+    sh("cd .. && xcodegen generate")
+    increment_build_number
+    build_app(scheme: "PokerStats")
+    upload_to_app_store(submit_for_review: true)
+  end
+end

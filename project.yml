@@ -11,6 +11,23 @@ settings:
     SWIFT_VERSION: "6.0"
     DEVELOPMENT_TEAM: ""
 
+schemes:
+  PokerStats:
+    build:
+      targets:
+        PokerStats: all
+        PokerStatsUITests: [test]
+        PokerStatsTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - PokerStatsUITests
+        - PokerStatsTests
+    archive:
+      config: Release
+
 targets:
   PokerStats:
     type: application
@@ -128,6 +145,21 @@ targets:
         SUPPORTED_PLATFORMS: "iphoneos iphonesimulator"
         SWIFT_STRICT_CONCURRENCY: complete
         SUPPORTS_LIVE_ACTIVITIES: YES
+
+  PokerStatsUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: PokerStatsUITests
+      - path: fastlane/SnapshotHelper.swift
+    dependencies:
+      - target: PokerStats
+    settings:
+      base:
+        INFOPLIST_GENERATION_MODE: GeneratedFile
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.rohanthomas.PokerStatsUITests
+        TEST_TARGET_NAME: PokerStats
 
   PokerStatsTests:
     type: bundle.unit-test

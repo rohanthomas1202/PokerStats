@@ -1,0 +1,38 @@
+# Snapfile — Fastlane screenshot automation for PokerStats
+# Run with: fastlane snapshot
+
+# Devices to capture (matches App Store Connect requirements)
+devices([
+  "iPhone 17 Pro Max",   # 6.9" (covers 6.7" and 6.5" sizes)
+  "iPhone 17 Pro",       # 6.3"
+  "iPhone 16e"           # 6.1" (covers smaller sizes)
+])
+
+# Languages (add more as needed)
+languages([
+  "en-US"
+])
+
+# iOS version (must match installed simulators exactly)
+ios_version("26.3.1")
+
+# Xcode scheme and test plan
+scheme("PokerStats")
+
+# Output directory
+output_directory("./fastlane/screenshots")
+
+# Clean previous screenshots
+clear_previous_screenshots(true)
+
+# Stop after first failure (faster iteration)
+stop_after_first_error(true)
+
+# Dark mode (app forces dark mode, but ensure simulator matches)
+dark_mode(true)
+
+# Override status bar for clean screenshots
+override_status_bar(true)
+
+# Disable concurrent simulators for stability
+concurrent_simulators(false)

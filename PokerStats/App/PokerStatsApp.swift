@@ -20,6 +20,15 @@ struct PokerStatsApp: App {
             ContentView()
                 .preferredColorScheme(.dark)
                 .environment(authService)
+                .task {
+                    if ProcessInfo.processInfo.arguments.contains("--seed-screenshot-data") {
+                        let context = container.mainContext
+                        let count = (try? context.fetchCount(FetchDescriptor<Session>())) ?? 0
+                        if count == 0 {
+                            DataSeeder.seed(into: context)
+                        }
+                    }
+                }
                 .overlay(alignment: .top) {
                     if let message = cloudStatusMessage ?? authService.backupStatus {
                         Text(message)
@@ -35,7 +44,9 @@ struct PokerStatsApp: App {
                 .animation(.easeInOut, value: cloudStatusMessage)
                 .animation(.easeInOut, value: authService.backupStatus)
                 .onAppear {
-                    authService.initialize()
+                    if !ProcessInfo.processInfo.arguments.contains("--seed-screenshot-data") {
+                        authService.initialize()
+                    }
                 }
                 .onChange(of: authService.isAuthenticated) { _, isAuthenticated in
                     if isAuthenticated {

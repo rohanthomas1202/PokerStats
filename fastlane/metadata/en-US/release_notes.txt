@@ -1,0 +1,1 @@
+Initial release of PokerStats — track your live poker sessions, log hands in seconds, and find leaks in your game.

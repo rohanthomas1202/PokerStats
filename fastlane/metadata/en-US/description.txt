@@ -1,0 +1,33 @@
+PokerStats is the fastest way to track your live poker sessions and understand your game.
+
+LOG HANDS IN UNDER 3 SECONDS
+Our progressive hand logger captures every decision — preflop action, 3-bet responses, postflop results, and c-bets — with just a few taps. Fold in one tap. Full hand in five.
+
+REAL-TIME SESSION TRACKING
+Start a session and track your buy-ins, rebuys, and cash-outs with a crash-proof timer that keeps running even if you close the app. Live Activities keep your session visible on your Lock Screen.
+
+KNOW YOUR NUMBERS
+See the stats that matter: VPIP, PFR, C-Bet%, WTSD%, W$SD%, Fold-to-3-Bet, and more. Understand whether you're playing tight-aggressive, loose-passive, or anywhere in between.
+
+FIND YOUR LEAKS
+The built-in Leak Finder analyzes your stats against proven ranges and tells you exactly where you're losing money — with coaching-style insights to help you improve.
+
+TRENDS & ANALYTICS
+Track your cumulative bankroll, spot patterns in your VPIP/PFR over time, see which days of the week are most profitable, and review your session P&L distribution.
+
+POSITION-AWARE STATS
+Break down your play by table position (UTG, MP, CO, BTN, SB, BB) to see where you're strongest and where you need work.
+
+MENTAL GAME TRACKING
+Log your tilt level, energy, and focus for each session. See how your mental state correlates with your win rate — data-driven tilt management.
+
+SESSION HISTORY
+Review every session with detailed breakdowns, hand logs, notes, and financial summaries. Search by location or stakes.
+
+DESIGNED FOR LIVE PLAYERS
+Built by a poker player, for poker players. No bloat, no subscriptions, no ads. Just fast, focused tracking that works at the table.
+
+• Offline-first — works without internet
+• Dark mode optimized for casino lighting
+• Home screen widget for quick session info
+• iCloud backup to keep your data safe
