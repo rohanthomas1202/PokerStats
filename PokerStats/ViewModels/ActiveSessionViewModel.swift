@@ -9,6 +9,7 @@ import WidgetKit
 final class ActiveSessionViewModel {
     let session: Session
     private let modelContext: ModelContext
+    private var authService: AuthService?
 
     var isShowingHandLogger = false
     var isShowingRebuy = false
@@ -26,9 +27,10 @@ final class ActiveSessionViewModel {
 
     private var liveActivity: Activity<SessionActivityAttributes>?
 
-    init(session: Session, modelContext: ModelContext) {
+    init(session: Session, modelContext: ModelContext, authService: AuthService? = nil) {
         self.session = session
         self.modelContext = modelContext
+        self.authService = authService
         self.sessionNotes = session.notes
         self.tiltLevel = session.tiltLevel ?? 3
         self.energyLevel = session.energyLevel ?? 3
@@ -139,6 +141,7 @@ final class ActiveSessionViewModel {
         try? modelContext.save()
         endLiveActivity()
         WidgetCenter.shared.reloadAllTimelines()
+        autoBackup()
     }
 
     func abandonSession() {
@@ -149,6 +152,7 @@ final class ActiveSessionViewModel {
         try? modelContext.save()
         endLiveActivity()
         WidgetCenter.shared.reloadAllTimelines()
+        autoBackup()
     }
 
     func saveNotes() {
@@ -190,6 +194,16 @@ final class ActiveSessionViewModel {
         config.seats[seatIndex].playerName = name
         session.tableConfig = config
         try? modelContext.save()
+    }
+
+    // MARK: - Auto Backup
+
+    private func autoBackup() {
+        guard let authService else {
+            print("[AutoBackup] Skipped — no authService")
+            return
+        }
+        authService.scheduleBackup(modelContext: modelContext)
     }
 
     // MARK: - Live Activity

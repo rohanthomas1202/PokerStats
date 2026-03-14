@@ -59,7 +59,7 @@ final class BackupService {
 
         // 5. Generate storage path
         let timestamp = ISO8601DateFormatter().string(from: .now)
-        let storagePath = "\(userId.uuidString)/\(timestamp)_v\(BackupPayload.currentSchemaVersion).json.gz"
+        let storagePath = "\(userId.uuidString.lowercased())/\(timestamp)_v\(BackupPayload.currentSchemaVersion).json.gz"
 
         // 6. Upload to storage
         try await client.uploadFile(

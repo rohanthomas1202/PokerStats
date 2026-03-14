@@ -8,6 +8,10 @@ final class AuthViewModel {
     var isProcessing = false
     var errorMessage: String?
 
+    var email = ""
+    var password = ""
+    var isSignUpMode = false
+
     private let authService: AuthService
 
     init(authService: AuthService) {
@@ -51,13 +55,43 @@ final class AuthViewModel {
         }
     }
 
+    // MARK: - Email/Password Sign In
+
+    func handleEmailSignIn() {
+        let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedEmail.isEmpty, !password.isEmpty else {
+            errorMessage = "Please enter your email and password."
+            return
+        }
+        guard password.count >= 6 else {
+            errorMessage = "Password must be at least 6 characters."
+            return
+        }
+
+        isProcessing = true
+        errorMessage = nil
+
+        Task {
+            do {
+                if isSignUpMode {
+                    try await authService.signUpWithEmail(email: trimmedEmail, password: password)
+                } else {
+                    try await authService.signInWithEmail(email: trimmedEmail, password: password)
+                }
+                email = ""
+                password = ""
+                isShowingSignIn = false
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+            isProcessing = false
+        }
+    }
+
     // MARK: - Google Sign In (placeholder — requires GoogleSignIn SDK)
 
     func handleGoogleSignIn() {
         // TODO: Integrate GoogleSignIn SDK
-        // 1. GIDSignIn.sharedInstance.signIn(withPresenting: rootViewController)
-        // 2. On success, get user.idToken.tokenString
-        // 3. Call authService.signInWithGoogle(idToken: tokenString)
         errorMessage = "Google Sign-In is not yet configured."
     }
 

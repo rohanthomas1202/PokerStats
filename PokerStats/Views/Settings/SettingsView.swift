@@ -8,6 +8,8 @@ struct SettingsView: View {
     @State private var authViewModel: AuthViewModel?
     @State private var isShowingDeleteAccount = false
     @State private var isShowingDeleteAccountFinal = false
+    @State private var isSeeding = false
+    @State private var seedComplete = false
 
     var body: some View {
         Form {
@@ -81,6 +83,18 @@ struct SettingsView: View {
 
             // MARK: - Data Section
             Section("Data") {
+                #if DEBUG
+                Button {
+                    isSeeding = true
+                    DataSeeder.seed(into: modelContext)
+                    isSeeding = false
+                    seedComplete = true
+                } label: {
+                    Label(isSeeding ? "Seeding..." : "Seed 6 Months Test Data", systemImage: "wand.and.stars")
+                }
+                .disabled(isSeeding)
+                #endif
+
                 Button(role: .destructive) {
                     viewModel.showDeleteAllConfirmation = true
                 } label: {
@@ -159,6 +173,11 @@ struct SettingsView: View {
             }
         } message: {
             Text("This will permanently delete your account and all cloud data. Local data will also be removed.")
+        }
+        .alert("Test Data Seeded", isPresented: $seedComplete) {
+            Button("OK") { }
+        } message: {
+            Text("6 months of realistic session data has been added.")
         }
         .alert("This cannot be undone.", isPresented: $isShowingDeleteAccountFinal) {
             Button("Cancel", role: .cancel) { }

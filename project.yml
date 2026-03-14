@@ -25,13 +25,16 @@ targets:
     resources:
       - path: PokerStats/Resources
         type: folder
+    settings:
+      base:
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortraitUpsideDown"
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortraitUpsideDown"
+        INFOPLIST_KEY_UIRequiresFullScreen: false
     entitlements:
       path: PokerStats/PokerStats.entitlements
       properties:
         com.apple.security.application-groups:
           - group.com.rohanthomas.PokerStats
-        com.apple.developer.applesignin:
-          - Default
     preBuildScripts:
       - name: Generate Secrets.plist from .env
         script: |

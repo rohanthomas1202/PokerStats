@@ -4,6 +4,7 @@ import SwiftData
 /// Context-sensitive session tab: shows StartSessionView or ActiveSessionView.
 struct SessionTabView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(AuthService.self) private var authService
     @Query(sort: \Session.startTime, order: .reverse)
     private var allSessions: [Session]
 
@@ -20,7 +21,8 @@ struct SessionTabView: View {
                     ActiveSessionView(
                         viewModel: ActiveSessionViewModel(
                             session: activeSession,
-                            modelContext: modelContext
+                            modelContext: modelContext,
+                            authService: authService
                         )
                     )
                 } else {

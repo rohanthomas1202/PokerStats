@@ -30,12 +30,12 @@
 - [ ] Add reversed client ID URL scheme to project.yml
 - [ ] Wire up `GIDSignIn` in AuthViewModel + PokerStatsApp
 
-## Step 6: Deploy delete-account Edge Function — TODO
-- [ ] Install Supabase CLI (`brew install supabase/tap/supabase`)
-- [ ] `supabase login` + `supabase link --project-ref xukhlkjjrrwmorxtlizh`
-- [ ] `supabase functions new delete-account`
-- [ ] Add function code (see plan file Section 2.4)
-- [ ] `supabase functions deploy delete-account --no-verify-jwt`
+## Step 6: Deploy delete-account Edge Function — DONE
+- [x] Install Supabase CLI (`brew install supabase/tap/supabase`)
+- [x] `supabase login` + `supabase link --project-ref xukhlkjjrrwmorxtlizh`
+- [x] `supabase functions new delete-account`
+- [x] Add function code: validates JWT, deletes storage files, backup_metadata, profile, then auth user
+- [x] `supabase functions deploy delete-account --no-verify-jwt`
 
 ## Step 7: End-to-End Testing — TODO
 - [ ] Sign in with Apple → verify Keychain + Supabase dashboard user

@@ -1,5 +1,6 @@
 import Foundation
 import AuthenticationServices
+import SwiftData
 
 @Observable
 @MainActor
@@ -106,6 +107,42 @@ final class AuthService {
         }
     }
 
+    // MARK: - Sign In with Email
+
+    func signInWithEmail(email: String, password: String) async throws {
+        isLoading = true
+        error = nil
+
+        do {
+            let session = try await client.signInWithPassword(email: email, password: password)
+            try storeSession(session)
+            isAuthenticated = true
+            isLoading = false
+        } catch {
+            isLoading = false
+            let authError = AuthServiceError.emailSignInFailed(error.localizedDescription)
+            self.error = authError
+            throw authError
+        }
+    }
+
+    func signUpWithEmail(email: String, password: String) async throws {
+        isLoading = true
+        error = nil
+
+        do {
+            let session = try await client.signUpWithEmail(email: email, password: password)
+            try storeSession(session)
+            isAuthenticated = true
+            isLoading = false
+        } catch {
+            isLoading = false
+            let authError = AuthServiceError.emailSignInFailed(error.localizedDescription)
+            self.error = authError
+            throw authError
+        }
+    }
+
     // MARK: - Sign Out
 
     func signOut() async {
@@ -119,6 +156,28 @@ final class AuthService {
         userEmail = nil
         userId = nil
         error = nil
+    }
+
+    // MARK: - Auto Backup
+
+    private(set) var backupStatus: String?
+    private var backupTask: Task<Void, Never>?
+
+    func scheduleBackup(modelContext: ModelContext) {
+        guard isAuthenticated else { return }
+        backupTask?.cancel()
+        backupTask = Task {
+            backupStatus = "Backing up..."
+            do {
+                let backupService = BackupService(authService: self, modelContext: modelContext)
+                let metadata = try await backupService.createAndUploadBackup()
+                backupStatus = "Backed up \(metadata.sessionCount) sessions"
+            } catch {
+                backupStatus = "Backup failed: \(error.localizedDescription)"
+            }
+            try? await Task.sleep(for: .seconds(3))
+            backupStatus = nil
+        }
     }
 
     // MARK: - Delete Account
@@ -209,6 +268,7 @@ final class AuthService {
 enum AuthServiceError: LocalizedError, Sendable {
     case appleSignInFailed(String)
     case googleSignInFailed(String)
+    case emailSignInFailed(String)
     case sessionExpired
     case deletionFailed(String)
 
@@ -216,6 +276,7 @@ enum AuthServiceError: LocalizedError, Sendable {
         switch self {
         case .appleSignInFailed(let msg): "Apple Sign In failed: \(msg)"
         case .googleSignInFailed(let msg): "Google Sign In failed: \(msg)"
+        case .emailSignInFailed(let msg): "Sign in failed: \(msg)"
         case .sessionExpired: "Session expired. Please sign in again."
         case .deletionFailed(let msg): "Account deletion failed: \(msg)"
         }

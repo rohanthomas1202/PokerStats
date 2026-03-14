@@ -151,6 +151,36 @@ final class SupabaseClient: Sendable {
         return try decoder.decode(AuthSession.self, from: data)
     }
 
+    func signUpWithEmail(email: String, password: String) async throws -> AuthSession {
+        struct SignUpBody: Encodable, Sendable {
+            let email: String
+            let password: String
+        }
+
+        let data = try await request(
+            endpoint: "/auth/v1/signup",
+            method: .post,
+            body: SignUpBody(email: email, password: password),
+            authenticated: false
+        )
+        return try decoder.decode(AuthSession.self, from: data)
+    }
+
+    func signInWithPassword(email: String, password: String) async throws -> AuthSession {
+        struct SignInBody: Encodable, Sendable {
+            let email: String
+            let password: String
+        }
+
+        let data = try await request(
+            endpoint: "/auth/v1/token?grant_type=password",
+            method: .post,
+            body: SignInBody(email: email, password: password),
+            authenticated: false
+        )
+        return try decoder.decode(AuthSession.self, from: data)
+    }
+
     func refreshSession(refreshToken: String) async throws -> AuthSession {
         struct RefreshBody: Encodable, Sendable {
             let refreshToken: String
