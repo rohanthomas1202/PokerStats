@@ -1,4 +1,4 @@
-import ActivityKit
+@preconcurrency import ActivityKit
 import Foundation
 import SwiftData
 import Observation
@@ -115,7 +115,7 @@ final class ActiveSessionViewModel {
         }
 
         try? modelContext.save()
-        updateLiveActivity()
+        Task { await updateLiveActivity() }
     }
 
     func deleteHand(_ hand: Hand) {
@@ -129,7 +129,7 @@ final class ActiveSessionViewModel {
         session.rebuys += amount
         rebuyAmountText = ""
         try? modelContext.save()
-        updateLiveActivity()
+        Task { await updateLiveActivity() }
     }
 
     func endSession(cashOut: Double, tipRake: Double = 0) {
@@ -139,7 +139,7 @@ final class ActiveSessionViewModel {
         session.status = .completed
         session.notes = sessionNotes
         try? modelContext.save()
-        endLiveActivity()
+        Task { await endLiveActivity() }
         WidgetCenter.shared.reloadAllTimelines()
         autoBackup()
     }
@@ -150,7 +150,7 @@ final class ActiveSessionViewModel {
         session.cashOut = 0
         session.notes = sessionNotes
         try? modelContext.save()
-        endLiveActivity()
+        Task { await endLiveActivity() }
         WidgetCenter.shared.reloadAllTimelines()
         autoBackup()
     }
@@ -218,7 +218,7 @@ final class ActiveSessionViewModel {
 
         if let existing {
             liveActivity = existing
-            updateLiveActivity()
+            Task { await updateLiveActivity() }
         } else {
             startLiveActivity()
         }
@@ -249,7 +249,7 @@ final class ActiveSessionViewModel {
         }
     }
 
-    func updateLiveActivity() {
+    func updateLiveActivity() async {
         guard let liveActivity else { return }
 
         let state = SessionActivityAttributes.ContentState(
@@ -258,12 +258,10 @@ final class ActiveSessionViewModel {
         )
         let content = ActivityContent(state: state, staleDate: nil)
 
-        Task {
-            await liveActivity.update(content)
-        }
+        await liveActivity.update(content)
     }
 
-    func endLiveActivity() {
+    func endLiveActivity() async {
         guard let liveActivity else { return }
 
         let finalState = SessionActivityAttributes.ContentState(
@@ -272,9 +270,7 @@ final class ActiveSessionViewModel {
         )
         let content = ActivityContent(state: finalState, staleDate: nil)
 
-        Task {
-            await liveActivity.end(content, dismissalPolicy: .default)
-        }
+        await liveActivity.end(content, dismissalPolicy: .default)
         self.liveActivity = nil
     }
 }
