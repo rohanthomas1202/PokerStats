@@ -28,6 +28,11 @@ schemes:
     archive:
       config: Release
 
+packages:
+  GoogleSignIn:
+    url: https://github.com/google/GoogleSignIn-iOS
+    from: 7.1.0
+
 targets:
   PokerStats:
     type: application
@@ -89,6 +94,8 @@ targets:
           - $(SRCROOT)/PokerStats/Resources/Secrets.plist
     dependencies:
       - target: PokerStatsWidgets
+      - package: GoogleSignIn
+        product: GoogleSignIn
     settings:
       base:
         INFOPLIST_GENERATION_MODE: GeneratedFile
