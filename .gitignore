@@ -55,5 +55,8 @@ playground.xcworkspace
 .env.*
 Secrets.plist
 
+# Supabase CLI state
+supabase/.temp/
+
 # Claude Code
 .claude/
