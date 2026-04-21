@@ -84,65 +84,6 @@ final class AuthService {
         }
     }
 
-    // MARK: - Sign In with Google
-
-    func signInWithGoogle(idToken: String) async throws {
-        isLoading = true
-        error = nil
-
-        do {
-            let session = try await client.signInWithIdToken(
-                provider: .google,
-                idToken: idToken
-            )
-
-            try storeSession(session)
-            isAuthenticated = true
-            isLoading = false
-        } catch {
-            isLoading = false
-            let authError = AuthServiceError.googleSignInFailed(error.localizedDescription)
-            self.error = authError
-            throw authError
-        }
-    }
-
-    // MARK: - Sign In with Email
-
-    func signInWithEmail(email: String, password: String) async throws {
-        isLoading = true
-        error = nil
-
-        do {
-            let session = try await client.signInWithPassword(email: email, password: password)
-            try storeSession(session)
-            isAuthenticated = true
-            isLoading = false
-        } catch {
-            isLoading = false
-            let authError = AuthServiceError.emailSignInFailed(error.localizedDescription)
-            self.error = authError
-            throw authError
-        }
-    }
-
-    func signUpWithEmail(email: String, password: String) async throws {
-        isLoading = true
-        error = nil
-
-        do {
-            let session = try await client.signUpWithEmail(email: email, password: password)
-            try storeSession(session)
-            isAuthenticated = true
-            isLoading = false
-        } catch {
-            isLoading = false
-            let authError = AuthServiceError.emailSignInFailed(error.localizedDescription)
-            self.error = authError
-            throw authError
-        }
-    }
-
     // MARK: - Sign Out
 
     func signOut() async {
@@ -267,16 +208,12 @@ final class AuthService {
 
 enum AuthServiceError: LocalizedError, Sendable {
     case appleSignInFailed(String)
-    case googleSignInFailed(String)
-    case emailSignInFailed(String)
     case sessionExpired
     case deletionFailed(String)
 
     var errorDescription: String? {
         switch self {
         case .appleSignInFailed(let msg): "Apple Sign In failed: \(msg)"
-        case .googleSignInFailed(let msg): "Google Sign In failed: \(msg)"
-        case .emailSignInFailed(let msg): "Sign in failed: \(msg)"
         case .sessionExpired: "Session expired. Please sign in again."
         case .deletionFailed(let msg): "Account deletion failed: \(msg)"
         }

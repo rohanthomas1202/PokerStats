@@ -28,96 +28,15 @@ struct SignInView: View {
 
                 Spacer()
 
-                // Email/Password form
-                VStack(spacing: 12) {
-                    TextField("Email", text: .init(
-                        get: { authViewModel.email },
-                        set: { authViewModel.email = $0 }
-                    ))
-                    .textContentType(.emailAddress)
-                    .keyboardType(.emailAddress)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
-                    .padding()
-                    .background(Color(.systemGray6))
-                    .foregroundStyle(.black)
-                    .cornerRadius(12)
-
-                    SecureField("Password", text: .init(
-                        get: { authViewModel.password },
-                        set: { authViewModel.password = $0 }
-                    ))
-                    .textContentType(authViewModel.isSignUpMode ? .newPassword : .password)
-                    .padding()
-                    .background(Color(.systemGray6))
-                    .foregroundStyle(.black)
-                    .cornerRadius(12)
-
-                    Button {
-                        authViewModel.handleEmailSignIn()
-                    } label: {
-                        Text(authViewModel.isSignUpMode ? "Create Account" : "Sign In")
-                            .font(.body.weight(.semibold))
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 50)
-                            .background(Color.accentColor)
-                            .foregroundStyle(.white)
-                            .cornerRadius(12)
-                    }
-                    .disabled(authViewModel.isProcessing)
-
-                    Button {
-                        authViewModel.isSignUpMode.toggle()
-                        authViewModel.errorMessage = nil
-                    } label: {
-                        Text(authViewModel.isSignUpMode
-                             ? "Already have an account? Sign In"
-                             : "Don't have an account? Sign Up")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
+                // Sign in with Apple
+                SignInWithAppleButton(.signIn) { request in
+                    request.requestedScopes = [.email, .fullName]
+                } onCompletion: { result in
+                    authViewModel.handleAppleSignIn(result: result)
                 }
-                .padding(.horizontal, 24)
-
-                // Divider
-                HStack {
-                    Rectangle().frame(height: 1).foregroundStyle(.secondary.opacity(0.3))
-                    Text("or")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Rectangle().frame(height: 1).foregroundStyle(.secondary.opacity(0.3))
-                }
-                .padding(.horizontal, 24)
-
-                // Social sign-in buttons
-                VStack(spacing: 12) {
-                    // Sign in with Apple
-                    SignInWithAppleButton(.signIn) { request in
-                        request.requestedScopes = [.email, .fullName]
-                    } onCompletion: { result in
-                        authViewModel.handleAppleSignIn(result: result)
-                    }
-                    .signInWithAppleButtonStyle(.white)
-                    .frame(height: 50)
-                    .cornerRadius(12)
-
-                    // Sign in with Google (placeholder)
-                    Button {
-                        authViewModel.handleGoogleSignIn()
-                    } label: {
-                        HStack(spacing: 8) {
-                            Image(systemName: "g.circle.fill")
-                                .font(.title2)
-                            Text("Sign in with Google")
-                                .font(.body.weight(.medium))
-                        }
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 50)
-                        .background(.white)
-                        .foregroundStyle(.black)
-                        .cornerRadius(12)
-                    }
-                }
+                .signInWithAppleButtonStyle(.white)
+                .frame(height: 50)
+                .cornerRadius(12)
                 .padding(.horizontal, 24)
 
                 // Error message

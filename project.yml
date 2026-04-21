@@ -28,11 +28,6 @@ schemes:
     archive:
       config: Release
 
-packages:
-  GoogleSignIn:
-    url: https://github.com/google/GoogleSignIn-iOS
-    from: 7.1.0
-
 targets:
   PokerStats:
     type: application
@@ -70,8 +65,6 @@ targets:
             <string>https://YOUR_PROJECT_REF.supabase.co</string>
             <key>SUPABASE_ANON_KEY</key>
             <string>YOUR_ANON_KEY</string>
-            <key>GOOGLE_CLIENT_ID</key>
-            <string></string>
           </dict>
           </plist>
           PLISTEOF
@@ -98,8 +91,6 @@ targets:
           - $(SRCROOT)/PokerStats/Resources/Secrets.plist
     dependencies:
       - target: PokerStatsWidgets
-      - package: GoogleSignIn
-        product: GoogleSignIn
     settings:
       base:
         INFOPLIST_GENERATION_MODE: GeneratedFile

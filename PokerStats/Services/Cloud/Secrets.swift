@@ -20,10 +20,6 @@ enum Secrets {
         values["SUPABASE_ANON_KEY"] ?? "YOUR_ANON_KEY"
     }
 
-    static var googleClientID: String {
-        values["GOOGLE_CLIENT_ID"] ?? ""
-    }
-
     // MARK: - .env fallback (development only)
 
     private static func loadDotEnv() -> [String: String] {
