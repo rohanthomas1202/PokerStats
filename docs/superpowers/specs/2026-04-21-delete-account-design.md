@@ -37,7 +37,7 @@ Tapping **Delete Account** in Settings surfaces two confirmation alerts, but the
 
 1. **Cloud** — `SupabaseClient.callEdgeFunction("delete-account")`. On non-2xx, throw `SupabaseError.httpError` with the server's message. The Edge Function already performs: delete backup files → delete `backup_metadata` rows → delete `profiles` row → `auth.admin.deleteUser`. No change to the function itself.
 2. **Keychain** — `KeychainHelper.deleteAll()`.
-3. **Local SwiftData** — delete all rows of `Hand`, `Session`, `Settings`, `TableConfig`. Save the context. Reload widget timelines via `WidgetCenter.shared.reloadAllTimelines()`.
+3. **Local SwiftData** — delete all rows of `Hand`, `Session`, `Settings`. Save the context. Reload widget timelines via `WidgetCenter.shared.reloadAllTimelines()`.
 4. **In-memory auth state** — `isAuthenticated = false`, clear `userId` / `userEmail`.
 
 If step 1 throws, the pipeline stops and re-throws. Steps 2–4 do not execute; local data is preserved. This means a user facing a transient server error can retry without having lost their hand history.
