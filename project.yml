@@ -9,7 +9,7 @@ options:
 settings:
   base:
     SWIFT_VERSION: "6.0"
-    DEVELOPMENT_TEAM: ""
+    DEVELOPMENT_TEAM: "V2QRL64JUR"
 
 schemes:
   PokerStats:
@@ -52,6 +52,8 @@ targets:
       properties:
         com.apple.security.application-groups:
           - group.com.rohanthomas.PokerStats
+        com.apple.developer.applesignin:
+          - Default
     preBuildScripts:
       - name: Generate Secrets.plist from .env
         script: |
@@ -90,6 +92,8 @@ targets:
           echo '</dict>' >> "$PLIST_FILE"
           echo '</plist>' >> "$PLIST_FILE"
           echo "Generated Secrets.plist from .env"
+        inputFiles:
+          - $(SRCROOT)/.env
         outputFiles:
           - $(SRCROOT)/PokerStats/Resources/Secrets.plist
     dependencies:
