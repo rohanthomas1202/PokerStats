@@ -1,6 +1,7 @@
 import Foundation
 import AuthenticationServices
 import SwiftData
+import os
 
 @Observable
 @MainActor
@@ -16,6 +17,7 @@ final class AuthService {
     var displayEmail: String { userEmail ?? "Unknown" }
 
     private let client = SupabaseClient.shared
+    private static let logger = Logger(subsystem: "com.rohanthomas.PokerStats", category: "AuthService")
 
     // MARK: - Initialization
 
@@ -128,20 +130,31 @@ final class AuthService {
         error = nil
 
         do {
-            // Call Edge Function to delete all server-side data
-            try await client.callEdgeFunction("delete-account")
-
-            // Revoke Apple credential if applicable
-            // (Apple token revocation requires the authorization code,
-            // which we don't persist. The Edge Function handles server-side cleanup.)
+            // Apple-linked accounts re-confirm with Sign in with Apple; the
+            // fresh authorization code lets the edge function revoke the
+            // Apple token before deleting the account (App Review 5.1.1(v)).
+            let reauthenticator = AppleReauthenticator()
+            let supabase = self.client
+            let deleter = AccountDeleter(
+                appleUserId: { KeychainHelper.read(.appleUserId) },
+                appleAuthorizationCode: { try await reauthenticator.authorizationCode() },
+                callDeleteFunction: { try await supabase.callEdgeFunction("delete-account", body: $0) }
+            )
+            try await deleter.run()
 
             KeychainHelper.deleteAll()
             isAuthenticated = false
             userEmail = nil
             userId = nil
             isLoading = false
+        } catch let error as AccountDeletionError {
+            // Cancelled, or Apple revoked but cleanup failed: the caller shows these.
+            isLoading = false
+            throw error
         } catch {
             isLoading = false
+            // Detail for debugging only; the user sees the generic message.
+            Self.logger.error("Account deletion failed: \(error.localizedDescription)")
             let authError = AuthServiceError.deletionFailed(error.localizedDescription)
             self.error = authError
             throw authError
@@ -215,7 +228,7 @@ enum AuthServiceError: LocalizedError, Sendable {
         switch self {
         case .appleSignInFailed(let msg): "Apple Sign In failed: \(msg)"
         case .sessionExpired: "Session expired. Please sign in again."
-        case .deletionFailed(let msg): "Account deletion failed: \(msg)"
+        case .deletionFailed: "Your account wasn't deleted. Check your connection and try again. If you've been signed out, sign in and try again."
         }
     }
 }

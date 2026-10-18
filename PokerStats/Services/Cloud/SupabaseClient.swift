@@ -264,16 +264,12 @@ final class SupabaseClient: Sendable {
 
     // MARK: - Edge Functions
 
-    func callEdgeFunction(_ name: String) async throws {
+    func callEdgeFunction(_ name: String, body: (any Encodable & Sendable)? = nil) async throws {
         guard let token = try await validAccessToken() else {
             throw SupabaseError.notAuthenticated
         }
 
-        let url = URL(string: "\(projectURL)/functions/v1/\(name)")!
-        var urlRequest = URLRequest(url: url)
-        urlRequest.httpMethod = "POST"
-        urlRequest.setValue(anonKey, forHTTPHeaderField: "apikey")
-        urlRequest.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        let urlRequest = try makeEdgeFunctionRequest(name, accessToken: token, body: body)
 
         let (data, response) = try await performRequest(urlRequest)
 
@@ -285,6 +281,25 @@ final class SupabaseClient: Sendable {
                 message: message
             )
         }
+    }
+
+    /// Builds the POST for an edge function call. Separate so tests can check
+    /// the exact body this client sends.
+    func makeEdgeFunctionRequest(
+        _ name: String,
+        accessToken: String,
+        body: (any Encodable & Sendable)?
+    ) throws -> URLRequest {
+        let url = URL(string: "\(projectURL)/functions/v1/\(name)")!
+        var urlRequest = URLRequest(url: url)
+        urlRequest.httpMethod = "POST"
+        urlRequest.setValue(anonKey, forHTTPHeaderField: "apikey")
+        urlRequest.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
+        if let body {
+            urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            urlRequest.httpBody = try encoder.encode(body)
+        }
+        return urlRequest
     }
 
     // MARK: - Token Management

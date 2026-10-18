@@ -1,5 +1,12 @@
 // Request handler for delete-account, with the Supabase clients injected so
 // the HTTP contract can be tested without a live project.
+import {
+  type AppleLinkInfo,
+  appleSubject,
+  isAppleLinked,
+  readAppleConfig,
+  revokeAppleToken,
+} from "./apple.ts";
 import { type CleanupClient, deleteUserData } from "./cleanup.ts";
 
 type AuthError = { message: string } | null;
@@ -13,7 +20,7 @@ export interface AdminClient extends CleanupClient {
 export interface UserClient {
   auth: {
     getUser(): PromiseLike<{
-      data: { user: { id: string } | null };
+      data: { user: ({ id: string } & AppleLinkInfo) | null };
       error: AuthError;
     }>;
   };
@@ -22,6 +29,23 @@ export interface UserClient {
 export interface HandlerDeps {
   createAdminClient(): AdminClient;
   createUserClient(authHeader: string): UserClient;
+  // Used for the Apple secrets (APPLE_TEAM_ID etc.).
+  getEnv(name: string): string | undefined;
+  fetch: typeof fetch;
+  nowSeconds?: () => number;
+}
+
+// Optional JSON body: { "authorization_code": "<fresh Apple code>" }.
+async function readAuthorizationCode(
+  req: Request,
+): Promise<string | undefined> {
+  try {
+    const body = await req.json();
+    const code = body?.authorization_code;
+    return typeof code === "string" && code.length > 0 ? code : undefined;
+  } catch {
+    return undefined; // empty or non-JSON body
+  }
 }
 
 function json(body: unknown, status: number): Response {
@@ -32,8 +56,15 @@ function json(body: unknown, status: number): Response {
 }
 
 // Details go to the log only; the client gets a generic body.
-function failure(step: string): Response {
-  return json({ error: "Account deletion failed", step, retryable: true }, 500);
+// `apple_revoked: true` tells the app the Apple token is already revoked (the
+// user may be signed out), so it can ask them to sign in again and retry.
+function failure(step: string, appleRevoked = false): Response {
+  return json({
+    error: "Account deletion failed",
+    step,
+    retryable: true,
+    ...(appleRevoked ? { apple_revoked: true } : {}),
+  }, 500);
 }
 
 export function makeHandler(deps: HandlerDeps) {
@@ -49,6 +80,7 @@ export function makeHandler(deps: HandlerDeps) {
       return json({ error: "Missing authorization" }, 401);
     }
 
+    let appleRevoked = false;
     try {
       // Create admin client for privileged operations
       const supabaseAdmin = deps.createAdminClient();
@@ -67,6 +99,56 @@ export function makeHandler(deps: HandlerDeps) {
 
       const userId = user.id;
 
+      // 0. Apple-linked accounts: revoke the Sign in with Apple token first,
+      // so a failure here leaves all data and the account in place.
+      if (isAppleLinked(user)) {
+        const code = await readAuthorizationCode(req);
+        if (!code) {
+          console.error(
+            `delete-account: Apple-linked user ${userId} sent no authorization_code`,
+          );
+          // `code` is what the app matches on to show the Apple sheet and retry.
+          return json({
+            error: "Apple re-authentication required",
+            code: "apple_reauth_required",
+            step: "revoke apple token",
+            retryable: true,
+          }, 400);
+        }
+        // Fail closed: without the stored Apple user ID we can't check that the
+        // code belongs to this account.
+        const expectedSubject = appleSubject(user);
+        if (!expectedSubject) {
+          console.error(
+            `delete-account: Apple-linked user ${userId} has no Apple identity sub on file`,
+          );
+          return failure("revoke apple token");
+        }
+        const config = readAppleConfig(deps.getEnv);
+        if (!config.ok) {
+          console.error(
+            `delete-account: Apple revocation not configured, missing secrets: ${
+              config.missing.join(", ")
+            }`,
+          );
+          return failure("revoke apple token");
+        }
+        const revoke = await revokeAppleToken({
+          config: config.config,
+          authorizationCode: code,
+          expectedSubject,
+          fetch: deps.fetch,
+          nowSeconds: deps.nowSeconds?.() ?? Math.floor(Date.now() / 1000),
+        });
+        if (!revoke.ok) {
+          console.error(
+            `delete-account: revoke apple token failed for ${userId}: ${revoke.message}`,
+          );
+          return failure("revoke apple token");
+        }
+        appleRevoked = true;
+      }
+
       // 1-3. Delete backup files, backup_metadata rows, and the profile row.
       // Stop on the first failure and keep the auth user so the user can retry.
       const cleanup = await deleteUserData(supabaseAdmin, userId);
@@ -74,7 +156,7 @@ export function makeHandler(deps: HandlerDeps) {
         console.error(
           `delete-account: ${cleanup.step} failed for ${userId}: ${cleanup.message}`,
         );
-        return failure(cleanup.step);
+        return failure(cleanup.step, appleRevoked);
       }
 
       // 4. Delete the auth user (must be last)
@@ -86,13 +168,13 @@ export function makeHandler(deps: HandlerDeps) {
         console.error(
           `delete-account: delete auth user failed for ${userId}: ${deleteError.message}`,
         );
-        return failure("delete auth user");
+        return failure("delete auth user", appleRevoked);
       }
 
       return json({ message: "Account deleted successfully" }, 200);
     } catch (err) {
       console.error("delete-account: unexpected error", err);
-      return failure("unexpected");
+      return failure("unexpected", appleRevoked);
     }
   };
 }
