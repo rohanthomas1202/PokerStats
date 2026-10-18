@@ -163,30 +163,10 @@ final class BackupService {
 
     // MARK: - Restore Backup
 
+    /// Used by both manual restore (Settings) and `autoRestoreIfEmpty`.
+    /// Validates first, then deletes and inserts in one save, rolling back on error.
     func restoreBackup(_ payload: BackupPayload) throws {
-        // 1. Delete all existing local data
-        try deleteAllLocalData()
-
-        // 2. Recreate sessions with hands
-        for sessionDTO in payload.sessions {
-            let session = Session.fromDTO(sessionDTO)
-            modelContext.insert(session)
-
-            for handDTO in sessionDTO.hands {
-                let hand = Hand.fromDTO(handDTO)
-                hand.session = session
-                modelContext.insert(hand)
-            }
-        }
-
-        // 3. Recreate settings
-        if let settingsDTO = payload.settings {
-            let settings = Settings.fromDTO(settingsDTO)
-            modelContext.insert(settings)
-        }
-
-        // 4. Save
-        try modelContext.save()
+        try LocalDataRestorer(modelContext: modelContext).restore(payload)
     }
 
     // MARK: - Private Helpers
@@ -201,31 +181,6 @@ final class BackupService {
     private func fetchSettings() throws -> Settings? {
         let descriptor = FetchDescriptor<Settings>()
         return try modelContext.fetch(descriptor).first
-    }
-
-    private func deleteAllLocalData() throws {
-        // Delete all hands first (even though cascade should handle it)
-        let handDescriptor = FetchDescriptor<Hand>()
-        let hands = try modelContext.fetch(handDescriptor)
-        for hand in hands {
-            modelContext.delete(hand)
-        }
-
-        // Delete all sessions
-        let sessionDescriptor = FetchDescriptor<Session>()
-        let sessions = try modelContext.fetch(sessionDescriptor)
-        for session in sessions {
-            modelContext.delete(session)
-        }
-
-        // Delete all settings
-        let settingsDescriptor = FetchDescriptor<Settings>()
-        let settings = try modelContext.fetch(settingsDescriptor)
-        for setting in settings {
-            modelContext.delete(setting)
-        }
-
-        try modelContext.save()
     }
 
     private func enforceRetention(userId: UUID, keep: Int = 5) async throws {
