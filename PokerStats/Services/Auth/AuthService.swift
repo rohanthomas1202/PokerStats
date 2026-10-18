@@ -16,26 +16,35 @@ final class AuthService {
 
     var displayEmail: String { userEmail ?? "Unknown" }
 
-    private let client = SupabaseClient.shared
+    private let client: SupabaseClient
+    private var tokenStore: any TokenStore { client.tokenStore }
     private static let logger = Logger(subsystem: "com.rohanthomas.PokerStats", category: "AuthService")
+    @ObservationIgnored nonisolated(unsafe) private var invalidationObserver: (any NSObjectProtocol)?
+
+    init(client: SupabaseClient = .shared) {
+        self.client = client
+        // A definitive refresh failure has already cleared the tokens; flip
+        // the UI to match. Posted on the main actor, so this runs inline.
+        invalidationObserver = NotificationCenter.default.addObserver(
+            forName: .supabaseSessionInvalidated,
+            object: client,
+            queue: nil
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.clearSignedInState() }
+        }
+    }
+
+    deinit {
+        if let invalidationObserver {
+            NotificationCenter.default.removeObserver(invalidationObserver)
+        }
+    }
 
     // MARK: - Initialization
 
     func initialize() {
-        // Restore session from Keychain
-        if let tokenString = KeychainHelper.read(.accessToken),
-           let userIdString = KeychainHelper.read(.userId),
-           let id = UUID(uuidString: userIdString) {
-            isAuthenticated = true
-            userId = id
-            userEmail = KeychainHelper.read(.userEmail)
-
-            // Check if token needs refresh (non-blocking)
-            if isTokenExpired(tokenString) {
-                Task {
-                    await silentRefresh()
-                }
-            }
+        if restoreSession() {
+            Task { await silentRefresh() }
         }
 
         // Check Apple credential state if applicable
@@ -51,6 +60,21 @@ final class AuthService {
                 await self?.signOut()
             }
         }
+    }
+
+    /// Signed-in state comes from the stored tokens. Returns true when the
+    /// stored access token has expired and needs `silentRefresh()`.
+    @discardableResult
+    func restoreSession() -> Bool {
+        guard let tokenString = tokenStore.read(.accessToken),
+              let userIdString = tokenStore.read(.userId),
+              let id = UUID(uuidString: userIdString) else {
+            return false
+        }
+        isAuthenticated = true
+        userId = id
+        userEmail = tokenStore.read(.userEmail)
+        return isTokenExpired(tokenString)
     }
 
     // MARK: - Sign In with Apple
@@ -77,7 +101,7 @@ final class AuthService {
             )
 
             try storeSession(session)
-            try KeychainHelper.save(appleUserId, for: .appleUserId)
+            try tokenStore.save(appleUserId, for: .appleUserId)
             isAuthenticated = true
             isLoading = false
         } catch {
@@ -92,11 +116,16 @@ final class AuthService {
 
     func signOut() async {
         // Best-effort server sign out
-        if let token = KeychainHelper.read(.accessToken) {
+        if let token = tokenStore.read(.accessToken) {
             try? await client.signOut(accessToken: token)
         }
 
-        KeychainHelper.deleteAll()
+        tokenStore.deleteAll()
+        clearSignedInState()
+    }
+
+    /// Resets the signed-in UI state. Callers clear the stored tokens.
+    private func clearSignedInState() {
         isAuthenticated = false
         userEmail = nil
         userId = nil
@@ -166,32 +195,31 @@ final class AuthService {
     // MARK: - Private Helpers
 
     private func storeSession(_ session: AuthSession) throws {
-        try KeychainHelper.save(session.accessToken, for: .accessToken)
-        try KeychainHelper.save(session.refreshToken, for: .refreshToken)
-        try KeychainHelper.save(session.user.id.uuidString, for: .userId)
+        try tokenStore.save(session.accessToken, for: .accessToken)
+        try tokenStore.save(session.refreshToken, for: .refreshToken)
+        try tokenStore.save(session.user.id.uuidString, for: .userId)
         userId = session.user.id
         if let email = session.user.email {
-            try KeychainHelper.save(email, for: .userEmail)
+            try tokenStore.save(email, for: .userEmail)
             userEmail = email
         }
     }
 
-    private func silentRefresh() async {
-        guard let refreshToken = KeychainHelper.read(.refreshToken) else {
-            await signOut()
-            return
-        }
-
+    /// Only a definitive auth failure signs the user out (via
+    /// `.supabaseSessionInvalidated`). Transient failures keep the session;
+    /// the next request or launch refreshes again.
+    func silentRefresh() async {
         do {
-            let session = try await client.refreshSession(refreshToken: refreshToken)
-            try storeSession(session)
+            let session = try await client.refreshStoredSession()
+            userId = session.user.id
+            if let email = session.user.email { userEmail = email }
         } catch {
-            await signOut()
+            Self.logger.info("Silent refresh failed: \(String(describing: error), privacy: .private)")
         }
     }
 
     private func checkAppleCredentialState() {
-        guard let appleUserId = KeychainHelper.read(.appleUserId) else { return }
+        guard let appleUserId = tokenStore.read(.appleUserId) else { return }
 
         ASAuthorizationAppleIDProvider().getCredentialState(forUserID: appleUserId) { [weak self] state, _ in
             Task { @MainActor in

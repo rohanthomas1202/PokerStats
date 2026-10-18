@@ -42,6 +42,9 @@ struct StorageObject: Codable, Sendable {
 enum SupabaseError: LocalizedError, Sendable {
     case httpError(statusCode: Int, message: String)
     case sessionExpired
+    /// A token refresh failed for a non-auth reason (offline, timeout, 5xx).
+    /// The session is kept; the next request tries again.
+    case refreshUnavailable
     case networkError(String)
     case decodingError(String)
     case notAuthenticated
@@ -50,6 +53,7 @@ enum SupabaseError: LocalizedError, Sendable {
         switch self {
         case .httpError(let code, let message): "HTTP \(code): \(message)"
         case .sessionExpired: "Session expired. Please sign in again."
+        case .refreshUnavailable: "Couldn't reach the server. Check your connection and try again."
         case .networkError(let message): "Network error: \(message)"
         case .decodingError(let message): "Decoding error: \(message)"
         case .notAuthenticated: "Not authenticated."
@@ -65,14 +69,22 @@ final class SupabaseClient: Sendable {
     private let projectURL: String
     private let anonKey: String
 
-    private let session: URLSession
+    typealias Transport = @Sendable (URLRequest) async throws -> (Data, URLResponse)
+
+    let tokenStore: any TokenStore
+    private let transport: Transport
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
 
-    init() {
+    /// Tests pass a fake transport and token store.
+    init(
+        tokenStore: any TokenStore = KeychainTokenStore(),
+        transport: @escaping Transport = { try await URLSession.shared.data(for: $0) }
+    ) {
         projectURL = Secrets.supabaseURL
         anonKey = Secrets.supabaseAnonKey
-        session = .shared
+        self.tokenStore = tokenStore
+        self.transport = transport
 
         encoder = JSONEncoder()
         encoder.keyEncodingStrategy = .convertToSnakeCase
@@ -323,30 +335,27 @@ final class SupabaseClient: Sendable {
     // MARK: - Token Management
 
     private func validAccessToken() async throws -> String? {
-        guard let token = KeychainHelper.read(.accessToken) else {
+        guard let token = tokenStore.read(.accessToken) else {
             return nil
         }
-
-        // Decode JWT to check expiration
         if isTokenExpired(token) {
-            // Attempt refresh
-            guard let refreshToken = KeychainHelper.read(.refreshToken) else {
-                return nil
-            }
-
-            do {
-                let newSession = try await refreshSession(refreshToken: refreshToken)
-                try KeychainHelper.save(newSession.accessToken, for: .accessToken)
-                try KeychainHelper.save(newSession.refreshToken, for: .refreshToken)
-                return newSession.accessToken
-            } catch {
-                // Refresh failed — clear tokens
-                KeychainHelper.deleteAll()
-                throw SupabaseError.sessionExpired
-            }
+            return try await refreshStoredSession().accessToken
         }
-
         return token
+    }
+
+    /// Refreshes with the stored refresh token. See `SessionRefresher` for
+    /// which failures sign the user out and which keep the session.
+    func refreshStoredSession() async throws -> AuthSession {
+        try await SessionRefresher(
+            store: tokenStore,
+            refresh: { try await self.refreshSession(refreshToken: $0) },
+            onInvalidated: {
+                await MainActor.run {
+                    NotificationCenter.default.post(name: .supabaseSessionInvalidated, object: self)
+                }
+            }
+        ).refreshStoredSession()
     }
 
     private func isTokenExpired(_ jwt: String) -> Bool {
@@ -374,7 +383,7 @@ final class SupabaseClient: Sendable {
 
     private func performRequest(_ request: URLRequest) async throws -> (Data, URLResponse) {
         do {
-            return try await session.data(for: request)
+            return try await transport(request)
         } catch {
             throw SupabaseError.networkError(error.localizedDescription)
         }
