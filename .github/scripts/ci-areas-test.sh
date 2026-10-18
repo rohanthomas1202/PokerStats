@@ -33,6 +33,28 @@ expect "workflow change"     "ios=true deno=true"   ".github/workflows/ci.yml"
 expect "prefix lookalike"    "ios=false deno=false" $'PokerStatsDocs/x.md\nproject.yml.bak\nsupabase.md'
 expect "no trailing newline" "ios=false deno=true"  "supabase/x.ts"
 
+# A file moved out of PokerStats/ must still run iOS. Without --no-renames,
+# git diff lists only the new path.
+repo=$(mktemp -d)
+trap 'rm -rf "$repo"' EXIT
+git -C "$repo" init -q
+mkdir "$repo/PokerStats"
+echo x > "$repo/PokerStats/Moved.swift"
+git -C "$repo" add -A
+git -C "$repo" -c user.name=t -c user.email=t@t commit -qm base
+mkdir "$repo/docs"
+git -C "$repo" mv PokerStats/Moved.swift docs/Moved.swift
+git -C "$repo" -c user.name=t -c user.email=t@t commit -qm move
+expect "rename out of app"   "ios=true deno=false"  "$(git -C "$repo" diff --name-only --no-renames HEAD^1 HEAD)"
+
+# git diff prints paths with spaces unquoted, one per line.
+mkdir -p "$repo/supabase/my fn"
+echo x > "$repo/supabase/my fn/index.ts"
+git -C "$repo" add -A
+git -C "$repo" -c user.name=t -c user.email=t@t commit -qm space
+expect "path with spaces"    "ios=false deno=true"  "$(git -C "$repo" diff --name-only --no-renames HEAD^1 HEAD)"
+expect "spaces, two areas"   "ios=true deno=true"   $'PokerStats/My View.swift\nsupabase/my fn/index.ts'
+
 if (( failures > 0 )); then
   echo "$failures test(s) failed"
   exit 1
