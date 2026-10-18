@@ -17,17 +17,38 @@ jobs:
   ios:
     name: iOS build and test
     runs-on: macos-26
-    timeout-minutes: 45
+    # Target is ~5 min (build ~1 min, test ~3 min incl. simulator boot).
+    timeout-minutes: 20
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+      XCODEGEN_VERSION: 2.46.0
+      XCODEGEN_SHA256: 4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806
     steps:
       - uses: actions/checkout@v7
 
+      # Pinned release with checksum check, instead of whatever brew has today.
       - name: Install XcodeGen
-        run: brew install xcodegen
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/xcodegen.zip" \
+            "https://github.com/yonaskolb/XcodeGen/releases/download/${XCODEGEN_VERSION}/xcodegen.zip"
+          echo "${XCODEGEN_SHA256}  $RUNNER_TEMP/xcodegen.zip" | shasum -a 256 -c -
+          unzip -q "$RUNNER_TEMP/xcodegen.zip" -d "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/xcodegen/bin" >> "$GITHUB_PATH"
 
       - name: Generate Xcode project
-        run: xcodegen generate
+        run: xcodegen --version && xcodegen generate
+
+      # SwiftPM checkouts and the Clang/Swift module cache. Keyed on
+      # Package.resolved (once the project has packages) and project.yml.
+      - name: Cache SwiftPM and module cache
+        uses: actions/cache@v6
+        with:
+          path: |
+            SourcePackages
+            DerivedData/ModuleCache.noindex
+          key: ios-${{ runner.os }}-xcode26.6-${{ hashFiles('**/Package.resolved', 'project.yml') }}
+          restore-keys: |
+            ios-${{ runner.os }}-xcode26.6-
 
       # Newest installed iOS 26 runtime, first iPhone on it.
       - name: Pick simulator
@@ -43,12 +64,11 @@ jobs:
           echo "udid=${udid%% *}" >> "$GITHUB_OUTPUT"
 
       # No .env in CI: the project's pre-build script writes a placeholder
-      # Secrets.plist, so no secrets are needed.
-      # Signing: ad-hoc ("-") with no team or profile, so no certificates or
-      # secrets are needed. CODE_SIGNING_ALLOWED=NO can't be used: it also
-      # drops the app's entitlements, and without the App Group entitlement
-      # containerURL(forSecurityApplicationGroupIdentifier:) returns nil and
-      # the test host app crashes at launch in AppGroupContainer.
+      # Secrets.plist, so no secrets are needed. Signing is off, so the app has
+      # no App Group entitlement; AppGroupContainer falls back to an in-memory
+      # store only when running as a unit-test host (a normal launch throws).
+      # -disableAutomaticPackageResolution makes xcodebuild use Package.resolved
+      # as committed and fail if it is missing or out of date.
       - name: Build
         run: >
           xcodebuild build-for-testing
@@ -56,10 +76,9 @@ jobs:
           -scheme PokerStats
           -destination "id=${{ steps.sim.outputs.udid }}"
           -derivedDataPath DerivedData
-          CODE_SIGN_STYLE=Manual
-          CODE_SIGN_IDENTITY=-
-          DEVELOPMENT_TEAM=
-          PROVISIONING_PROFILE_SPECIFIER=
+          -clonedSourcePackagesDirPath SourcePackages
+          -disableAutomaticPackageResolution
+          CODE_SIGNING_ALLOWED=NO
 
       # Unit tests only. PokerStatsUITests is the fastlane screenshot suite.
       - name: Test
@@ -69,7 +88,17 @@ jobs:
           -scheme PokerStats
           -destination "id=${{ steps.sim.outputs.udid }}"
           -derivedDataPath DerivedData
+          -resultBundlePath TestResults.xcresult
           -only-testing:PokerStatsTests
+
+      - name: Upload test results
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: TestResults.xcresult
+          path: TestResults.xcresult
+          if-no-files-found: ignore
+          retention-days: 7
 
   deno:
     name: Edge functions (Deno)
@@ -80,7 +109,7 @@ jobs:
 
       - uses: denoland/setup-deno@v2
         with:
-          deno-version: v2.x
+          deno-version: v2.9.7
 
       # Each function has its own deno.json import map, so run per folder.
       - name: Check and test

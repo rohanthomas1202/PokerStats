@@ -376,7 +376,7 @@ Cmd + U
 
 GitHub Actions runs `.github/workflows/ci.yml` on every pull request to `main` and on every push to `main`. It has two jobs:
 
-- **iOS build and test** (`macos-26` runner, Xcode 26.6): installs XcodeGen, runs `xcodegen generate`, builds the `PokerStats` scheme for the newest available iOS 26 iPhone simulator with ad-hoc signing (no team, certificate, or profile; this keeps the App Group entitlement the app needs at launch), then runs the `PokerStatsTests` unit tests. The fastlane screenshot UI tests are not run in CI. CI has no `.env` file and no secrets: the pre-build script writes a placeholder `Secrets.plist`.
+- **iOS build and test** (`macos-26` runner, Xcode 26.6): installs a pinned XcodeGen release, runs `xcodegen generate`, builds the `PokerStats` scheme for the newest available iOS 26 iPhone simulator with code signing off, then runs the `PokerStatsTests` unit tests. Unsigned builds have no App Group entitlement, so `AppGroupContainer` uses an in-memory store when it runs as a unit-test host; a normal launch without the App Group fails with a clear error instead. SwiftPM checkouts and the module cache are cached, and packages resolve only from the committed `Package.resolved`. If tests fail, the `.xcresult` bundle is uploaded as a run artifact. The fastlane screenshot UI tests are not run in CI. CI has no `.env` file and no secrets: the pre-build script writes a placeholder `Secrets.plist`.
 - **Edge functions (Deno)** (`ubuntu-latest`): runs `deno check` and `deno test` in each folder under `supabase/functions/`.
 
 Dependabot (`.github/dependabot.yml`) opens weekly PRs to update the GitHub Actions versions used in the workflow.
