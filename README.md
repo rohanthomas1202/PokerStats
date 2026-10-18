@@ -140,7 +140,7 @@ The table must match `Package.resolved` exactly. The rest of `PokerStats.xcodepr
 ### Tooling (not shipped in the app)
 
 - **XcodeGen**: generates the Xcode project from `project.yml`. Installed with Homebrew, unpinned.
-- **fastlane**: screenshots and App Store uploads (`fastlane/`). There is no `Gemfile`, so the version is not pinned.
+- **fastlane**: screenshots and App Store uploads (`fastlane/`). There is no `Gemfile`, so the version is not pinned. The `release` lane only uploads the build and metadata (`submit_for_review: false`, `automatic_release: false`). Submitting for App Review is manual and owner-only, done in App Store Connect. No CI workflow runs `fastlane release`.
 - **Supabase edge function** (`supabase/functions/delete-account`): imports `@supabase/supabase-js@2.118.0` from esm.sh and `@supabase/functions-js@2.118.0` from JSR (`deno.json`), both pinned to exact versions. Apple token revocation uses WebCrypto and `fetch` only, with no extra package. It needs the Edge Function secrets `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_CLIENT_ID` and `APPLE_PRIVATE_KEY`.
 
 ---

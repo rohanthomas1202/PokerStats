@@ -45,7 +45,7 @@ Deploy to TestFlight
 [bundle exec] fastlane ios release
 ```
 
-Deploy to App Store
+Upload to App Store Connect (no review submission; the owner submits manually)
 
 ----
 
