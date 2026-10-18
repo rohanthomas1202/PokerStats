@@ -14,6 +14,9 @@ final class SettingsViewModel {
     var showDeleteAllConfirmation = false
     var showDeleteAllSecondConfirmation = false
 
+    /// Tests use an isolated store.
+    @ObservationIgnored var autoRestoreFlag = AutoRestoreFlag.standard
+
     func loadSettings(from context: ModelContext) {
         let descriptor = FetchDescriptor<Settings>()
         if let settings = try? context.fetch(descriptor).first {
@@ -40,6 +43,9 @@ final class SettingsViewModel {
     }
 
     func deleteAllData(from context: ModelContext) {
+        // Set first: a deliberate wipe must never be undone by auto-restore,
+        // even if the app is killed mid-delete.
+        autoRestoreFlag.set()
         do {
             try context.delete(model: Hand.self)
             try context.delete(model: Session.self)
@@ -52,8 +58,11 @@ final class SettingsViewModel {
     }
 
     /// After the server confirmed account deletion: remove every local model
-    /// (settings too), end any Live Activity, and refresh widgets.
+    /// (settings too), end any Live Activity, and refresh widgets. Also clears
+    /// the auto-restore flag: the account and its backups are gone, so the
+    /// next sign-in is treated like a fresh install.
     func wipeAfterAccountDeletion(from context: ModelContext) {
+        autoRestoreFlag.clear()
         do {
             try LocalDataWiper(modelContext: context).wipe()
         } catch {

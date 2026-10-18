@@ -63,9 +63,11 @@ struct PokerStatsApp: App {
         let autoRestore = AutoRestore(
             modelContext: context,
             listBackups: { try await backupService.listBackups() },
-            downloadBackup: { try await backupService.downloadBackup(metadata: $0) }
+            downloadBackup: { try await backupService.downloadBackup(metadata: $0) },
+            flag: .standard
         )
-        guard (try? LocalDataRestorer(modelContext: context).isStoreEmpty()) == true else { return }
+        guard !AutoRestoreFlag.standard.isSet,
+              (try? LocalDataRestorer(modelContext: context).isStoreEmpty()) == true else { return }
 
         Task { @MainActor in
             cloudStatusMessage = "Restoring from cloud..."
@@ -78,7 +80,7 @@ struct PokerStatsApp: App {
                     try? await Task.sleep(for: .seconds(2))
                     cloudStatusMessage = nil
                     return
-                case .skippedLocalDataExists, .skippedDataAppearedDuringDownload:
+                case .skippedLocalDataExists, .skippedDataAppearedDuringDownload, .skippedAlreadyRan:
                     // Local data wins; nothing was restored or deleted.
                     cloudStatusMessage = nil
                     return
