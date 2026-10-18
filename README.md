@@ -209,9 +209,10 @@ One repo holds the iOS app, the backend, and the web app.
 - **Shared test data:** goes in `shared/fixtures/`. The iOS and web test suites will both read it, so the two compute the same stats. It doesn't exist yet.
 - **Specs:** product specs are in `docs/specs/`.
 - **Backlog:** this repo's issues, ranked in [#17](https://github.com/rohanthomas1202/PokerStats/issues/17). The `ios`, `backend`, and `web` lane labels decide which engineer takes an item.
-- **CI:** each pull request runs only the jobs its changes touch, and one check, `CI passed`, reports the result ([#98](https://github.com/rohanthomas1202/PokerStats/issues/98)). See [Continuous Integration](#continuous-integration).
+- **CI:** each pull request runs only the jobs its changes touch, and one check, `CI passed`, reports the result ([#98](https://github.com/rohanthomas1202/PokerStats/issues/98)). The `Detect changes` job runs `ci-areas-test.sh` before it picks the jobs. See [Continuous Integration](#continuous-integration).
 - **Review rules:** `.github/CODEOWNERS` sets who must review each path ([#99](https://github.com/rohanthomas1202/PokerStats/issues/99)).
-- **Releases:** iOS builds are uploaded only from tags ([#100](https://github.com/rohanthomas1202/PokerStats/issues/100)). An `ios-sprint-N` tag uploads a TestFlight build for testers. An `ios-vX.Y` tag uploads an App Store build, and the owner submits it for review by hand.
+- **Releases (planned):** iOS builds will be uploaded only from tags ([#100](https://github.com/rohanthomas1202/PokerStats/issues/100)). An `ios-sprint-N` tag will upload a TestFlight build for testers, and an `ios-vX.Y` tag will upload an App Store build that the owner submits for review by hand. Until that workflow merges, no CI workflow runs a release lane.
+- **Build and release scripts:** `fastlane/` holds the fastlane lanes, `ci_scripts/` holds the Xcode Cloud and build-number scripts, and `.github/scripts/` holds the scripts and tests the CI workflows call.
 
 ---
 
