@@ -123,9 +123,9 @@ Third-party Swift packages are allowed. Every package the app uses is listed her
 
 | Name | Pinned version | Purpose | Link |
 |------|----------------|---------|------|
-| None | — | — | — |
+| supabase-swift (products Auth, Functions, PostgREST, Storage) | 2.55.4 | Supabase clients: Sign in with Apple and the session (Keychain storage, token refresh), backups in Storage, `backup_metadata` and `profiles` through PostgREST, and the `delete-account` edge function. Realtime is not used. | [supabase/supabase-swift](https://github.com/supabase/supabase-swift) |
 
-There are no SPM packages yet: `project.yml` has no `packages:` block and there is no `Package.resolved`.
+`Package.resolved` also pins the packages supabase-swift depends on (swift-asn1, swift-clocks, swift-concurrency-extras, swift-crypto, swift-http-types, swift-issue-reporting, xctest-dynamic-overlay). They are not used by the app directly.
 
 ### Policy
 
@@ -379,7 +379,7 @@ GitHub Actions runs `.github/workflows/ci.yml` on every pull request to `main` a
 - **iOS build and test** (`macos-26` runner, Xcode 26.6): installs a pinned XcodeGen release, runs `xcodegen generate`, builds the `PokerStats` scheme for the newest available iOS 26 iPhone simulator with code signing off, then runs the `PokerStatsTests` unit tests. Unsigned builds have no App Group entitlement, so `AppGroupContainer` uses an in-memory store when it runs as a unit-test host; a normal launch without the App Group fails with a clear error instead. SwiftPM checkouts and the module cache are cached, and packages resolve only from the committed `Package.resolved`. If tests fail, the `.xcresult` bundle is uploaded as a run artifact. The fastlane screenshot UI tests are not run in CI. CI has no `.env` file and no secrets: the pre-build script writes a placeholder `Secrets.plist`. The build gets its build number from `ci_scripts/build_number.sh`, and `ci_scripts/check_build_numbers.sh` checks that the built app and its widget extension both carry it, with the same version.
 - **Edge functions (Deno)** (`ubuntu-latest`): runs `deno check` and `deno test` in each folder under `supabase/functions/`.
 
-Dependabot (`.github/dependabot.yml`) opens weekly PRs to update the GitHub Actions versions used in the workflow.
+Dependabot (`.github/dependabot.yml`) opens weekly PRs to update the GitHub Actions versions used in the workflow and the Swift packages in `Package.resolved`. A Swift package update PR must also update the `exactVersion` in `project.yml` and the Dependencies table.
 
 ---
 
