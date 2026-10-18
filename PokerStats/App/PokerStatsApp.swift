@@ -59,23 +59,30 @@ struct PokerStatsApp: App {
 
     private func autoRestoreIfEmpty() {
         let context = container.mainContext
-        let sessionCount = (try? context.fetchCount(FetchDescriptor<Session>())) ?? 0
-        guard sessionCount == 0 else { return }
-
         let backupService = BackupService(authService: authService, modelContext: context)
+        let autoRestore = AutoRestore(
+            modelContext: context,
+            listBackups: { try await backupService.listBackups() },
+            downloadBackup: { try await backupService.downloadBackup(metadata: $0) }
+        )
+        guard (try? LocalDataRestorer(modelContext: context).isStoreEmpty()) == true else { return }
+
         Task { @MainActor in
             cloudStatusMessage = "Restoring from cloud..."
             do {
-                let backups = try await backupService.listBackups()
-                guard let latest = backups.first else {
+                switch try await autoRestore.run() {
+                case .restored(let sessionCount):
+                    cloudStatusMessage = "Restored \(sessionCount) sessions"
+                case .noBackups:
                     cloudStatusMessage = "No backups found"
                     try? await Task.sleep(for: .seconds(2))
                     cloudStatusMessage = nil
                     return
+                case .skippedLocalDataExists, .skippedDataAppearedDuringDownload:
+                    // Local data wins; nothing was restored or deleted.
+                    cloudStatusMessage = nil
+                    return
                 }
-                let payload = try await backupService.downloadBackup(metadata: latest)
-                try backupService.restoreBackup(payload)
-                cloudStatusMessage = "Restored \(payload.sessions.count) sessions"
             } catch {
                 cloudStatusMessage = "Restore failed: \(error.localizedDescription)"
             }
