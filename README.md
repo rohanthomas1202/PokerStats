@@ -211,7 +211,7 @@ One repo holds the iOS app, the backend, and the web app.
 - **Backlog:** this repo's issues, ranked in [#17](https://github.com/rohanthomas1202/PokerStats/issues/17). The `ios`, `backend`, and `web` lane labels decide which engineer takes an item.
 - **CI:** each pull request runs only the jobs its changes touch, and one check, `CI passed`, reports the result ([#98](https://github.com/rohanthomas1202/PokerStats/issues/98)). The `Detect changes` job runs `ci-areas-test.sh` before it picks the jobs. See [Continuous Integration](#continuous-integration).
 - **Review rules:** `.github/CODEOWNERS` sets who must review each path ([#99](https://github.com/rohanthomas1202/PokerStats/issues/99)).
-- **Releases (planned):** iOS builds will be uploaded only from tags ([#100](https://github.com/rohanthomas1202/PokerStats/issues/100)). An `ios-sprint-N` tag will upload a TestFlight build for testers, and an `ios-vX.Y` tag will upload an App Store build that the owner submits for review by hand. Until that workflow merges, no CI workflow runs a release lane.
+- **Releases:** `.github/workflows/ios-release.yml` uploads iOS builds only from tags. An `ios-sprint-N` tag uploads a TestFlight build for testers. An `ios-vX.Y` tag uploads an App Store build, and each of those uploads waits for the owner's approval through the `app-store` environment and the `APP_STORE_UPLOAD_ENABLED` variable. CI never submits for review; the owner does that by hand. [#100](https://github.com/rohanthomas1202/PokerStats/issues/100) and [#31](https://github.com/rohanthomas1202/PokerStats/issues/31) stay open until the owner setup is done and a dry run on `main` is green (see Releases).
 - **Build and release scripts:** `fastlane/` holds the fastlane lanes, `ci_scripts/` holds the Xcode Cloud and build-number scripts, and `.github/scripts/` holds the scripts and tests the CI workflows call.
 
 ---
@@ -409,13 +409,27 @@ Dependabot (`.github/dependabot.yml`) opens weekly PRs to update the GitHub Acti
 | Push an `ios-vX.Y` or `ios-vX.Y.Z` tag | Uploads the App Store build. The owner submits it for review by hand in App Store Connect, every time. CI never submits. |
 | Run the workflow by hand (Actions > iOS release > Run workflow, on `main`) | Dry run: builds and signs, no upload. |
 
-A tag must point at a commit on `main` whose "CI passed" check succeeded, or the run stops before building. Only one release runs at a time. The `.ipa` and dSYMs are saved as run artifacts for 30 days.
+A tag must point at a commit on `main` whose "CI passed" check succeeded, or the run stops before building. Only one release runs at a time.
 
-`ios-sprint-*` runs the `testflight` job (`fastlane ios beta`, TestFlight). `ios-v*` runs the `appstore` job (`fastlane ios release`, App Store Connect build upload only; never `submit_for_review`, and metadata and screenshots are skipped until #53 lands). Manual dispatch runs the `testflight` job with `fastlane ios beta dry_run:true` (build and sign only). The two jobs are exclusive, and the `testflight` job never calls the release lane. The "What to Test" notes for TestFlight are the commit subjects since the previous valid `ios-*` release tag (`.github/scripts/release-notes.sh`). Signing is cloud-managed: xcodebuild gets the App Store Connect API key (`-authenticationKeyPath`, `-authenticationKeyID`, `-authenticationKeyIssuerID`) with `-allowProvisioningUpdates` for both archive and export, so no certificate or profile is stored in the repo or in secrets. That covers the widget extension (Live Activity) and the App Group `group.com.rohanthomas.PokerStats`. Only dSYMs are kept as run artifacts; the repo is public, so the `.ipa` is not.
+`ios-sprint-*` runs the `testflight` job (`fastlane ios beta`, TestFlight). `ios-v*` runs the `appstore` job (`fastlane ios release`, App Store Connect build upload only; never `submit_for_review`, and metadata and screenshots are skipped until #53 lands). Manual dispatch runs the `testflight` job with `fastlane ios beta dry_run:true` (build and sign only). The two jobs are exclusive, and the `testflight` job never calls the release lane. The "What to Test" notes for TestFlight are the commit subjects since the previous valid `ios-*` release tag (`.github/scripts/release-notes.sh`). Signing is cloud-managed: xcodebuild gets the App Store Connect API key (`-authenticationKeyPath`, `-authenticationKeyID`, `-authenticationKeyIssuerID`) with `-allowProvisioningUpdates` for both archive and export, so no certificate or profile is stored in the repo or in secrets. That covers the widget extension (Live Activity) and the App Group `group.com.rohanthomas.PokerStats`. Only dSYMs are kept as run artifacts, for 30 days; the repo is public, so the `.ipa` is not.
 
-The `appstore` job runs in the `app-store` GitHub environment and fails at its first step unless the repository variable `APP_STORE_UPLOAD_ENABLED` is `true`. The owner sets that variable only after adding himself as a required reviewer on `app-store`, so every App Store upload waits for his approval. Branch protection does not replace that reviewer.
+The `appstore` job runs in the `app-store` GitHub environment and fails at its first step unless the repository variable `APP_STORE_UPLOAD_ENABLED` is `true`. Once the owner setup below is done, every App Store upload waits for the owner's approval on that environment.
 
-Both jobs need these secrets, stored as environment secrets on `testflight` and `app-store` (Settings > Environments), not as repository secrets:
+#### Owner setup
+
+Do these steps in this order ([#31](https://github.com/rohanthomas1202/PokerStats/issues/31)). Uploads fail until the secrets are in place, and App Store uploads also fail until `APP_STORE_UPLOAD_ENABLED` is set.
+
+1. Sign the App Store Connect agreement ([#66](https://github.com/rohanthomas1202/PokerStats/issues/66)). The App Store Connect API returns 403 until then.
+2. Create the `testflight` and `app-store` environments (Settings > Environments).
+3. Limit each environment's deployment branches and tags: `testflight` to `main` and `ios-sprint-*` tags, `app-store` to `ios-v*` tags. Do this before adding any secret. Without it, a write collaborator can push an edited copy of the workflow on another branch and read the App Store Connect key from the environment.
+4. On `app-store`, add the owner as a required reviewer. GitHub creates a missing environment with no protection, and branch protection does not replace that reviewer.
+5. Add the secrets below to both environments as environment secrets, not as repository secrets. A job outside those environments then gets no keys.
+6. Set the repository variable `APP_STORE_UPLOAD_ENABLED=true` (Settings > Secrets and variables > Actions > Variables).
+7. Run the workflow by hand on `main` as a dry run to confirm signing.
+
+Recommended: add a tag ruleset that restricts who can create `ios-*` tags. Pushing a tag is what starts an upload, and without a ruleset any write collaborator can push one.
+
+Both jobs need these secrets on `testflight` and `app-store`:
 
 - `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_PRIVATE_KEY`: the App Store Connect API key. Cloud-managed signing needs the Admin role, or App Manager with access to certificates.
 - `SUPABASE_URL`, `SUPABASE_ANON_KEY`: written to `.env` so the build gets the real `Secrets.plist`. The run fails rather than ship the placeholder values.
