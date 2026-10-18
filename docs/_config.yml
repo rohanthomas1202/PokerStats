@@ -1,0 +1,6 @@
+# GitHub Pages (Jekyll) config for the docs/ folder.
+# Only the privacy policy is meant to be published; the engineering plans
+# under superpowers/ are excluded from the site.
+title: PokerStats
+exclude:
+  - superpowers
