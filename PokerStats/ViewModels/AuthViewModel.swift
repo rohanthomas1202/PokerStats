@@ -1,5 +1,6 @@
 import Foundation
 import AuthenticationServices
+import os
 
 @Observable
 @MainActor
@@ -45,8 +46,15 @@ final class AuthViewModel {
         let rawNonce: String
     }
 
+    /// Shown when Apple or Supabase rejects the sign-in. Details go to the log only.
+    static let signInFailedMessage = "Couldn't sign in with Apple. Please try again."
+    /// Shown when Apple's response is incomplete or no attempt is in progress.
+    static let signInIncompleteMessage = "Sign-in didn't finish. Please try again."
+
+    private static let logger = Logger(subsystem: "com.rohanthomas.PokerStats", category: "AuthViewModel")
+
     /// Nonce for the sign-in attempt in progress. Memory only, used once.
-    private var pendingNonce: SignInNonce?
+    @ObservationIgnored private var pendingNonce: SignInNonce?
 
     /// SignInWithAppleButton's request closure; runs once per attempt.
     func configureAppleRequest(_ request: ASAuthorizationAppleIDRequest) {
@@ -58,6 +66,7 @@ final class AuthViewModel {
     func startAppleSignInAttempt() -> String {
         let nonce = SignInNonce()
         pendingNonce = nonce
+        errorMessage = nil // a repeat failure then re-announces for VoiceOver
         return nonce.hashed
     }
 
@@ -68,7 +77,8 @@ final class AuthViewModel {
                   let identityToken = credential.identityToken,
                   let authorizationCode = credential.authorizationCode else {
                 pendingNonce = nil
-                errorMessage = "Missing Apple credentials."
+                Self.logger.error("Apple sign-in returned no identity token or authorization code")
+                errorMessage = Self.signInIncompleteMessage
                 return
             }
             completeAppleSignIn(
@@ -82,7 +92,8 @@ final class AuthViewModel {
             pendingNonce = nil
             // User cancelled is not an error
             if (error as? ASAuthorizationError)?.code == .canceled { return }
-            errorMessage = error.localizedDescription
+            Self.logSignInFailure(error, step: "apple")
+            errorMessage = Self.signInFailedMessage
         }
     }
 
@@ -96,7 +107,7 @@ final class AuthViewModel {
         appleUserId: String
     ) -> Task<Void, Never>? {
         guard let nonce = pendingNonce else {
-            errorMessage = "Sign-in request expired. Try again."
+            errorMessage = Self.signInIncompleteMessage
             return nil
         }
         pendingNonce = nil
@@ -116,9 +127,23 @@ final class AuthViewModel {
                 try await performAppleSignIn(credential)
                 isShowingSignIn = false
             } catch {
-                errorMessage = error.localizedDescription
+                Self.logSignInFailure(error, step: "supabase")
+                errorMessage = Self.signInFailedMessage
             }
             isProcessing = false
+        }
+    }
+
+    /// Logs the error kind and status publicly; the server's message stays
+    /// private. Never logs the credential, tokens, or nonce.
+    private static func logSignInFailure(_ error: Error, step: StaticString) {
+        let stepName = "\(step)"
+        switch error {
+        case SupabaseError.httpError(let statusCode, let message):
+            logger.error("Sign in with Apple failed at \(stepName, privacy: .public): HTTP \(statusCode, privacy: .public) \(message, privacy: .private)")
+        default:
+            let kind = String(describing: type(of: error))
+            logger.error("Sign in with Apple failed at \(stepName, privacy: .public): \(kind, privacy: .public) \(error.localizedDescription, privacy: .private)")
         }
     }
 

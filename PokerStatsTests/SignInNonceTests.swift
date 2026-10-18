@@ -144,7 +144,7 @@ struct SignInNonceTests {
 
         #expect(complete(vm) == nil)
         #expect(recorder.credentials.count == 1)
-        #expect(vm.errorMessage == "Sign-in request expired. Try again.")
+        #expect(vm.errorMessage == "Sign-in didn't finish. Please try again.")
     }
 
     @Test func completionWithoutAttempt_doesNotCallSupabase() {
@@ -153,6 +153,7 @@ struct SignInNonceTests {
         #expect(complete(vm) == nil)
         #expect(recorder.credentials.isEmpty)
         #expect(!vm.isProcessing)
+        #expect(vm.errorMessage == "Sign-in didn't finish. Please try again.")
     }
 
     @Test func appleFailure_discardsNonce() {
@@ -171,10 +172,43 @@ struct SignInNonceTests {
         vm.isShowingSignIn = true
         _ = vm.startAppleSignInAttempt()
         await complete(vm)?.value
-        #expect(vm.errorMessage == "Supabase said no")
+        #expect(vm.errorMessage == "Couldn't sign in with Apple. Please try again.")
         #expect(vm.isShowingSignIn)
         #expect(!vm.isProcessing)
         #expect(complete(vm) == nil)
         #expect(recorder.credentials.count == 1)
+    }
+
+    @Test func supabaseHTTPError_showsFixedCopy_notServerText() async {
+        let recorder = SignInRecorder()
+        let serverText = #"{"code":400,"error_code":"bad_jwt","msg":"Nonces mismatch"}"#
+        let vm = viewModel(recorder) {
+            throw SupabaseError.httpError(statusCode: 400, message: serverText)
+        }
+        _ = vm.startAppleSignInAttempt()
+        await complete(vm)?.value
+        let shown = vm.errorMessage ?? ""
+        #expect(shown == "Couldn't sign in with Apple. Please try again.")
+        #expect(!shown.contains("HTTP"))
+        #expect(!shown.contains("Nonces mismatch"))
+    }
+
+    @Test func appleNonCancelFailure_showsFixedCopy_andDiscardsNonce() {
+        let recorder = SignInRecorder()
+        let vm = viewModel(recorder)
+        _ = vm.startAppleSignInAttempt()
+        vm.handleAppleSignIn(result: .failure(ASAuthorizationError(.failed)))
+        #expect(vm.errorMessage == "Couldn't sign in with Apple. Please try again.")
+        #expect(complete(vm) == nil)
+        #expect(recorder.credentials.isEmpty)
+    }
+
+    @Test func newAttempt_clearsPreviousError() {
+        let recorder = SignInRecorder()
+        let vm = viewModel(recorder)
+        #expect(complete(vm) == nil)
+        #expect(vm.errorMessage != nil)
+        _ = vm.startAppleSignInAttempt()
+        #expect(vm.errorMessage == nil)
     }
 }
