@@ -120,6 +120,9 @@ export async function makeClientSecret(
 
 type IdTokenClaims = { iss?: unknown; aud?: unknown; sub?: unknown };
 
+// Does not verify the signature or exp. Safe only for the id_token returned
+// directly by Apple's token endpoint over TLS; do not reuse for a
+// client-supplied token.
 function decodeJwtClaims(jwt: string): IdTokenClaims | undefined {
   try {
     const part = jwt.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
