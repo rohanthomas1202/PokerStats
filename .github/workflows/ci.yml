@@ -14,8 +14,38 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Decides which jobs this change needs. Pull requests diff the merge commit
+  # against its first parent (the base branch tip). Pushes to main run all jobs.
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      ios: ${{ steps.areas.outputs.ios }}
+      deno: ${{ steps.areas.outputs.deno }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2
+
+      - name: Test change detection
+        run: .github/scripts/ci-areas-test.sh
+
+      - name: Pick jobs
+        id: areas
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            areas=$(git diff --name-only HEAD^1 HEAD | .github/scripts/ci-areas.sh)
+          else
+            areas=$'ios=true\ndeno=true'
+          fi
+          echo "$areas"
+          echo "$areas" >> "$GITHUB_OUTPUT"
+
   ios:
     name: iOS build and test
+    needs: changes
+    if: needs.changes.outputs.ios == 'true'
     runs-on: macos-26
     # Target is ~5 min (build ~1 min, test ~3 min incl. simulator boot).
     timeout-minutes: 20
@@ -118,6 +148,8 @@ jobs:
 
   deno:
     name: Edge functions (Deno)
+    needs: changes
+    if: needs.changes.outputs.deno == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -134,4 +166,25 @@ jobs:
             echo "::group::$dir"
             (cd "$dir" && deno check *.ts && deno test --permit-no-files)
             echo "::endgroup::"
+          done
+
+  # The one check branch protection requires. Always runs; passes when every
+  # job passed or was skipped, fails if any failed or was cancelled.
+  gate:
+    name: CI passed
+    needs: [changes, ios, deno]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check job results
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "Job results: $RESULTS"
+          for result in $RESULTS; do
+            case "$result" in
+              success|skipped) ;;
+              *) echo "A required job ended as '$result'."; exit 1 ;;
+            esac
           done
