@@ -221,7 +221,7 @@ struct SettingsView: View {
             Button("Cancel", role: .cancel) { }
             Button("Yes, Delete My Account", role: .destructive) {
                 authViewModel?.deleteAccount {
-                    viewModel.deleteAllData(from: modelContext)
+                    viewModel.wipeAfterAccountDeletion(from: modelContext)
                 }
             }
         } message: {

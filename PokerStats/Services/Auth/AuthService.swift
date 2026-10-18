@@ -107,42 +107,85 @@ final class AuthService {
 
     private(set) var backupStatus: String?
     private var backupTask: Task<Void, Never>?
+    /// True while account deletion runs; no new backup starts.
+    private var backupsSuspended = false
 
     func scheduleBackup(modelContext: ModelContext) {
         guard isAuthenticated else { return }
+        scheduleBackup {
+            try await BackupService(authService: self, modelContext: modelContext).createAndUploadBackup()
+        }
+    }
+
+    /// Runs `backup` as the one pending backup, replacing any earlier one.
+    /// Separate so tests can supply the work.
+    func scheduleBackup(_ backup: @escaping @MainActor () async throws -> BackupMetadata) {
+        guard !backupsSuspended else { return }
         backupTask?.cancel()
         backupTask = Task {
             backupStatus = "Backing up..."
             do {
-                let backupService = BackupService(authService: self, modelContext: modelContext)
-                let metadata = try await backupService.createAndUploadBackup()
+                let metadata = try await backup()
+                if Task.isCancelled { return }
                 backupStatus = "Backed up \(metadata.sessionCount) sessions"
             } catch {
+                // A cancelled backup was replaced or stopped; it reports nothing.
+                if Task.isCancelled { return }
                 backupStatus = "Backup failed: \(error.localizedDescription)"
             }
             try? await Task.sleep(for: .seconds(3))
+            if Task.isCancelled { return }
             backupStatus = nil
         }
+    }
+
+    /// Cancels the scheduled or in-flight backup, waits until it has stopped,
+    /// and blocks new ones until `resumeBackups()`.
+    func suspendBackups() async {
+        backupsSuspended = true
+        let task = backupTask
+        backupTask = nil
+        task?.cancel()
+        await task?.value
+        backupStatus = nil
+    }
+
+    func resumeBackups() {
+        backupsSuspended = false
     }
 
     // MARK: - Delete Account
 
     func deleteAccount() async throws {
-        isLoading = true
-        error = nil
-
-        do {
+        let supabase = self.client
+        try await deleteAccount(serverDelete: {
             // Apple-linked accounts re-confirm with Sign in with Apple; the
             // fresh authorization code lets the edge function revoke the
             // Apple token before deleting the account (App Review 5.1.1(v)).
             let reauthenticator = AppleReauthenticator()
-            let supabase = self.client
             let deleter = AccountDeleter(
                 appleUserId: { KeychainHelper.read(.appleUserId) },
                 appleAuthorizationCode: { try await reauthenticator.authorizationCode() },
                 callDeleteFunction: { try await supabase.callEdgeFunction("delete-account", body: $0) }
             )
             try await deleter.run()
+        })
+    }
+
+    /// Order: stop backups, then the server delete, then clear the Keychain
+    /// and auth state. The caller wipes local SwiftData only after this
+    /// returns, so a failed server delete leaves local data in place.
+    /// Separate so tests can supply the server delete.
+    func deleteAccount(serverDelete: @MainActor () async throws -> Void) async throws {
+        // A backup landing after the server delete would recreate cloud data.
+        await suspendBackups()
+        defer { resumeBackups() }
+
+        isLoading = true
+        error = nil
+
+        do {
+            try await serverDelete()
 
             KeychainHelper.deleteAll()
             isAuthenticated = false
