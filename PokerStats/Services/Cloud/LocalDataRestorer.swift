@@ -33,6 +33,24 @@ struct LocalDataRestorer {
         }
     }
 
+    /// Restores only if the store has no sessions or hands, checked right
+    /// before the restore with no suspension point in between, so nothing the
+    /// user creates can slip in between the check and the delete. Pending
+    /// (unsaved) inserts count as data. Returns false, touching nothing, if
+    /// local data exists.
+    func restoreIfStoreEmpty(_ payload: BackupPayload) throws -> Bool {
+        try Self.validate(payload)
+        guard try isStoreEmpty() else { return false }
+        try restore(payload)
+        return true
+    }
+
+    /// True when the context (including unsaved changes) has no sessions or hands.
+    func isStoreEmpty() throws -> Bool {
+        try modelContext.fetchCount(FetchDescriptor<Session>()) == 0
+            && modelContext.fetchCount(FetchDescriptor<Hand>()) == 0
+    }
+
     /// Checks the payload before any local mutation.
     static func validate(_ payload: BackupPayload) throws {
         if payload.schemaVersion > BackupPayload.currentSchemaVersion {

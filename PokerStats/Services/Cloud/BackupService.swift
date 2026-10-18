@@ -163,7 +163,8 @@ final class BackupService {
 
     // MARK: - Restore Backup
 
-    /// Used by both manual restore (Settings) and `autoRestoreIfEmpty`.
+    /// Manual restore (Settings). Auto-restore goes through `AutoRestore`,
+    /// which uses `LocalDataRestorer.restoreIfStoreEmpty`.
     /// Validates first, then deletes and inserts in one save, rolling back on error.
     func restoreBackup(_ payload: BackupPayload) throws {
         try LocalDataRestorer(modelContext: modelContext).restore(payload)
