@@ -10,6 +10,13 @@ private final class Flag {
     var value = false
 }
 
+/// A flag backed by its own UserDefaults suite, unset.
+@MainActor
+func freshFlag() -> AutoRestoreFlag {
+    let defaults = UserDefaults(suiteName: "AutoRestoreTests.\(UUID().uuidString)")!
+    return AutoRestoreFlag(defaults: defaults)
+}
+
 @Suite("Auto Restore Tests")
 @MainActor
 struct AutoRestoreTests {
@@ -63,7 +70,8 @@ struct AutoRestoreTests {
                 try context.save()
                 await Task.yield()
                 return backupPayload()
-            }
+            },
+            flag: freshFlag()
         )
 
         let outcome = try await autoRestore.run()
@@ -83,7 +91,8 @@ struct AutoRestoreTests {
                 // Inserted but not yet saved (autosave hasn't run).
                 context.insert(Session(location: "Unsaved Mid-Download"))
                 return backupPayload()
-            }
+            },
+            flag: freshFlag()
         )
 
         #expect(try await autoRestore.run() == .skippedDataAppearedDuringDownload)
@@ -98,7 +107,8 @@ struct AutoRestoreTests {
         let autoRestore = AutoRestore(
             modelContext: container.mainContext,
             listBackups: { [metadata] in [metadata] },
-            downloadBackup: { _ in backupPayload() }
+            downloadBackup: { _ in backupPayload() },
+            flag: freshFlag()
         )
 
         #expect(try await autoRestore.run() == .restored(sessionCount: 1))
@@ -112,7 +122,8 @@ struct AutoRestoreTests {
         let autoRestore = AutoRestore(
             modelContext: context,
             listBackups: { [metadata] in [metadata] },
-            downloadBackup: { _ in throw DownloadFailed() }
+            downloadBackup: { _ in throw DownloadFailed() },
+            flag: freshFlag()
         )
 
         await #expect(throws: DownloadFailed.self) { try await autoRestore.run() }
@@ -129,7 +140,8 @@ struct AutoRestoreTests {
             downloadBackup: { _ in
                 downloaded.value = true
                 return backupPayload()
-            }
+            },
+            flag: freshFlag()
         )
 
         #expect(try await autoRestore.run() == .noBackups)
@@ -149,7 +161,8 @@ struct AutoRestoreTests {
                 listed.value = true
                 return []
             },
-            downloadBackup: { _ in backupPayload() }
+            downloadBackup: { _ in backupPayload() },
+            flag: freshFlag()
         )
 
         #expect(try await autoRestore.run() == .skippedLocalDataExists)
