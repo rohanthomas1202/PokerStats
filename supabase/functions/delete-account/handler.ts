@@ -6,6 +6,7 @@ import {
   isAppleLinked,
   readAppleConfig,
   revokeAppleToken,
+  type RevokeFailureCode,
 } from "./apple.ts";
 import { type CleanupClient, deleteUserData } from "./cleanup.ts";
 
@@ -55,16 +56,62 @@ function json(body: unknown, status: number): Response {
   });
 }
 
-// Details go to the log only; the client gets a generic body.
+// Every failure response, by code. The app branches on `code`, then on
+// `retryable`. Non-retryable codes are returned before any data is deleted.
+const FAILURES = {
+  apple_reauth_required: {
+    status: 400,
+    retryable: false,
+    error: "Apple re-authentication required",
+  },
+  apple_identity_missing: {
+    status: 422,
+    retryable: false,
+    error: "No Apple account on file for this user",
+  },
+  apple_account_mismatch: {
+    status: 422,
+    retryable: false,
+    error: "Apple account does not match this user",
+  },
+  apple_token_invalid: {
+    status: 422,
+    retryable: false,
+    error: "Apple token failed verification",
+  },
+  server_not_configured: {
+    status: 503,
+    retryable: true,
+    error: "Account deletion is temporarily unavailable",
+  },
+  delete_failed: {
+    status: 500,
+    retryable: true,
+    error: "Account deletion failed",
+  },
+} satisfies Record<
+  RevokeFailureCode | "apple_reauth_required" | "apple_identity_missing",
+  { status: number; retryable: boolean; error: string }
+>;
+
+type FailureCode = keyof typeof FAILURES;
+
+// Details go to the log only; the client gets the code's fixed body.
 // `apple_revoked: true` tells the app the Apple token is already revoked (the
 // user may be signed out), so it can ask them to sign in again and retry.
-function failure(step: string, appleRevoked = false): Response {
+function failure(
+  code: FailureCode,
+  step: string,
+  appleRevoked = false,
+): Response {
+  const { status, retryable, error } = FAILURES[code];
   return json({
-    error: "Account deletion failed",
+    error,
+    code,
     step,
-    retryable: true,
+    retryable,
     ...(appleRevoked ? { apple_revoked: true } : {}),
-  }, 500);
+  }, status);
 }
 
 export function makeHandler(deps: HandlerDeps) {
@@ -102,18 +149,17 @@ export function makeHandler(deps: HandlerDeps) {
       // 0. Apple-linked accounts: revoke the Sign in with Apple token first,
       // so a failure here leaves all data and the account in place.
       if (isAppleLinked(user)) {
-        const code = await readAuthorizationCode(req);
-        if (!code) {
+        const step = "revoke apple token";
+        // Checked before asking for a code, so the user isn't sent through the
+        // Apple sheet only to hit a server that can't revoke.
+        const config = readAppleConfig(deps.getEnv);
+        if (!config.ok) {
           console.error(
-            `delete-account: Apple-linked user ${userId} sent no authorization_code`,
+            `delete-account: Apple revocation not configured, missing secrets: ${
+              config.missing.join(", ")
+            }`,
           );
-          // `code` is what the app matches on to show the Apple sheet and retry.
-          return json({
-            error: "Apple re-authentication required",
-            code: "apple_reauth_required",
-            step: "revoke apple token",
-            retryable: true,
-          }, 400);
+          return failure("server_not_configured", step);
         }
         // Fail closed: without the stored Apple user ID we can't check that the
         // code belongs to this account.
@@ -122,16 +168,14 @@ export function makeHandler(deps: HandlerDeps) {
           console.error(
             `delete-account: Apple-linked user ${userId} has no Apple identity sub on file`,
           );
-          return failure("revoke apple token");
+          return failure("apple_identity_missing", step);
         }
-        const config = readAppleConfig(deps.getEnv);
-        if (!config.ok) {
+        const code = await readAuthorizationCode(req);
+        if (!code) {
           console.error(
-            `delete-account: Apple revocation not configured, missing secrets: ${
-              config.missing.join(", ")
-            }`,
+            `delete-account: Apple-linked user ${userId} sent no authorization_code`,
           );
-          return failure("revoke apple token");
+          return failure("apple_reauth_required", step);
         }
         const revoke = await revokeAppleToken({
           config: config.config,
@@ -144,7 +188,7 @@ export function makeHandler(deps: HandlerDeps) {
           console.error(
             `delete-account: revoke apple token failed for ${userId}: ${revoke.message}`,
           );
-          return failure("revoke apple token");
+          return failure(revoke.code, step);
         }
         appleRevoked = true;
       }
@@ -156,7 +200,7 @@ export function makeHandler(deps: HandlerDeps) {
         console.error(
           `delete-account: ${cleanup.step} failed for ${userId}: ${cleanup.message}`,
         );
-        return failure(cleanup.step, appleRevoked);
+        return failure("delete_failed", cleanup.step, appleRevoked);
       }
 
       // 4. Delete the auth user (must be last)
@@ -168,13 +212,13 @@ export function makeHandler(deps: HandlerDeps) {
         console.error(
           `delete-account: delete auth user failed for ${userId}: ${deleteError.message}`,
         );
-        return failure("delete auth user", appleRevoked);
+        return failure("delete_failed", "delete auth user", appleRevoked);
       }
 
       return json({ message: "Account deleted successfully" }, 200);
     } catch (err) {
       console.error("delete-account: unexpected error", err);
-      return failure("unexpected", appleRevoked);
+      return failure("delete_failed", "unexpected", appleRevoked);
     }
   };
 }
