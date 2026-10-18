@@ -34,6 +34,8 @@ expect "next line false"        pass fastlane/Fastfile    $'upload_to_app_store(
 expect "flag with false"        pass ci_scripts/release.sh 'fastlane deliver --submit_for_review false'
 expect "flag lookalike"         pass ci_scripts/release.sh 'fastlane deliver --submit_for_review_later'
 expect "workflow false"         pass .github/workflows/x.yml $'env:\n  DELIVER_SUBMIT_FOR_REVIEW: "false"'
+expect "ENV.fetch false"        pass fastlane/Fastfile    'ENV.fetch("DELIVER_AUTOMATIC_RELEASE", "false")'
+expect "false, then other true" pass fastlane/Fastfile    'upload_to_app_store(submit_for_review: false, skip_metadata: true)'
 
 expect "submit key: true"       fail fastlane/Fastfile    'upload_to_app_store(submit_for_review: true)'
 expect "release key: true"      fail fastlane/Fastfile    'upload_to_app_store(automatic_release: true)'
@@ -61,14 +63,45 @@ expect "bare flag, more flags"  fail ci_scripts/release.sh 'fastlane deliver --a
 expect "bare flag, continued"   fail .github/workflows/x.yml $'run: fastlane deliver --submit_for_review \\\n  --force'
 expect "flag with yes"          fail ci_scripts/release.sh 'fastlane deliver --automatic_release yes'
 expect "flag equals true"       fail ci_scripts/release.sh 'fastlane deliver --submit_for_review=true'
+expect "ENV.fetch default"      fail fastlane/Fastfile    'ENV.fetch("DELIVER_AUTOMATIC_RELEASE", "true")'
+expect "ENV.fetch no quotes"    fail fastlane/Fastfile    "ENV.fetch('DELIVER_SUBMIT_FOR_REVIEW', true)"
+expect "YAML bool tag"          fail .github/workflows/x.yml $'with:\n  submit_for_review: !!bool true'
+
+# expect_status NAME WANT_STATUS PATH...  (runs from the scratch repo)
+expect_status() {
+  local name="$1" want="$2" got=0
+  shift 2
+  (cd "$tmp/repo" && "$script" "$@") >"$tmp/out" 2>&1 || got=$?
+  if [[ "$got" == "$want" ]]; then
+    echo "ok   $name"
+  else
+    echo "FAIL $name: want exit $want, got $got"
+    failures=$((failures + 1))
+  fi
+}
 
 # A missing path must fail, not pass silently.
-if "$script" "$tmp/does-not-exist" >/dev/null 2>&1; then
-  echo "FAIL missing path: want fail, got pass"
-  failures=$((failures + 1))
-else
-  echo "ok   missing path"
-fi
+rm -rf "$tmp/repo"
+mkdir -p "$tmp/repo"
+expect_status "missing path" 2 does-not-exist
+
+# A missing path next to a path with a match: grep exits 2 with output, and
+# the guard must still fail.
+for dir in "${dirs[@]}"; do mkdir -p "$tmp/repo/$dir"; done
+printf '%s\n' 'upload_to_app_store(submit_for_review: true)' > "$tmp/repo/fastlane/Fastfile"
+expect_status "missing path next to a match" 2 "${dirs[@]}" does-not-exist
+
+# Two paths matching at once: fail and name both files.
+printf '%s\n' 'export DELIVER_AUTOMATIC_RELEASE=yes' > "$tmp/repo/ci_scripts/release.sh"
+expect_status "two paths match" 1 "${dirs[@]}"
+for file in fastlane/Fastfile ci_scripts/release.sh; do
+  if grep -q "^$file:" "$tmp/out"; then
+    echo "ok   two paths match: names $file"
+  else
+    echo "FAIL two paths match: $file not in output"
+    failures=$((failures + 1))
+  fi
+done
 
 if (( failures > 0 )); then
   echo "$failures test(s) failed"
