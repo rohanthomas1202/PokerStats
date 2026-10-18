@@ -193,6 +193,10 @@ jobs:
       - name: Test the guard
         run: .github/scripts/fastlane-no-submit-test.sh
 
+      # Only these paths are scanned. A new release script anywhere else (the
+      # repo root, a Makefile, .github/scripts/) must be added here and to
+      # dirs in fastlane-no-submit-test.sh. .github/scripts/ stays out because
+      # the guard's test file holds true values.
       - name: Check fastlane, workflows and ci_scripts
         run: .github/scripts/fastlane-no-submit.sh fastlane .github/workflows ci_scripts
 

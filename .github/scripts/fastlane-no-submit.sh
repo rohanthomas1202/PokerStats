@@ -4,17 +4,21 @@
 #
 # Catches literal settings only, with a true value (true, yes, on or 1, any
 # case), on the same line or the next one:
-#   Ruby       key: true, :key => true, key(true), key true, key = true
-#   env/YAML   DELIVER_SUBMIT_FOR_REVIEW=yes, ENV["..."] = "on", KEY: "true"
+#   Ruby       key: true, :key => true, key(true), key true, key = true,
+#              ENV.fetch("DELIVER_AUTOMATIC_RELEASE", "true")
+#   env/YAML   DELIVER_SUBMIT_FOR_REVIEW=yes, ENV["..."] = "on", KEY: "true",
+#              KEY: !!bool true
 #   CLI flag   --submit_for_review or --automatic_release with no value
 # Not detected: variables, options hashes, expressions such as
-# `false || true`, and env vars set in the Xcode Cloud UI, which stay a
-# manual check.
+# `false || true`, an ENV.fetch block default (`ENV.fetch("KEY") { "true" }`),
+# a comment line between the key and its value, and env vars set in the
+# Xcode Cloud UI, which stay a manual check.
 set -euo pipefail
 
 key='(submit_for_review|automatic_release)'
-# A separator may be followed by a newline; a bare space may not.
-setting="${key}[]\"'[:blank:]]*((:|=>|=|\\()[[:space:]]*)?[\"']?(true|yes|on|1)([^[:alnum:]_]|\$)"
+# A separator may be followed by a newline; a bare space may not. The comma
+# is ENV.fetch's default argument; !!bool and !!str are YAML tags.
+setting="${key}[]\"'[:blank:]]*((:|=>|=|\\(|,)[[:space:]]*)?(!!(bool|str)[[:blank:]]+)?[\"']?(true|yes|on|1)([^[:alnum:]_]|\$)"
 # [^[:blank:][:print:]] is a line break: grep can't take \n in a pattern.
 flag="--${key}[[:blank:]]*([^[:blank:][:print:]]|[;&|)\"'\\]|[[:blank:]]-|\$)"
 
