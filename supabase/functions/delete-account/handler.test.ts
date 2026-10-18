@@ -143,7 +143,12 @@ for (
     });
     assertEquals(await quiet(() => call(handler, post())), {
       status: 500,
-      body: { error: "Account deletion failed", step, retryable: true },
+      body: {
+        error: "Account deletion failed",
+        code: "delete_failed",
+        step,
+        retryable: true,
+      },
     });
     assertEquals(deletedUsers, []);
   });
@@ -155,6 +160,7 @@ Deno.test("auth user delete failure returns generic 500", async () => {
     status: 500,
     body: {
       error: "Account deletion failed",
+      code: "delete_failed",
       step: "delete auth user",
       retryable: true,
     },
@@ -167,6 +173,7 @@ Deno.test("unexpected error returns generic 500", async () => {
     status: 500,
     body: {
       error: "Account deletion failed",
+      code: "delete_failed",
       step: "unexpected",
       retryable: true,
     },
@@ -207,8 +214,15 @@ const appleUser: AppleLinkInfo = {
   identities: [{ provider: "apple", identity_data: { sub: APPLE_SUB } }],
 };
 
-const fakeIdToken = (sub: string) =>
-  `h.${btoa(JSON.stringify({ sub })).replace(/=+$/, "")}.s`;
+const fakeIdToken = (sub: string, claims: Record<string, unknown> = {}) =>
+  `h.${
+    btoa(JSON.stringify({
+      iss: "https://appleid.apple.com",
+      aud: "com.rohanthomas.PokerStats",
+      sub,
+      ...claims,
+    })).replace(/=+$/, "")
+  }.s`;
 
 type AppleReply = { status: number; body?: unknown };
 
@@ -266,6 +280,27 @@ function assertNoSecrets(text: string, env: Record<string, string>) {
   }
 }
 
+const deleteFailed = {
+  error: "Account deletion failed",
+  code: "delete_failed",
+  step: "revoke apple token",
+  retryable: true,
+};
+
+const notConfigured = {
+  error: "Account deletion is temporarily unavailable",
+  code: "server_not_configured",
+  step: "revoke apple token",
+  retryable: true,
+};
+
+const nonRetryable = (code: string, error: string) => ({
+  error,
+  code,
+  step: "revoke apple token",
+  retryable: false,
+});
+
 Deno.test("apple: revokes before any data is deleted, then deletes everything", async () => {
   const env = await appleEnv();
   const log = { calls: [] as string[] };
@@ -319,14 +354,7 @@ Deno.test("apple: revoke error returns generic 500 and deletes nothing", async (
   const { result, logs } = await captureErrors(() =>
     call(handler, post(undefined, { authorization_code: CODE }))
   );
-  assertEquals(result, {
-    status: 500,
-    body: {
-      error: "Account deletion failed",
-      step: "revoke apple token",
-      retryable: true,
-    },
-  });
+  assertEquals(result, { status: 500, body: deleteFailed });
   assertEquals(fake.calls, []);
   assertEquals(deletedUsers, []);
   assertEquals(fake.remaining(), 3);
@@ -347,8 +375,7 @@ Deno.test("apple: token exchange error (expired code) deletes nothing", async ()
   const { result, logs } = await captureErrors(() =>
     call(handler, post(undefined, { authorization_code: CODE }))
   );
-  assertEquals(result.status, 500);
-  assertEquals(result.body.step, "revoke apple token");
+  assertEquals(result, { status: 500, body: deleteFailed });
   assertEquals(apple.requests.length, 1); // never reached /auth/revoke
   assertEquals(fake.calls, []);
   assertEquals(deletedUsers, []);
@@ -366,13 +393,12 @@ Deno.test("apple: network failure deletes nothing", async () => {
   const { result } = await captureErrors(() =>
     call(handler, post(undefined, { authorization_code: CODE }))
   );
-  assertEquals(result.status, 500);
-  assertEquals(result.body.step, "revoke apple token");
+  assertEquals(result, { status: 500, body: deleteFailed });
   assertEquals(fake.calls, []);
   assertEquals(deletedUsers, []);
 });
 
-Deno.test("apple: code for a different Apple account is rejected", async () => {
+Deno.test("apple: code for a different Apple account returns 422 apple_account_mismatch", async () => {
   const env = await appleEnv();
   const apple = fakeApple({ calls: [] }, {
     token: {
@@ -388,13 +414,86 @@ Deno.test("apple: code for a different Apple account is rejected", async () => {
   const { result } = await captureErrors(() =>
     call(handler, post(undefined, { authorization_code: CODE }))
   );
-  assertEquals(result.status, 500);
+  assertEquals(result, {
+    status: 422,
+    body: nonRetryable(
+      "apple_account_mismatch",
+      "Apple account does not match this user",
+    ),
+  });
   assertEquals(apple.requests.length, 1); // no revoke
   assertEquals(fake.calls, []);
   assertEquals(deletedUsers, []);
 });
 
-Deno.test("apple: missing secrets returns generic 500, logs names only, deletes nothing", async () => {
+for (
+  const [name, claims] of [
+    ["wrong iss", { iss: "https://evil.example.com" }],
+    ["missing iss", { iss: undefined }],
+    ["wrong aud", { aud: "com.example.other" }],
+    ["aud array without the client ID", { aud: ["com.example.other"] }],
+  ] as const
+) {
+  Deno.test(`apple: id_token with ${name} returns 422 apple_token_invalid`, async () => {
+    const env = await appleEnv();
+    const apple = fakeApple({ calls: [] }, {
+      token: {
+        status: 200,
+        body: {
+          refresh_token: REFRESH,
+          id_token: fakeIdToken(APPLE_SUB, claims),
+        },
+      },
+    });
+    const { handler, deletedUsers, fake } = setup({
+      userFields: appleUser,
+      env,
+      fetch: apple.fetchFn,
+    });
+    const { result, logs } = await captureErrors(() =>
+      call(handler, post(undefined, { authorization_code: CODE }))
+    );
+    assertEquals(result, {
+      status: 422,
+      body: nonRetryable(
+        "apple_token_invalid",
+        "Apple token failed verification",
+      ),
+    });
+    assertEquals(apple.requests.length, 1); // no revoke
+    assertEquals(fake.calls, []);
+    assertEquals(deletedUsers, []);
+    assertNoSecrets(logs, env);
+  });
+}
+
+Deno.test("apple: id_token aud array that includes the client ID is accepted", async () => {
+  const env = await appleEnv();
+  const apple = fakeApple({ calls: [] }, {
+    token: {
+      status: 200,
+      body: {
+        refresh_token: REFRESH,
+        id_token: fakeIdToken(APPLE_SUB, {
+          aud: ["com.example.other", "com.rohanthomas.PokerStats"],
+        }),
+      },
+    },
+  });
+  const { handler, deletedUsers } = setup({
+    userFields: appleUser,
+    env,
+    fetch: apple.fetchFn,
+  });
+  assertEquals(
+    await call(handler, post(undefined, { authorization_code: CODE })),
+    { status: 200, body: { message: "Account deleted successfully" } },
+  );
+  assertEquals(apple.requests.length, 2);
+  assertEquals(deletedUsers, [USER]);
+});
+
+Deno.test("apple: missing secrets returns 503 server_not_configured, logs names only, deletes nothing", async () => {
   const env = await appleEnv();
   const partial = {
     APPLE_TEAM_ID: env.APPLE_TEAM_ID,
@@ -409,14 +508,7 @@ Deno.test("apple: missing secrets returns generic 500, logs names only, deletes 
   const { result, logs } = await captureErrors(() =>
     call(handler, post(undefined, { authorization_code: CODE }))
   );
-  assertEquals(result, {
-    status: 500,
-    body: {
-      error: "Account deletion failed",
-      step: "revoke apple token",
-      retryable: true,
-    },
-  });
+  assertEquals(result, { status: 503, body: notConfigured });
   assertEquals(apple.requests, []);
   assertEquals(fake.calls, []);
   assertEquals(deletedUsers, []);
@@ -424,7 +516,7 @@ Deno.test("apple: missing secrets returns generic 500, logs names only, deletes 
   assertNoSecrets(logs, env);
 });
 
-Deno.test("apple: malformed private key returns generic 500 and deletes nothing", async () => {
+Deno.test("apple: malformed private key returns 503 server_not_configured and deletes nothing", async () => {
   const env = { ...(await appleEnv()), APPLE_PRIVATE_KEY: "not-a-key" };
   const apple = fakeApple({ calls: [] });
   const { handler, deletedUsers, fake } = setup({
@@ -435,7 +527,7 @@ Deno.test("apple: malformed private key returns generic 500 and deletes nothing"
   const { result, logs } = await captureErrors(() =>
     call(handler, post(undefined, { authorization_code: CODE }))
   );
-  assertEquals(result.status, 500);
+  assertEquals(result, { status: 503, body: notConfigured });
   assertEquals(apple.requests, []);
   assertEquals(fake.calls, []);
   assertEquals(deletedUsers, []);
@@ -453,15 +545,24 @@ Deno.test("apple: missing authorization_code returns 400 and deletes nothing", a
   const { result } = await captureErrors(() => call(handler, post()));
   assertEquals(result, {
     status: 400,
-    body: {
-      error: "Apple re-authentication required",
-      code: "apple_reauth_required",
-      step: "revoke apple token",
-      retryable: true,
-    },
+    body: nonRetryable(
+      "apple_reauth_required",
+      "Apple re-authentication required",
+    ),
   });
   assertEquals(apple.requests, []);
   assertEquals(fake.calls.length, 0);
+  assertEquals(deletedUsers, []);
+});
+
+Deno.test("apple: missing secrets without a code returns 503, not a reauth request", async () => {
+  const { handler, deletedUsers, fake } = setup({
+    userFields: appleUser,
+    env: {},
+  });
+  const { result } = await captureErrors(() => call(handler, post()));
+  assertEquals(result, { status: 503, body: notConfigured });
+  assertEquals(fake.calls, []);
   assertEquals(deletedUsers, []);
 });
 
@@ -481,6 +582,7 @@ Deno.test("apple: cleanup failure after revoke is flagged apple_revoked and keep
     status: 500,
     body: {
       error: "Account deletion failed",
+      code: "delete_failed",
       step: "delete backup_metadata",
       retryable: true,
       apple_revoked: true,
@@ -491,26 +593,38 @@ Deno.test("apple: cleanup failure after revoke is flagged apple_revoked and keep
   assertNoSecrets(logs, env);
 });
 
-Deno.test("apple: Apple-linked user with no stored Apple sub fails closed", async () => {
-  const env = await appleEnv();
-  const apple = fakeApple({ calls: [] });
-  const { handler, deletedUsers, fake } = setup({
-    userFields: { app_metadata: { provider: "apple" }, identities: [] },
-    env,
-    fetch: apple.fetchFn,
-  });
-  const { result, logs } = await captureErrors(() =>
-    call(handler, post(undefined, { authorization_code: CODE }))
+for (const body of [{ authorization_code: CODE }, undefined]) {
+  Deno.test(
+    `apple: no stored Apple sub returns 422 apple_identity_missing (${
+      body ? "with" : "without"
+    } a code)`,
+    async () => {
+      const env = await appleEnv();
+      const apple = fakeApple({ calls: [] });
+      const { handler, deletedUsers, fake } = setup({
+        userFields: { app_metadata: { provider: "apple" }, identities: [] },
+        env,
+        fetch: apple.fetchFn,
+      });
+      const { result, logs } = await captureErrors(() =>
+        call(handler, post(undefined, body))
+      );
+      assertEquals(result, {
+        status: 422,
+        body: nonRetryable(
+          "apple_identity_missing",
+          "No Apple account on file for this user",
+        ),
+      });
+      assertEquals(apple.requests, []);
+      assertEquals(fake.calls, []);
+      assertEquals(deletedUsers, []);
+      assertEquals(logs.includes("no Apple identity sub"), true);
+    },
   );
-  assertEquals(result.status, 500);
-  assertEquals(result.body.step, "revoke apple token");
-  assertEquals(apple.requests, []);
-  assertEquals(fake.calls, []);
-  assertEquals(deletedUsers, []);
-  assertEquals(logs.includes("no Apple identity sub"), true);
-});
+}
 
-Deno.test("apple: token response without id_token is rejected", async () => {
+Deno.test("apple: token response without id_token returns 500 delete_failed", async () => {
   const env = await appleEnv();
   const apple = fakeApple({ calls: [] }, {
     token: { status: 200, body: { refresh_token: REFRESH } },
@@ -523,7 +637,7 @@ Deno.test("apple: token response without id_token is rejected", async () => {
   const { result } = await captureErrors(() =>
     call(handler, post(undefined, { authorization_code: CODE }))
   );
-  assertEquals(result.status, 500);
+  assertEquals(result, { status: 500, body: deleteFailed });
   assertEquals(apple.requests.length, 1); // no revoke
   assertEquals(fake.calls, []);
   assertEquals(deletedUsers, []);

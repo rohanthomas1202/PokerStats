@@ -12,7 +12,8 @@
 
 export const APPLE_TOKEN_URL = "https://appleid.apple.com/auth/token";
 export const APPLE_REVOKE_URL = "https://appleid.apple.com/auth/revoke";
-const APPLE_AUDIENCE = "https://appleid.apple.com";
+// Issuer of Apple's id_tokens and audience of our client secret.
+const APPLE_ISSUER = "https://appleid.apple.com";
 // Apple allows up to six months; the secret is only used for two calls.
 const CLIENT_SECRET_TTL_SECONDS = 300;
 
@@ -104,7 +105,7 @@ export async function makeClientSecret(
     iss: config.teamId,
     iat: nowSeconds,
     exp: nowSeconds + CLIENT_SECRET_TTL_SECONDS,
-    aud: APPLE_AUDIENCE,
+    aud: APPLE_ISSUER,
     sub: config.clientId,
   };
   const signingInput = `${base64urlJSON(header)}.${base64urlJSON(claims)}`;
@@ -117,15 +118,21 @@ export async function makeClientSecret(
   return `${signingInput}.${base64url(new Uint8Array(signature))}`;
 }
 
-function decodeJwtSubject(jwt: string): string | undefined {
+type IdTokenClaims = { iss?: unknown; aud?: unknown; sub?: unknown };
+
+function decodeJwtClaims(jwt: string): IdTokenClaims | undefined {
   try {
     const part = jwt.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
     const padded = part + "=".repeat((4 - part.length % 4) % 4);
-    const sub = JSON.parse(atob(padded)).sub;
-    return typeof sub === "string" ? sub : undefined;
+    const claims = JSON.parse(atob(padded));
+    return typeof claims === "object" && claims !== null ? claims : undefined;
   } catch {
     return undefined;
   }
+}
+
+function hasAudience(aud: unknown, clientId: string): boolean {
+  return aud === clientId || (Array.isArray(aud) && aud.includes(clientId));
 }
 
 // Apple error bodies are {"error": "..."}; only that code is reported.
@@ -139,9 +146,16 @@ async function appleError(res: Response): Promise<string> {
   return `${res.status}`;
 }
 
+// The handler turns these into its response codes.
+export type RevokeFailureCode =
+  | "server_not_configured"
+  | "apple_token_invalid"
+  | "apple_account_mismatch"
+  | "delete_failed";
+
 export type RevokeResult =
   | { ok: true }
-  | { ok: false; message: string };
+  | { ok: false; code: RevokeFailureCode; message: string };
 
 export interface RevokeOptions {
   config: AppleConfig;
@@ -160,7 +174,11 @@ export async function revokeAppleToken(
   } catch (err) {
     // fetch rejects on network failure; report the error type only.
     const name = err instanceof Error ? err.name : "error";
-    return { ok: false, message: `request failed (${name})` };
+    return {
+      ok: false,
+      code: "delete_failed",
+      message: `request failed (${name})`,
+    };
   }
 }
 
@@ -172,6 +190,7 @@ async function exchangeAndRevoke(opts: RevokeOptions): Promise<RevokeResult> {
     const name = err instanceof Error ? err.name : "error";
     return {
       ok: false,
+      code: "server_not_configured",
       message: `client secret: invalid private key (${name})`,
     };
   }
@@ -193,17 +212,36 @@ async function exchangeAndRevoke(opts: RevokeOptions): Promise<RevokeResult> {
   if (!tokenRes.ok) {
     return {
       ok: false,
+      code: "delete_failed",
       message: `token exchange: ${await appleError(tokenRes)}`,
     };
   }
   const tokens = await tokenRes.json();
 
-  const sub = typeof tokens.id_token === "string"
-    ? decodeJwtSubject(tokens.id_token)
+  const claims = typeof tokens.id_token === "string"
+    ? decodeJwtClaims(tokens.id_token)
     : undefined;
-  if (!opts.expectedSubject || sub !== opts.expectedSubject) {
+  if (!claims) {
     return {
       ok: false,
+      code: "delete_failed",
+      message: "token exchange: no readable id_token",
+    };
+  }
+  if (
+    claims.iss !== APPLE_ISSUER ||
+    !hasAudience(claims.aud, opts.config.clientId)
+  ) {
+    return {
+      ok: false,
+      code: "apple_token_invalid",
+      message: "token exchange: id_token iss or aud is wrong",
+    };
+  }
+  if (!opts.expectedSubject || claims.sub !== opts.expectedSubject) {
+    return {
+      ok: false,
+      code: "apple_account_mismatch",
       message: "token exchange: Apple account does not match this user",
     };
   }
@@ -214,7 +252,11 @@ async function exchangeAndRevoke(opts: RevokeOptions): Promise<RevokeResult> {
     ? [tokens.access_token, "access_token"]
     : [undefined, undefined];
   if (!token || !hint) {
-    return { ok: false, message: "token exchange: no token in response" };
+    return {
+      ok: false,
+      code: "delete_failed",
+      message: "token exchange: no token in response",
+    };
   }
 
   const revokeRes = await opts.fetch(APPLE_REVOKE_URL, {
@@ -223,7 +265,11 @@ async function exchangeAndRevoke(opts: RevokeOptions): Promise<RevokeResult> {
     body: form({ token, token_type_hint: hint }),
   });
   if (!revokeRes.ok) {
-    return { ok: false, message: `revoke: ${await appleError(revokeRes)}` };
+    return {
+      ok: false,
+      code: "delete_failed",
+      message: `revoke: ${await appleError(revokeRes)}`,
+    };
   }
   return { ok: true };
 }
