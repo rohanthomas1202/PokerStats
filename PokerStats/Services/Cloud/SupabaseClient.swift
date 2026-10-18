@@ -73,6 +73,8 @@ final class SupabaseClient: Sendable {
 
     let tokenStore: any TokenStore
     private let transport: Transport
+    /// Shares one in-flight token refresh between concurrent callers.
+    let refreshFlight = SingleFlight<AuthSession>()
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
 
@@ -346,8 +348,10 @@ final class SupabaseClient: Sendable {
 
     /// Refreshes with the stored refresh token. See `SessionRefresher` for
     /// which failures sign the user out and which keep the session.
+    /// Single-flight: concurrent callers share one refresh request and its
+    /// result, so the single-use refresh token is never sent twice.
     func refreshStoredSession() async throws -> AuthSession {
-        try await SessionRefresher(
+        let refresher = SessionRefresher(
             store: tokenStore,
             refresh: { try await self.refreshSession(refreshToken: $0) },
             onInvalidated: {
@@ -355,7 +359,8 @@ final class SupabaseClient: Sendable {
                     NotificationCenter.default.post(name: .supabaseSessionInvalidated, object: self)
                 }
             }
-        ).refreshStoredSession()
+        )
+        return try await refreshFlight.run { try await refresher.refreshStoredSession() }
     }
 
     private func isTokenExpired(_ jwt: String) -> Bool {

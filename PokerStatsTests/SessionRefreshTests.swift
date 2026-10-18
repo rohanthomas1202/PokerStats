@@ -70,6 +70,79 @@ private func client(_ store: FakeTokenStore, reply: RefreshReply, log: RequestLo
     }
 }
 
+/// Holds the stub transport until the test opens it.
+private final class Gate: @unchecked Sendable {
+    private let lock = NSLock()
+    private var isOpen = false
+    private var waiting: [CheckedContinuation<Void, Never>] = []
+
+    func wait() async {
+        await withCheckedContinuation { continuation in
+            let resumeNow = lock.withLock {
+                if isOpen { return true }
+                waiting.append(continuation)
+                return false
+            }
+            if resumeNow { continuation.resume() }
+        }
+    }
+
+    func open() {
+        let toResume = lock.withLock {
+            isOpen = true
+            defer { waiting.removeAll() }
+            return waiting
+        }
+        toResume.forEach { $0.resume() }
+    }
+}
+
+/// Behaves like Supabase: a refresh token works once; sending it again gets
+/// `refresh_token_already_used`. `replies[n]` answers the n-th request
+/// (the last one repeats); the first request waits on `gate`.
+private func singleUseClient(
+    _ store: FakeTokenStore,
+    replies: [RefreshReply],
+    gate: Gate,
+    log: RequestLog
+) -> SupabaseClient {
+    let used = RequestLog()
+    return SupabaseClient(tokenStore: store) { request in
+        let url = request.url!
+        let index = log.all.count
+        log.append(url.absoluteString)
+        if index == 0 { await gate.wait() }
+
+        let body = try JSONSerialization.jsonObject(with: request.httpBody ?? Data()) as? [String: Any]
+        let token = body?["refresh_token"] as? String ?? ""
+        let reply: RefreshReply
+        if used.all.contains(token) {
+            reply = .status(400, #"{"code":400,"error_code":"refresh_token_already_used","msg":"Already Used"}"#)
+        } else {
+            reply = replies[min(index, replies.count - 1)]
+            // Only a successful refresh consumes the token.
+            if case .status(200, _) = reply { used.append(token) }
+        }
+        switch reply {
+        case .urlError(let code):
+            throw URLError(code)
+        case .status(let code, let body):
+            let response = HTTPURLResponse(url: url, statusCode: code, httpVersion: nil, headerFields: nil)!
+            return (Data(body.utf8), response)
+        }
+    }
+}
+
+/// Polls until `condition` holds (or records a timeout after ~5 s).
+@MainActor
+private func waitUntil(_ what: String, _ condition: () async -> Bool) async {
+    for _ in 0..<500 {
+        if await condition() { return }
+        try? await Task.sleep(for: .milliseconds(10))
+    }
+    Issue.record("timed out waiting for \(what)")
+}
+
 @Suite("Session Refresh Tests")
 @MainActor
 struct SessionRefreshTests {
@@ -210,6 +283,75 @@ struct SessionRefreshTests {
         let auth = AuthService(client: client(FakeTokenStore(), reply: .status(500, "")))
         #expect(!auth.restoreSession())
         #expect(!auth.isAuthenticated)
+    }
+
+    // MARK: - Single-flight refresh
+
+    @Test func concurrentRefreshes_shareOneRequest_andStaySignedIn() async throws {
+        let store = signedInStore()
+        let log = RequestLog()
+        let gate = Gate()
+        let sut = singleUseClient(store, replies: [.status(200, successBody)], gate: gate, log: log)
+        let auth = AuthService(client: sut)
+        auth.restoreSession()
+
+        let first = Task { try await sut.refreshStoredSession() }
+        let second = Task { try await sut.refreshStoredSession() }
+        // Both callers are waiting on the one flight before the server answers.
+        await waitUntil("both callers joined") { await sut.refreshFlight.waiters == 2 }
+        gate.open()
+
+        let sessions = try await [first.value, second.value]
+
+        #expect(log.all.count == 1, "one token request for two callers")
+        #expect(sessions.allSatisfy { $0.accessToken == freshAccess && $0.refreshToken == "new-refresh" })
+        #expect(store.read(.accessToken) == freshAccess)
+        #expect(store.read(.refreshToken) == "new-refresh")
+        #expect(auth.isAuthenticated)
+        #expect(auth.userId == userId)
+    }
+
+    @Test func failedSharedRefresh_reachesEveryWaiter_thenNextCallRetries() async throws {
+        let store = signedInStore()
+        let before = store.snapshot
+        let log = RequestLog()
+        let gate = Gate()
+        let sut = singleUseClient(
+            store,
+            replies: [.status(503, "upstream"), .status(200, successBody)],
+            gate: gate,
+            log: log
+        )
+        let auth = AuthService(client: sut)
+        auth.restoreSession()
+
+        let first = Task { try await sut.refreshStoredSession() }
+        let second = Task { try await sut.refreshStoredSession() }
+        await waitUntil("both callers joined") { await sut.refreshFlight.waiters == 2 }
+        gate.open()
+
+        for caller in [first, second] {
+            do {
+                _ = try await caller.value
+                Issue.record("expected a throw")
+            } catch {
+                guard case SupabaseError.refreshUnavailable = error else {
+                    Issue.record("expected refreshUnavailable, got \(error)")
+                    continue
+                }
+            }
+        }
+        #expect(log.all.count == 1, "one token request for two callers")
+        #expect(store.snapshot == before, "transient failure keeps the tokens")
+        #expect(auth.isAuthenticated)
+        #expect(await sut.refreshFlight.waiters == 0)
+
+        // The failed flight is not reused: the next call sends a new request.
+        let session = try await sut.refreshStoredSession()
+        #expect(log.all.count == 2)
+        #expect(session.refreshToken == "new-refresh")
+        #expect(store.read(.refreshToken) == "new-refresh")
+        #expect(auth.isAuthenticated)
     }
 
     // MARK: - Classifier directly

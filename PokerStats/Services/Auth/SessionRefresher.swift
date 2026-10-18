@@ -22,6 +22,8 @@ extension Notification.Name {
 }
 
 /// The one place a token refresh is run and its failure is classified.
+/// Callers go through `SupabaseClient.refreshStoredSession()`, which runs this
+/// single-flight (see `SingleFlight`), so a refresh token is sent only once.
 ///
 /// - Success: saves the new tokens.
 /// - Definitive auth failure (401, or 400 with a refresh-token/session error,
@@ -95,5 +97,36 @@ struct SessionRefresher: Sendable {
     private func invalidate() async {
         store.deleteAll()
         await onInvalidated()
+    }
+}
+
+/// Runs at most one operation at a time; callers that arrive while one is in
+/// flight await that same result instead of starting their own.
+///
+/// Used for token refresh: Supabase refresh tokens are single-use, so two
+/// parallel refreshes with the same token get `refresh_token_already_used`,
+/// which `SessionRefresher` treats as a sign-out. Success and failure are both
+/// shared with every waiter; once the flight finishes, the next call starts a
+/// new one. The operation runs in its own Task, so one caller's cancellation
+/// doesn't cancel it for the others.
+actor SingleFlight<Value: Sendable> {
+    private var inFlight: Task<Value, Error>?
+    /// Callers currently awaiting the flight. Tests read it to line up a race.
+    private(set) var waiters = 0
+
+    func run(_ operation: @escaping @Sendable () async throws -> Value) async throws -> Value {
+        let task: Task<Value, Error>
+        if let inFlight {
+            task = inFlight
+        } else {
+            task = Task { try await operation() }
+            inFlight = task
+        }
+        waiters += 1
+        defer {
+            waiters -= 1
+            if inFlight == task { inFlight = nil }
+        }
+        return try await task.value
     }
 }
