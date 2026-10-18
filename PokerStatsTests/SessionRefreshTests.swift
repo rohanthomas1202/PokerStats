@@ -48,6 +48,10 @@ struct SessionRefreshTests {
         RefreshCase("400 other", .status(400, #"{"code":"validation_failed","message":"bad"}"#), definitive: false),
         RefreshCase("401 gateway", .status(401, #"{"message":"Invalid API key","hint":"Double check your Supabase `anon` or `service_role` API key."}"#), definitive: false),
         RefreshCase("401 invalid JWT", .status(401, #"{"msg":"Invalid JWT"}"#), definitive: false),
+        RefreshCase("401 no body", .status(401, ""), definitive: false),
+        // Without an error code the SDK can't tell this is about the refresh
+        // token, so it keeps the session; Supabase Auth sends the code.
+        RefreshCase("400 invalid_grant without code", .status(400, #"{"error":"invalid_grant","error_description":"Invalid Refresh Token"}"#), definitive: false),
         RefreshCase("400 refresh_token_not_found", .status(400, refreshTokenNotFound), definitive: true),
         RefreshCase("400 refresh_token_already_used", .status(400, #"{"code":"refresh_token_already_used","message":"Invalid Refresh Token: Already Used"}"#), definitive: true),
         RefreshCase("401 refresh_token_not_found", .status(401, #"{"code":"refresh_token_not_found","message":"Invalid Refresh Token"}"#), definitive: true),
