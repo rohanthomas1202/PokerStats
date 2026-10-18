@@ -3,12 +3,18 @@ build/
 DerivedData/
 *.xcodeproj/xcuserdata/
 *.xcworkspace/xcuserdata/
-*.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
 xcuserdata/
 
 # XcodeGen (regenerated from project.yml)
+# Everything in project.xcworkspace is ignored except Package.resolved,
+# which must be committed (see README "Dependencies").
 *.xcodeproj/project.pbxproj
-*.xcodeproj/project.xcworkspace/
+*.xcodeproj/project.xcworkspace/*
+!*.xcodeproj/project.xcworkspace/xcshareddata/
+*.xcodeproj/project.xcworkspace/xcshareddata/*
+!*.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
+*.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/*
+!*.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
 
 # macOS
 .DS_Store
@@ -18,7 +24,6 @@ xcuserdata/
 # Swift Package Manager
 .build/
 Packages/
-Package.resolved
 
 # CocoaPods (if ever used)
 Pods/
