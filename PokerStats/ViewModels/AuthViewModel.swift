@@ -67,28 +67,67 @@ final class AuthViewModel {
 
     var isShowingDeleteConfirmation = false
     var isShowingDeleteFinalConfirmation = false
-    /// Set when account deletion fails; Settings shows it in an alert.
-    /// Separate from `errorMessage`, which the sign-in sheet shows.
-    var deleteAccountErrorMessage: String?
 
-    /// `onDeleted` runs only after the server-side deletion succeeded, so local
-    /// data isn't wiped when the user cancels Apple re-authentication or the
-    /// deletion fails.
+    /// What Settings shows when account deletion fails.
+    struct DeleteAccountFailure: Equatable {
+        enum Kind: Equatable {
+            /// Nothing was disconnected; trying again is safe.
+            case retryable
+            /// Apple ID was disconnected but server cleanup failed. The user may
+            /// be signed out and must sign in with Apple again before retrying.
+            case appleDisconnected
+        }
+
+        let kind: Kind
+        let title: String
+        let message: String
+
+        static let retryable = DeleteAccountFailure(
+            kind: .retryable,
+            title: "Couldn't Delete Account",
+            message: "Your account wasn't deleted. Check your connection and try again."
+        )
+        static let appleDisconnected = DeleteAccountFailure(
+            kind: .appleDisconnected,
+            title: "Couldn't Finish Deleting Account",
+            message: "Your Apple ID was disconnected, but some account data wasn't deleted. Sign in with Apple again, then try again."
+        )
+    }
+
+    /// True while the deletion request is running; Settings shows a blocking overlay.
+    private(set) var isDeletingAccount = false
+    /// Set when deletion fails; Settings shows it in an alert with a retry action.
+    var deleteAccountFailure: DeleteAccountFailure?
+    /// Kept so "Try Again" re-runs the same success handler.
+    private var pendingOnDeleted: (@MainActor () -> Void)?
+
+    /// `onDeleted` (wiping local data) runs only after the server confirms the
+    /// deletion. On cancel or failure, local data is kept.
     @discardableResult
     func deleteAccount(onDeleted: @escaping @MainActor () -> Void = {}) -> Task<Void, Never> {
-        isProcessing = true
-        deleteAccountErrorMessage = nil
+        pendingOnDeleted = onDeleted
+        isDeletingAccount = true
+        deleteAccountFailure = nil
 
         return Task {
             do {
                 try await performDeleteAccount()
+                pendingOnDeleted = nil
                 onDeleted()
             } catch AccountDeletionError.reauthenticationCancelled {
                 // User dismissed the Apple sheet; nothing was deleted.
+            } catch AccountDeletionError.cleanupFailedAfterAppleRevoke {
+                deleteAccountFailure = .appleDisconnected
             } catch {
-                deleteAccountErrorMessage = error.localizedDescription
+                deleteAccountFailure = .retryable
             }
-            isProcessing = false
+            isDeletingAccount = false
         }
+    }
+
+    /// "Try Again" from the failure alert.
+    @discardableResult
+    func retryDeleteAccount() -> Task<Void, Never> {
+        deleteAccount(onDeleted: pendingOnDeleted ?? {})
     }
 }

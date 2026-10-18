@@ -465,6 +465,32 @@ Deno.test("apple: missing authorization_code returns 400 and deletes nothing", a
   assertEquals(deletedUsers, []);
 });
 
+Deno.test("apple: cleanup failure after revoke is flagged apple_revoked and keeps the auth user", async () => {
+  const env = await appleEnv();
+  const apple = fakeApple({ calls: [] });
+  const { handler, deletedUsers } = setup({
+    userFields: appleUser,
+    env,
+    fetch: apple.fetchFn,
+    cleanupFail: { backup_metadata: "secret detail" },
+  });
+  const { result, logs } = await captureErrors(() =>
+    call(handler, post(undefined, { authorization_code: CODE }))
+  );
+  assertEquals(result, {
+    status: 500,
+    body: {
+      error: "Account deletion failed",
+      step: "delete backup_metadata",
+      retryable: true,
+      apple_revoked: true,
+    },
+  });
+  assertEquals(apple.requests.length, 2);
+  assertEquals(deletedUsers, []);
+  assertNoSecrets(logs, env);
+});
+
 Deno.test("apple: Apple-linked user with no stored Apple sub fails closed", async () => {
   const env = await appleEnv();
   const apple = fakeApple({ calls: [] });

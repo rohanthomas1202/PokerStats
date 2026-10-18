@@ -147,9 +147,10 @@ final class AuthService {
             userEmail = nil
             userId = nil
             isLoading = false
-        } catch AccountDeletionError.reauthenticationCancelled {
+        } catch let error as AccountDeletionError {
+            // Cancelled, or Apple revoked but cleanup failed: the caller shows these.
             isLoading = false
-            throw AccountDeletionError.reauthenticationCancelled
+            throw error
         } catch {
             isLoading = false
             // Detail for debugging only; the user sees the generic message.

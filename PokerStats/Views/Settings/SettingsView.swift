@@ -127,6 +127,22 @@ struct SettingsView: View {
         .scrollContentBackground(.hidden)
         .background(Color.pokerBackground)
         .navigationTitle("Settings")
+        .overlay {
+            if authViewModel?.isDeletingAccount == true {
+                // Blocks the form while the deletion request runs.
+                ZStack {
+                    Color.black.opacity(0.4)
+                        .ignoresSafeArea()
+                    ProgressView("Deleting Account…")
+                        .tint(.white)
+                        .foregroundStyle(.white)
+                        .padding(24)
+                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+                }
+                .accessibilityAddTraits(.isModal)
+            }
+        }
+        .navigationBarBackButtonHidden(authViewModel?.isDeletingAccount == true)
         .onAppear {
             viewModel.loadSettings(from: modelContext)
             if authViewModel == nil {
@@ -179,13 +195,27 @@ struct SettingsView: View {
         } message: {
             Text("6 months of realistic session data has been added.")
         }
-        .alert("Couldn't Delete Account", isPresented: Binding(
-            get: { authViewModel?.deleteAccountErrorMessage != nil },
-            set: { if !$0 { authViewModel?.deleteAccountErrorMessage = nil } }
-        )) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            Text(authViewModel?.deleteAccountErrorMessage ?? "")
+        .alert(
+            authViewModel?.deleteAccountFailure?.title ?? "",
+            isPresented: Binding(
+                get: { authViewModel?.deleteAccountFailure != nil },
+                set: { if !$0 { authViewModel?.deleteAccountFailure = nil } }
+            ),
+            presenting: authViewModel?.deleteAccountFailure
+        ) { failure in
+            if failure.kind == .appleDisconnected && !authService.isAuthenticated {
+                // Signed out by the Apple revocation: sign in first, then delete again.
+                Button("Sign In") {
+                    authViewModel?.isShowingSignIn = true
+                }
+            } else {
+                Button("Try Again") {
+                    authViewModel?.retryDeleteAccount()
+                }
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: { failure in
+            Text(failure.message)
         }
         .alert("This cannot be undone.", isPresented: $isShowingDeleteAccountFinal) {
             Button("Cancel", role: .cancel) { }

@@ -56,8 +56,15 @@ function json(body: unknown, status: number): Response {
 }
 
 // Details go to the log only; the client gets a generic body.
-function failure(step: string): Response {
-  return json({ error: "Account deletion failed", step, retryable: true }, 500);
+// `apple_revoked: true` tells the app the Apple token is already revoked (the
+// user may be signed out), so it can ask them to sign in again and retry.
+function failure(step: string, appleRevoked = false): Response {
+  return json({
+    error: "Account deletion failed",
+    step,
+    retryable: true,
+    ...(appleRevoked ? { apple_revoked: true } : {}),
+  }, 500);
 }
 
 export function makeHandler(deps: HandlerDeps) {
@@ -73,6 +80,7 @@ export function makeHandler(deps: HandlerDeps) {
       return json({ error: "Missing authorization" }, 401);
     }
 
+    let appleRevoked = false;
     try {
       // Create admin client for privileged operations
       const supabaseAdmin = deps.createAdminClient();
@@ -138,6 +146,7 @@ export function makeHandler(deps: HandlerDeps) {
           );
           return failure("revoke apple token");
         }
+        appleRevoked = true;
       }
 
       // 1-3. Delete backup files, backup_metadata rows, and the profile row.
@@ -147,7 +156,7 @@ export function makeHandler(deps: HandlerDeps) {
         console.error(
           `delete-account: ${cleanup.step} failed for ${userId}: ${cleanup.message}`,
         );
-        return failure(cleanup.step);
+        return failure(cleanup.step, appleRevoked);
       }
 
       // 4. Delete the auth user (must be last)
@@ -159,13 +168,13 @@ export function makeHandler(deps: HandlerDeps) {
         console.error(
           `delete-account: delete auth user failed for ${userId}: ${deleteError.message}`,
         );
-        return failure("delete auth user");
+        return failure("delete auth user", appleRevoked);
       }
 
       return json({ message: "Account deleted successfully" }, 200);
     } catch (err) {
       console.error("delete-account: unexpected error", err);
-      return failure("unexpected");
+      return failure("unexpected", appleRevoked);
     }
   };
 }

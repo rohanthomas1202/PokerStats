@@ -165,4 +165,36 @@ struct AccountDeleterTests {
         let json = try #require(try JSONSerialization.jsonObject(with: body) as? [String: String])
         #expect(json.isEmpty)
     }
+
+    // MARK: - Apple revoked, then cleanup failed
+
+    @Test func cleanupFailureAfterRevoke_mapsToAppleDisconnectedError() async {
+        let recorder = Recorder()
+        let sut = deleter(
+            appleUserId: "001234.abc",
+            recorder: recorder,
+            function: { _ in
+                throw SupabaseError.httpError(
+                    statusCode: 500,
+                    message: #"{"error":"Account deletion failed","step":"delete backup_metadata","retryable":true,"apple_revoked":true}"#
+                )
+            }
+        )
+        await #expect(throws: AccountDeletionError.cleanupFailedAfterAppleRevoke) { try await sut.run() }
+    }
+
+    @Test func revokeFailure_isNotAppleDisconnected() async {
+        let recorder = Recorder()
+        let sut = deleter(
+            appleUserId: "001234.abc",
+            recorder: recorder,
+            function: { _ in
+                throw SupabaseError.httpError(
+                    statusCode: 500,
+                    message: #"{"error":"Account deletion failed","step":"revoke apple token","retryable":true}"#
+                )
+            }
+        )
+        await #expect(throws: SupabaseError.self) { try await sut.run() }
+    }
 }
