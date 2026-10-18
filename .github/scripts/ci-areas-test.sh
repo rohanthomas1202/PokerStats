@@ -23,6 +23,7 @@ expect "no files"            "ios=false deno=false" ""
 expect "docs only"           "ios=false deno=false" $'docs/specs/a.md\nREADME.md\nPRIVACY.md'
 expect "app source"          "ios=true deno=false"  "PokerStats/Views/Home.swift"
 expect "widgets"             "ios=true deno=false"  "PokerStatsWidgets/Info.plist"
+expect "privacy manifest"    "ios=true deno=false"  "PokerStats/PrivacyInfo.xcprivacy"
 expect "unit tests"          "ios=true deno=false"  "PokerStatsTests/FooTests.swift"
 expect "ui tests"            "ios=true deno=false"  "PokerStatsUITests/Snap.swift"
 expect "shared scheme"       "ios=true deno=false"  "PokerStats.xcodeproj/xcshareddata/xcschemes/PokerStats.xcscheme"

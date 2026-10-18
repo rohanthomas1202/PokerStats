@@ -127,6 +127,19 @@ jobs:
             DerivedData/Build/Products/Debug-iphonesimulator/PokerStats.app \
             "${{ steps.build_number.outputs.number }}"
 
+      # The privacy manifests as built, for the record (#115). Fails if the
+      # app has none; the widget extension may not have one yet.
+      - name: Show privacy manifests
+        run: |
+          app=DerivedData/Build/Products/Debug-iphonesimulator/PokerStats.app
+          plutil -p "$app/PrivacyInfo.xcprivacy"
+          widget="$app/PlugIns/PokerStatsWidgets.appex/PrivacyInfo.xcprivacy"
+          if [[ -f "$widget" ]]; then
+            plutil -p "$widget"
+          else
+            echo "PokerStatsWidgets.appex has no PrivacyInfo.xcprivacy."
+          fi
+
       # Unit tests only. PokerStatsUITests is the fastlane screenshot suite.
       - name: Test
         run: >
@@ -194,11 +207,36 @@ jobs:
       - name: Test release scripts
         run: .github/scripts/ios-release-test.sh
 
+  # Every required-reason API category the app or widget extension uses must
+  # be declared in that target's PrivacyInfo.xcprivacy (#115). Runs when the
+  # iOS job does.
+  privacy-manifest:
+    name: Privacy manifest declarations
+    needs: changes
+    if: needs.changes.outputs.ios == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Test the check
+        run: .github/scripts/privacy-api-check-test.sh
+
+      - name: Check the app
+        run: .github/scripts/privacy-api-check.sh PokerStats/PrivacyInfo.xcprivacy PokerStats
+
+      # The extension builds PokerStatsWidgets/ plus the shared PokerStats/
+      # files listed in project.yml, and needs its own manifest for them.
+      - name: Check the widget extension
+        run: |
+          mapfile -t sources < <(yq '.targets.PokerStatsWidgets.sources[] | (.path // .)' project.yml)
+          .github/scripts/privacy-api-check.sh PokerStatsWidgets/PrivacyInfo.xcprivacy "${sources[@]}"
+
   # The one check branch protection requires. Always runs; passes when every
   # job passed or was skipped, fails if any failed or was cancelled.
   gate:
     name: CI passed
-    needs: [changes, ios, deno, fastlane-guard, release-scripts]
+    needs: [changes, ios, deno, fastlane-guard, release-scripts, privacy-manifest]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
