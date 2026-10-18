@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  ios:
+    name: iOS build and test
+    runs-on: macos-26
+    timeout-minutes: 45
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      # Newest installed iOS 26 runtime, first iPhone on it.
+      - name: Pick simulator
+        id: sim
+        run: |
+          udid=$(xcrun simctl list devices available -j | jq -r '
+            .devices | to_entries
+            | map(select(.key | test("SimRuntime\\.iOS-26")))
+            | sort_by(.key | sub(".*iOS-"; "") | split("-") | map(tonumber))
+            | last.value | map(select(.name | startswith("iPhone")))
+            | first | "\(.udid) \(.name)"')
+          echo "Using simulator: $udid"
+          echo "udid=${udid%% *}" >> "$GITHUB_OUTPUT"
+
+      # No .env in CI: the project's pre-build script writes a placeholder
+      # Secrets.plist, so no secrets are needed. Signing is off for the
+      # simulator build.
+      - name: Build
+        run: >
+          xcodebuild build-for-testing
+          -project PokerStats.xcodeproj
+          -scheme PokerStats
+          -destination "id=${{ steps.sim.outputs.udid }}"
+          -derivedDataPath DerivedData
+          CODE_SIGNING_ALLOWED=NO
+
+      # Unit tests only. PokerStatsUITests is the fastlane screenshot suite.
+      - name: Test
+        run: >
+          xcodebuild test-without-building
+          -project PokerStats.xcodeproj
+          -scheme PokerStats
+          -destination "id=${{ steps.sim.outputs.udid }}"
+          -derivedDataPath DerivedData
+          -only-testing:PokerStatsTests
+
+  deno:
+    name: Edge functions (Deno)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      # Each function has its own deno.json import map, so run per folder.
+      - name: Check and test
+        run: |
+          for dir in supabase/functions/*/; do
+            echo "::group::$dir"
+            (cd "$dir" && deno check *.ts && deno test --permit-no-files)
+            echo "::endgroup::"
+          done
