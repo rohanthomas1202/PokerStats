@@ -30,11 +30,12 @@ struct SignInView: View {
 
                 // Sign in with Apple
                 SignInWithAppleButton(.signIn) { request in
-                    request.requestedScopes = [.email, .fullName]
+                    authViewModel.configureAppleRequest(request)
                 } onCompletion: { result in
                     authViewModel.handleAppleSignIn(result: result)
                 }
                 .signInWithAppleButtonStyle(.white)
+                .disabled(authViewModel.isProcessing)
                 .frame(height: 50)
                 .cornerRadius(12)
                 .padding(.horizontal, 24)
@@ -52,12 +53,17 @@ struct SignInView: View {
                 if authViewModel.isProcessing {
                     ProgressView()
                         .tint(.white)
+                        .accessibilityLabel("Signing in…")
                 }
 
                 Spacer()
                     .frame(height: 40)
             }
             .background(Color.pokerBackground)
+            .onChange(of: authViewModel.errorMessage) { _, message in
+                guard let message else { return }
+                AccessibilityNotification.Announcement(message).post()
+            }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

@@ -134,20 +134,38 @@ final class SupabaseClient: Sendable {
 
     // MARK: - Auth API
 
-    func signInWithIdToken(provider: AuthProvider, idToken: String) async throws -> AuthSession {
+    /// `nonce` is the raw value whose SHA-256 was sent to the identity
+    /// provider; Supabase rejects the ID token unless they match.
+    func signInWithIdToken(provider: AuthProvider, idToken: String, nonce: String) async throws -> AuthSession {
+        let urlRequest = try makeSignInWithIdTokenRequest(provider: provider, idToken: idToken, nonce: nonce)
+        let (data, response) = try await performRequest(urlRequest)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw SupabaseError.networkError("Invalid response")
+        }
+        guard (200...299).contains(httpResponse.statusCode) else {
+            let message = String(data: data, encoding: .utf8) ?? "Unknown error"
+            throw SupabaseError.httpError(statusCode: httpResponse.statusCode, message: message)
+        }
+        return try decoder.decode(AuthSession.self, from: data)
+    }
+
+    /// Builds the ID-token grant POST. Separate so tests can check the body.
+    func makeSignInWithIdTokenRequest(provider: AuthProvider, idToken: String, nonce: String) throws -> URLRequest {
         struct SignInBody: Encodable, Sendable {
             let provider: String
             let idToken: String
+            let nonce: String
         }
 
-        let body = SignInBody(provider: provider.rawValue, idToken: idToken)
-        let data = try await request(
-            endpoint: "/auth/v1/token?grant_type=id_token",
-            method: .post,
-            body: body,
-            authenticated: false
+        var urlRequest = URLRequest(url: URL(string: projectURL + "/auth/v1/token?grant_type=id_token")!)
+        urlRequest.httpMethod = HTTPMethod.post.rawValue
+        urlRequest.setValue(anonKey, forHTTPHeaderField: "apikey")
+        urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        urlRequest.httpBody = try encoder.encode(
+            SignInBody(provider: provider.rawValue, idToken: idToken, nonce: nonce)
         )
-        return try decoder.decode(AuthSession.self, from: data)
+        return urlRequest
     }
 
     func refreshSession(refreshToken: String) async throws -> AuthSession {

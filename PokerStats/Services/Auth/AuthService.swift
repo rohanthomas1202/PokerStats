@@ -59,7 +59,8 @@ final class AuthService {
         identityToken: Data,
         authorizationCode: Data,
         fullName: PersonNameComponents?,
-        appleUserId: String
+        appleUserId: String,
+        rawNonce: String
     ) async throws {
         guard let tokenString = String(data: identityToken, encoding: .utf8) else {
             throw AuthServiceError.appleSignInFailed("Invalid identity token")
@@ -71,7 +72,8 @@ final class AuthService {
         do {
             let session = try await client.signInWithIdToken(
                 provider: .apple,
-                idToken: tokenString
+                idToken: tokenString,
+                nonce: rawNonce
             )
 
             try storeSession(session)

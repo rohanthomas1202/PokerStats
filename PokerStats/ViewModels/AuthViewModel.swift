@@ -1,5 +1,6 @@
 import Foundation
 import AuthenticationServices
+import os
 
 @Observable
 @MainActor
@@ -13,12 +14,61 @@ final class AuthViewModel {
     /// Performs the account deletion; tests replace it.
     private let performDeleteAccount: @MainActor () async throws -> Void
 
-    init(authService: AuthService, performDeleteAccount: (@MainActor () async throws -> Void)? = nil) {
+    /// Performs the Supabase sign-in with Apple's credential; tests replace it.
+    private let performAppleSignIn: @MainActor (AppleSignInCredential) async throws -> Void
+
+    init(
+        authService: AuthService,
+        performDeleteAccount: (@MainActor () async throws -> Void)? = nil,
+        performAppleSignIn: (@MainActor (AppleSignInCredential) async throws -> Void)? = nil
+    ) {
         self.authService = authService
         self.performDeleteAccount = performDeleteAccount ?? { try await authService.deleteAccount() }
+        self.performAppleSignIn = performAppleSignIn ?? { credential in
+            try await authService.signInWithApple(
+                identityToken: credential.identityToken,
+                authorizationCode: credential.authorizationCode,
+                fullName: credential.fullName,
+                appleUserId: credential.appleUserId,
+                rawNonce: credential.rawNonce
+            )
+        }
     }
 
     // MARK: - Apple Sign In
+
+    struct AppleSignInCredential: Sendable {
+        let identityToken: Data
+        let authorizationCode: Data
+        let fullName: PersonNameComponents?
+        let appleUserId: String
+        /// Raw nonce whose SHA-256 went to Apple in the request.
+        let rawNonce: String
+    }
+
+    /// Shown when Apple or Supabase rejects the sign-in. Details go to the log only.
+    static let signInFailedMessage = "Couldn't sign in with Apple. Please try again."
+    /// Shown when Apple's response is incomplete or no attempt is in progress.
+    static let signInIncompleteMessage = "Sign-in didn't finish. Please try again."
+
+    private static let logger = Logger(subsystem: "com.rohanthomas.PokerStats", category: "AuthViewModel")
+
+    /// Nonce for the sign-in attempt in progress. Memory only, used once.
+    @ObservationIgnored private var pendingNonce: SignInNonce?
+
+    /// SignInWithAppleButton's request closure; runs once per attempt.
+    func configureAppleRequest(_ request: ASAuthorizationAppleIDRequest) {
+        request.requestedScopes = [.email, .fullName]
+        request.nonce = startAppleSignInAttempt()
+    }
+
+    /// Makes a fresh nonce for this attempt and returns the hash Apple gets.
+    func startAppleSignInAttempt() -> String {
+        let nonce = SignInNonce()
+        pendingNonce = nonce
+        errorMessage = nil // a repeat failure then re-announces for VoiceOver
+        return nonce.hashed
+    }
 
     func handleAppleSignIn(result: Result<ASAuthorization, Error>) {
         switch result {
@@ -26,32 +76,74 @@ final class AuthViewModel {
             guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
                   let identityToken = credential.identityToken,
                   let authorizationCode = credential.authorizationCode else {
-                errorMessage = "Missing Apple credentials."
+                pendingNonce = nil
+                Self.logger.error("Apple sign-in returned no identity token or authorization code")
+                errorMessage = Self.signInIncompleteMessage
                 return
             }
-
-            isProcessing = true
-            errorMessage = nil
-
-            Task {
-                do {
-                    try await authService.signInWithApple(
-                        identityToken: identityToken,
-                        authorizationCode: authorizationCode,
-                        fullName: credential.fullName,
-                        appleUserId: credential.user
-                    )
-                    isShowingSignIn = false
-                } catch {
-                    errorMessage = error.localizedDescription
-                }
-                isProcessing = false
-            }
+            completeAppleSignIn(
+                identityToken: identityToken,
+                authorizationCode: authorizationCode,
+                fullName: credential.fullName,
+                appleUserId: credential.user
+            )
 
         case .failure(let error):
+            pendingNonce = nil
             // User cancelled is not an error
             if (error as? ASAuthorizationError)?.code == .canceled { return }
-            errorMessage = error.localizedDescription
+            Self.logSignInFailure(error, step: "apple")
+            errorMessage = Self.signInFailedMessage
+        }
+    }
+
+    /// Sends Apple's credential to Supabase with this attempt's raw nonce,
+    /// then forgets the nonce. Returns nil if no attempt was started.
+    @discardableResult
+    func completeAppleSignIn(
+        identityToken: Data,
+        authorizationCode: Data,
+        fullName: PersonNameComponents?,
+        appleUserId: String
+    ) -> Task<Void, Never>? {
+        guard let nonce = pendingNonce else {
+            errorMessage = Self.signInIncompleteMessage
+            return nil
+        }
+        pendingNonce = nil
+
+        let credential = AppleSignInCredential(
+            identityToken: identityToken,
+            authorizationCode: authorizationCode,
+            fullName: fullName,
+            appleUserId: appleUserId,
+            rawNonce: nonce.raw
+        )
+        isProcessing = true
+        errorMessage = nil
+
+        return Task {
+            do {
+                try await performAppleSignIn(credential)
+                isShowingSignIn = false
+            } catch {
+                Self.logSignInFailure(error, step: "supabase")
+                errorMessage = Self.signInFailedMessage
+            }
+            isProcessing = false
+        }
+    }
+
+    /// Logs the error kind and status publicly; the server's message stays
+    /// private. Never logs the credential, tokens, or nonce.
+    private static func logSignInFailure(_ error: Error, step: StaticString) {
+        let stepName = "\(step)"
+        switch error {
+        case SupabaseError.httpError(let statusCode, let message):
+            logger.error("Sign in with Apple failed at \(stepName, privacy: .public): HTTP \(statusCode, privacy: .public) \(message, privacy: .private)")
+        default:
+            let kind = String(describing: type(of: error))
+            logger.error("Sign in with Apple failed at \(stepName, privacy: .public): \(kind, privacy: .public) \(error.localizedDescription, privacy: .private)")
         }
     }
 
