@@ -36,6 +36,9 @@ expect "flag lookalike"         pass ci_scripts/release.sh 'fastlane deliver --s
 expect "workflow false"         pass .github/workflows/x.yml $'env:\n  DELIVER_SUBMIT_FOR_REVIEW: "false"'
 expect "ENV.fetch false"        pass fastlane/Fastfile    'ENV.fetch("DELIVER_AUTOMATIC_RELEASE", "false")'
 expect "false, then other true" pass fastlane/Fastfile    'upload_to_app_store(submit_for_review: false, skip_metadata: true)'
+expect "comment, comma then on" pass fastlane/Fastfile    '# never set submit_for_review, on any lane'
+expect "comment, comma then 1"  pass ci_scripts/release.sh '# automatic_release, 1 of the keys we never set'
+expect "fetch other var false"  pass fastlane/Fastfile    'upload_to_app_store(submit_for_review: ENV.fetch("X", "false"))'
 
 expect "submit key: true"       fail fastlane/Fastfile    'upload_to_app_store(submit_for_review: true)'
 expect "release key: true"      fail fastlane/Fastfile    'upload_to_app_store(automatic_release: true)'
@@ -66,6 +69,11 @@ expect "flag equals true"       fail ci_scripts/release.sh 'fastlane deliver --s
 expect "ENV.fetch default"      fail fastlane/Fastfile    'ENV.fetch("DELIVER_AUTOMATIC_RELEASE", "true")'
 expect "ENV.fetch no quotes"    fail fastlane/Fastfile    "ENV.fetch('DELIVER_SUBMIT_FOR_REVIEW', true)"
 expect "YAML bool tag"          fail .github/workflows/x.yml $'with:\n  submit_for_review: !!bool true'
+expect "YAML int tag"           fail .github/workflows/x.yml $'with:\n  submit_for_review: !!int 1'
+expect "YAML anchor"            fail .github/workflows/x.yml $'with:\n  submit_for_review: &a true'
+expect "YAML anchor and tag"    fail .github/workflows/x.yml $'with:\n  automatic_release: &a !!bool yes'
+expect "fetch other var default" fail fastlane/Fastfile   'upload_to_app_store(submit_for_review: ENV.fetch("X", "true"))'
+expect "fetch default next line" fail fastlane/Fastfile   $'upload_to_app_store(automatic_release: ENV.fetch("X",\n  "true"))'
 
 # expect_status NAME WANT_STATUS PATH...  (runs from the scratch repo)
 expect_status() {
@@ -90,6 +98,12 @@ expect_status "missing path" 2 does-not-exist
 for dir in "${dirs[@]}"; do mkdir -p "$tmp/repo/$dir"; done
 printf '%s\n' 'upload_to_app_store(submit_for_review: true)' > "$tmp/repo/fastlane/Fastfile"
 expect_status "missing path next to a match" 2 "${dirs[@]}" does-not-exist
+if grep -q "^fastlane/Fastfile:" "$tmp/out"; then
+  echo "ok   missing path next to a match: names fastlane/Fastfile"
+else
+  echo "FAIL missing path next to a match: fastlane/Fastfile not in output"
+  failures=$((failures + 1))
+fi
 
 # Two paths matching at once: fail and name both files.
 printf '%s\n' 'export DELIVER_AUTOMATIC_RELEASE=yes' > "$tmp/repo/ci_scripts/release.sh"
