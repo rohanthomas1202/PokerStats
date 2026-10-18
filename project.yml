@@ -36,9 +36,13 @@ targets:
       - path: PokerStats
         excludes:
           - "Preview Content"
+          - "PrivacyInfo.xcprivacy"
       - path: PokerStats/Preview Content
         buildPhase: resources
         type: folder
+      # Privacy manifest, copied to the root of the .app (#74).
+      - path: PokerStats/PrivacyInfo.xcprivacy
+        buildPhase: resources
     resources:
       - path: PokerStats/Resources
         type: folder
