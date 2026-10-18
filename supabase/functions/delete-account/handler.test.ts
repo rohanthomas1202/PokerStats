@@ -455,12 +455,51 @@ Deno.test("apple: missing authorization_code returns 400 and deletes nothing", a
     status: 400,
     body: {
       error: "Apple re-authentication required",
+      code: "apple_reauth_required",
       step: "revoke apple token",
       retryable: true,
     },
   });
   assertEquals(apple.requests, []);
   assertEquals(fake.calls.length, 0);
+  assertEquals(deletedUsers, []);
+});
+
+Deno.test("apple: Apple-linked user with no stored Apple sub fails closed", async () => {
+  const env = await appleEnv();
+  const apple = fakeApple({ calls: [] });
+  const { handler, deletedUsers, fake } = setup({
+    userFields: { app_metadata: { provider: "apple" }, identities: [] },
+    env,
+    fetch: apple.fetchFn,
+  });
+  const { result, logs } = await captureErrors(() =>
+    call(handler, post(undefined, { authorization_code: CODE }))
+  );
+  assertEquals(result.status, 500);
+  assertEquals(result.body.step, "revoke apple token");
+  assertEquals(apple.requests, []);
+  assertEquals(fake.calls, []);
+  assertEquals(deletedUsers, []);
+  assertEquals(logs.includes("no Apple identity sub"), true);
+});
+
+Deno.test("apple: token response without id_token is rejected", async () => {
+  const env = await appleEnv();
+  const apple = fakeApple({ calls: [] }, {
+    token: { status: 200, body: { refresh_token: REFRESH } },
+  });
+  const { handler, deletedUsers, fake } = setup({
+    userFields: appleUser,
+    env,
+    fetch: apple.fetchFn,
+  });
+  const { result } = await captureErrors(() =>
+    call(handler, post(undefined, { authorization_code: CODE }))
+  );
+  assertEquals(result.status, 500);
+  assertEquals(apple.requests.length, 1); // no revoke
+  assertEquals(fake.calls, []);
   assertEquals(deletedUsers, []);
 });
 

@@ -179,6 +179,14 @@ struct SettingsView: View {
         } message: {
             Text("6 months of realistic session data has been added.")
         }
+        .alert("Couldn't Delete Account", isPresented: Binding(
+            get: { authViewModel?.deleteAccountErrorMessage != nil },
+            set: { if !$0 { authViewModel?.deleteAccountErrorMessage = nil } }
+        )) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(authViewModel?.deleteAccountErrorMessage ?? "")
+        }
         .alert("This cannot be undone.", isPresented: $isShowingDeleteAccountFinal) {
             Button("Cancel", role: .cancel) { }
             Button("Yes, Delete My Account", role: .destructive) {

@@ -10,8 +10,12 @@ final class AuthViewModel {
 
     private let authService: AuthService
 
-    init(authService: AuthService) {
+    /// Performs the account deletion; tests replace it.
+    private let performDeleteAccount: @MainActor () async throws -> Void
+
+    init(authService: AuthService, performDeleteAccount: (@MainActor () async throws -> Void)? = nil) {
         self.authService = authService
+        self.performDeleteAccount = performDeleteAccount ?? { try await authService.deleteAccount() }
     }
 
     // MARK: - Apple Sign In
@@ -63,22 +67,26 @@ final class AuthViewModel {
 
     var isShowingDeleteConfirmation = false
     var isShowingDeleteFinalConfirmation = false
+    /// Set when account deletion fails; Settings shows it in an alert.
+    /// Separate from `errorMessage`, which the sign-in sheet shows.
+    var deleteAccountErrorMessage: String?
 
     /// `onDeleted` runs only after the server-side deletion succeeded, so local
     /// data isn't wiped when the user cancels Apple re-authentication or the
     /// deletion fails.
-    func deleteAccount(onDeleted: @escaping @MainActor () -> Void = {}) {
+    @discardableResult
+    func deleteAccount(onDeleted: @escaping @MainActor () -> Void = {}) -> Task<Void, Never> {
         isProcessing = true
-        errorMessage = nil
+        deleteAccountErrorMessage = nil
 
-        Task {
+        return Task {
             do {
-                try await authService.deleteAccount()
+                try await performDeleteAccount()
                 onDeleted()
             } catch AccountDeletionError.reauthenticationCancelled {
                 // User dismissed the Apple sheet; nothing was deleted.
             } catch {
-                errorMessage = error.localizedDescription
+                deleteAccountErrorMessage = error.localizedDescription
             }
             isProcessing = false
         }

@@ -99,11 +99,22 @@ export function makeHandler(deps: HandlerDeps) {
           console.error(
             `delete-account: Apple-linked user ${userId} sent no authorization_code`,
           );
+          // `code` is what the app matches on to show the Apple sheet and retry.
           return json({
             error: "Apple re-authentication required",
+            code: "apple_reauth_required",
             step: "revoke apple token",
             retryable: true,
           }, 400);
+        }
+        // Fail closed: without the stored Apple user ID we can't check that the
+        // code belongs to this account.
+        const expectedSubject = appleSubject(user);
+        if (!expectedSubject) {
+          console.error(
+            `delete-account: Apple-linked user ${userId} has no Apple identity sub on file`,
+          );
+          return failure("revoke apple token");
         }
         const config = readAppleConfig(deps.getEnv);
         if (!config.ok) {
@@ -117,7 +128,7 @@ export function makeHandler(deps: HandlerDeps) {
         const revoke = await revokeAppleToken({
           config: config.config,
           authorizationCode: code,
-          expectedSubject: appleSubject(user),
+          expectedSubject,
           fetch: deps.fetch,
           nowSeconds: deps.nowSeconds?.() ?? Math.floor(Date.now() / 1000),
         });

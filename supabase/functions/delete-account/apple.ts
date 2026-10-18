@@ -146,8 +146,8 @@ export type RevokeResult =
 export interface RevokeOptions {
   config: AppleConfig;
   authorizationCode: string;
-  // When known, the exchanged token must belong to this Apple user.
-  expectedSubject?: string;
+  // The exchanged token must belong to this Apple user (Supabase's stored sub).
+  expectedSubject: string;
   fetch: typeof fetch;
   nowSeconds: number;
 }
@@ -198,16 +198,14 @@ async function exchangeAndRevoke(opts: RevokeOptions): Promise<RevokeResult> {
   }
   const tokens = await tokenRes.json();
 
-  if (opts.expectedSubject) {
-    const sub = typeof tokens.id_token === "string"
-      ? decodeJwtSubject(tokens.id_token)
-      : undefined;
-    if (sub !== opts.expectedSubject) {
-      return {
-        ok: false,
-        message: "token exchange: Apple account does not match this user",
-      };
-    }
+  const sub = typeof tokens.id_token === "string"
+    ? decodeJwtSubject(tokens.id_token)
+    : undefined;
+  if (!opts.expectedSubject || sub !== opts.expectedSubject) {
+    return {
+      ok: false,
+      message: "token exchange: Apple account does not match this user",
+    };
   }
 
   const [token, hint] = typeof tokens.refresh_token === "string"

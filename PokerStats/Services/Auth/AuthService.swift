@@ -1,6 +1,7 @@
 import Foundation
 import AuthenticationServices
 import SwiftData
+import os
 
 @Observable
 @MainActor
@@ -16,6 +17,7 @@ final class AuthService {
     var displayEmail: String { userEmail ?? "Unknown" }
 
     private let client = SupabaseClient.shared
+    private static let logger = Logger(subsystem: "com.rohanthomas.PokerStats", category: "AuthService")
 
     // MARK: - Initialization
 
@@ -150,6 +152,8 @@ final class AuthService {
             throw AccountDeletionError.reauthenticationCancelled
         } catch {
             isLoading = false
+            // Detail for debugging only; the user sees the generic message.
+            Self.logger.error("Account deletion failed: \(error.localizedDescription)")
             let authError = AuthServiceError.deletionFailed(error.localizedDescription)
             self.error = authError
             throw authError
@@ -223,7 +227,7 @@ enum AuthServiceError: LocalizedError, Sendable {
         switch self {
         case .appleSignInFailed(let msg): "Apple Sign In failed: \(msg)"
         case .sessionExpired: "Session expired. Please sign in again."
-        case .deletionFailed(let msg): "Account deletion failed: \(msg)"
+        case .deletionFailed: "Your account wasn't deleted. Check your connection and try again. If you've been signed out, sign in and try again."
         }
     }
 }
