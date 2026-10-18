@@ -141,7 +141,7 @@ The table must match `Package.resolved` exactly. The rest of `PokerStats.xcodepr
 
 - **XcodeGen**: generates the Xcode project from `project.yml`. Installed with Homebrew, unpinned.
 - **fastlane**: screenshots and App Store uploads (`fastlane/`). There is no `Gemfile`, so the version is not pinned.
-- **Supabase edge function** (`supabase/functions/delete-account`): imports `@supabase/supabase-js@2` from esm.sh and `@supabase/functions-js@^2` from JSR (`deno.json`).
+- **Supabase edge function** (`supabase/functions/delete-account`): imports `@supabase/supabase-js@2.118.0` from esm.sh and `@supabase/functions-js@2.118.0` from JSR (`deno.json`), both pinned to exact versions.
 
 ---
 
