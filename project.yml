@@ -134,6 +134,9 @@ targets:
       path: PokerStatsWidgets/Info.plist
       properties:
         CFBundleDisplayName: PokerStats
+        # Follow the build settings, so the extension always matches the app.
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     settings:

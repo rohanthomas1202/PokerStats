@@ -63,6 +63,11 @@ jobs:
           echo "Using simulator: $udid"
           echo "udid=${udid%% *}" >> "$GITHUB_OUTPUT"
 
+      # Same build number source and override as the fastlane upload lanes.
+      - name: Pick build number
+        id: build_number
+        run: echo "number=$(ci_scripts/build_number.sh)" >> "$GITHUB_OUTPUT"
+
       # No .env in CI: the project's pre-build script writes a placeholder
       # Secrets.plist, so no secrets are needed. Signing is off, so the app has
       # no App Group entitlement; AppGroupContainer falls back to an in-memory
@@ -79,6 +84,17 @@ jobs:
           -clonedSourcePackagesDirPath SourcePackages
           -disableAutomaticPackageResolution
           CODE_SIGNING_ALLOWED=NO
+          CURRENT_PROJECT_VERSION=${{ steps.build_number.outputs.number }}
+
+      # The app and widget extension must carry the same build number, taken
+      # from the override. Also fails if the committed widget Info.plist
+      # differs from what xcodegen generates from project.yml.
+      - name: Check build numbers
+        run: |
+          git diff --exit-code -- PokerStatsWidgets/Info.plist
+          ci_scripts/check_build_numbers.sh \
+            DerivedData/Build/Products/Debug-iphonesimulator/PokerStats.app \
+            "${{ steps.build_number.outputs.number }}"
 
       # Unit tests only. PokerStatsUITests is the fastlane screenshot suite.
       - name: Test
