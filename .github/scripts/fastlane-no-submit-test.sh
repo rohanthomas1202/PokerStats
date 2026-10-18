@@ -73,6 +73,10 @@ expect "YAML int tag"           fail .github/workflows/x.yml $'with:\n  submit_f
 expect "YAML anchor"            fail .github/workflows/x.yml $'with:\n  submit_for_review: &a true'
 expect "YAML anchor and tag"    fail .github/workflows/x.yml $'with:\n  automatic_release: &a !!bool yes'
 expect "fetch other var default" fail fastlane/Fastfile   'upload_to_app_store(submit_for_review: ENV.fetch("X", "true"))'
+expect "positional symbol key"  fail fastlane/Fastfile    'opts.store(:submit_for_review, true)'
+expect "positional, no space"   fail fastlane/Fastfile    'opts.store(:automatic_release,true)'
+expect "positional, next line"  fail fastlane/Fastfile    $'opts.store(:submit_for_review,\n  true)'
+expect "positional false"       pass fastlane/Fastfile    'opts.store(:submit_for_review, false)'
 expect "fetch default next line" fail fastlane/Fastfile   $'upload_to_app_store(automatic_release: ENV.fetch("X",\n  "true"))'
 
 # expect_status NAME WANT_STATUS PATH...  (runs from the scratch repo)
