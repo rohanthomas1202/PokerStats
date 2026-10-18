@@ -30,7 +30,7 @@ struct SignInView: View {
 
                 // Sign in with Apple
                 SignInWithAppleButton(.signIn) { request in
-                    request.requestedScopes = [.email, .fullName]
+                    authViewModel.configureAppleRequest(request)
                 } onCompletion: { result in
                     authViewModel.handleAppleSignIn(result: result)
                 }
