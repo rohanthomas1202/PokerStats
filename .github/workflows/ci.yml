@@ -193,8 +193,8 @@ jobs:
       - name: Test the guard
         run: .github/scripts/fastlane-no-submit-test.sh
 
-      - name: Check fastlane
-        run: .github/scripts/fastlane-no-submit.sh fastlane
+      - name: Check fastlane, workflows and ci_scripts
+        run: .github/scripts/fastlane-no-submit.sh fastlane .github/workflows ci_scripts
 
   # Tag parsing and TestFlight notes for ios-release.yml. Always runs.
   release-scripts:
