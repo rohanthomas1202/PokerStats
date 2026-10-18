@@ -421,13 +421,12 @@ Do these steps in this order ([#31](https://github.com/rohanthomas1202/PokerStat
 
 1. Sign the App Store Connect agreement ([#66](https://github.com/rohanthomas1202/PokerStats/issues/66)). The App Store Connect API returns 403 until then.
 2. Create the `testflight` and `app-store` environments (Settings > Environments).
-3. Limit each environment's deployment branches and tags: `testflight` to `main` and `ios-sprint-*` tags, `app-store` to `ios-v*` tags. Do this before adding any secret. Without it, a write collaborator can push an edited copy of the workflow on another branch and read the App Store Connect key from the environment.
-4. On `app-store`, add the owner as a required reviewer. GitHub creates a missing environment with no protection, and branch protection does not replace that reviewer.
-5. Add the secrets below to both environments as environment secrets, not as repository secrets. A job outside those environments then gets no keys.
-6. Set the repository variable `APP_STORE_UPLOAD_ENABLED=true` (Settings > Secrets and variables > Actions > Variables).
-7. Run the workflow by hand on `main` as a dry run to confirm signing.
-
-Recommended: add a tag ruleset that restricts who can create `ios-*` tags. Pushing a tag is what starts an upload, and without a ruleset any write collaborator can push one.
+3. Limit each environment's deployment branches and tags: `testflight` to `main` and `ios-sprint-*` tags, `app-store` to `ios-v*` tags. Do this before adding any secret. This stops a run from a non-matching ref, such as an edited copy of the workflow pushed on another branch, from reading the App Store Connect key. It does not stop a matching tag: an `ios-sprint-*` or `ios-v*` tag can point at any commit, including one on a side branch with an edited `ios-release.yml`, and that run gets the environment's secrets. Step 4 closes that gap.
+4. Add a tag ruleset (Settings > Rules > Rulesets) that targets `ios-*` tags and restricts who can create, update and delete them. Pushing a tag is what starts an upload. Together with step 3, only the people the ruleset allows can start a run that reads the App Store Connect key.
+5. On `app-store`, add the owner as a required reviewer. GitHub creates a missing environment with no protection, and branch protection does not replace that reviewer.
+6. Add the secrets below to both environments as environment secrets, not as repository secrets. A job outside those environments then gets no keys.
+7. Set the repository variable `APP_STORE_UPLOAD_ENABLED=true` (Settings > Secrets and variables > Actions > Variables).
+8. Run the workflow by hand on `main` as a dry run to confirm signing.
 
 Both jobs need these secrets on `testflight` and `app-store`:
 
