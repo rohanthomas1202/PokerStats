@@ -182,8 +182,9 @@ struct SettingsView: View {
         .alert("This cannot be undone.", isPresented: $isShowingDeleteAccountFinal) {
             Button("Cancel", role: .cancel) { }
             Button("Yes, Delete My Account", role: .destructive) {
-                authViewModel?.deleteAccount()
-                viewModel.deleteAllData(from: modelContext)
+                authViewModel?.deleteAccount {
+                    viewModel.deleteAllData(from: modelContext)
+                }
             }
         } message: {
             Text("Your account, all cloud backups, and all local data will be permanently deleted.")

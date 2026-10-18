@@ -264,7 +264,7 @@ final class SupabaseClient: Sendable {
 
     // MARK: - Edge Functions
 
-    func callEdgeFunction(_ name: String) async throws {
+    func callEdgeFunction(_ name: String, body: (any Encodable & Sendable)? = nil) async throws {
         guard let token = try await validAccessToken() else {
             throw SupabaseError.notAuthenticated
         }
@@ -274,6 +274,10 @@ final class SupabaseClient: Sendable {
         urlRequest.httpMethod = "POST"
         urlRequest.setValue(anonKey, forHTTPHeaderField: "apikey")
         urlRequest.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        if let body {
+            urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            urlRequest.httpBody = try encoder.encode(body)
+        }
 
         let (data, response) = try await performRequest(urlRequest)
 

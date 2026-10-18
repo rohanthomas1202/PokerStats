@@ -64,13 +64,19 @@ final class AuthViewModel {
     var isShowingDeleteConfirmation = false
     var isShowingDeleteFinalConfirmation = false
 
-    func deleteAccount() {
+    /// `onDeleted` runs only after the server-side deletion succeeded, so local
+    /// data isn't wiped when the user cancels Apple re-authentication or the
+    /// deletion fails.
+    func deleteAccount(onDeleted: @escaping @MainActor () -> Void = {}) {
         isProcessing = true
         errorMessage = nil
 
         Task {
             do {
                 try await authService.deleteAccount()
+                onDeleted()
+            } catch AccountDeletionError.reauthenticationCancelled {
+                // User dismissed the Apple sheet; nothing was deleted.
             } catch {
                 errorMessage = error.localizedDescription
             }

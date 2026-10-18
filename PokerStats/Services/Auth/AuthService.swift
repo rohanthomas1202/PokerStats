@@ -128,18 +128,26 @@ final class AuthService {
         error = nil
 
         do {
-            // Call Edge Function to delete all server-side data
-            try await client.callEdgeFunction("delete-account")
-
-            // Revoke Apple credential if applicable
-            // (Apple token revocation requires the authorization code,
-            // which we don't persist. The Edge Function handles server-side cleanup.)
+            // Apple-linked accounts re-confirm with Sign in with Apple; the
+            // fresh authorization code lets the edge function revoke the
+            // Apple token before deleting the account (App Review 5.1.1(v)).
+            let reauthenticator = AppleReauthenticator()
+            let supabase = self.client
+            let deleter = AccountDeleter(
+                appleUserId: { KeychainHelper.read(.appleUserId) },
+                appleAuthorizationCode: { try await reauthenticator.authorizationCode() },
+                callDeleteFunction: { try await supabase.callEdgeFunction("delete-account", body: $0) }
+            )
+            try await deleter.run()
 
             KeychainHelper.deleteAll()
             isAuthenticated = false
             userEmail = nil
             userId = nil
             isLoading = false
+        } catch AccountDeletionError.reauthenticationCancelled {
+            isLoading = false
+            throw AccountDeletionError.reauthenticationCancelled
         } catch {
             isLoading = false
             let authError = AuthServiceError.deletionFailed(error.localizedDescription)

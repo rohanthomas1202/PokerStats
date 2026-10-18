@@ -20,4 +20,6 @@ Deno.serve(makeHandler({
     );
     return client;
   },
+  getEnv: (name) => Deno.env.get(name),
+  fetch: (input, init) => fetch(input, init),
 }));
