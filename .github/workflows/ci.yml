@@ -36,7 +36,7 @@ jobs:
         run: |
           set -o pipefail
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            areas=$(git diff --name-only --no-renames HEAD^1 HEAD | .github/scripts/ci-areas.sh)
+            areas=$(.github/scripts/ci-changed-files.sh | .github/scripts/ci-areas.sh)
           else
             areas=$'ios=true\ndeno=true'
           fi

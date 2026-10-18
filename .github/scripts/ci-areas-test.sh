@@ -2,12 +2,15 @@
 # Tests for ci-areas.sh. Run: .github/scripts/ci-areas-test.sh
 set -euo pipefail
 
-script="$(dirname "$0")/ci-areas.sh"
+dir="$(cd "$(dirname "$0")" && pwd)"
+script="$dir/ci-areas.sh"
 failures=0
+repo=$(mktemp -d)
+trap 'rm -rf "$repo"' EXIT
 
 expect() {
   local name="$1" want="$2" input="$3" got
-  got=$(printf '%s' "$input" | "$script" | paste -sd' ' -)
+  got=$(printf '%s' "$input" | tr '\n' '\0' | "$script" | paste -sd' ' -)
   if [[ "$got" == "$want" ]]; then
     echo "ok   $name"
   else
@@ -33,27 +36,46 @@ expect "workflow change"     "ios=true deno=true"   ".github/workflows/ci.yml"
 expect "prefix lookalike"    "ios=false deno=false" $'PokerStatsDocs/x.md\nproject.yml.bak\nsupabase.md'
 expect "no trailing newline" "ios=false deno=true"  "supabase/x.ts"
 
-# A file moved out of PokerStats/ must still run iOS. Without --no-renames,
-# git diff lists only the new path.
-repo=$(mktemp -d)
-trap 'rm -rf "$repo"' EXIT
-git -C "$repo" init -q
-mkdir "$repo/PokerStats"
-echo x > "$repo/PokerStats/Moved.swift"
-git -C "$repo" add -A
-git -C "$repo" -c user.name=t -c user.email=t@t commit -qm base
-mkdir "$repo/docs"
-git -C "$repo" mv PokerStats/Moved.swift docs/Moved.swift
-git -C "$repo" -c user.name=t -c user.email=t@t commit -qm move
-expect "rename out of app"   "ios=true deno=false"  "$(git -C "$repo" diff --name-only --no-renames HEAD^1 HEAD)"
+expect "spaces, two areas"   "ios=true deno=true"   $'PokerStats/My View.swift\nsupabase/my fn/index.ts'
 
-# git diff prints paths with spaces unquoted, one per line.
+# The cases below commit a change to a scratch repo and run the workflow's own
+# ci-changed-files.sh on it, so they cover the real git diff flags.
+git -C "$repo" init -q
+commit() { git -C "$repo" add -A && git -C "$repo" -c user.name=t -c user.email=t@t commit -qm "$1"; }
+expect_commit() {
+  local name="$1" want="$2" got
+  commit "$name"
+  got=$(cd "$repo" && "$dir/ci-changed-files.sh" | "$script" | paste -sd' ' -)
+  if [[ "$got" == "$want" ]]; then
+    echo "ok   $name"
+  else
+    echo "FAIL $name: want '$want', got '$got'"
+    failures=$((failures + 1))
+  fi
+}
+
+mkdir "$repo/PokerStats" "$repo/docs"
+echo x > "$repo/PokerStats/Moved.swift"
+commit base
+
+git -C "$repo" mv PokerStats/Moved.swift docs/Moved.swift
+expect_commit "rename out of app"  "ios=true deno=false"
+
 mkdir -p "$repo/supabase/my fn"
 echo x > "$repo/supabase/my fn/index.ts"
-git -C "$repo" add -A
-git -C "$repo" -c user.name=t -c user.email=t@t commit -qm space
-expect "path with spaces"    "ios=false deno=true"  "$(git -C "$repo" diff --name-only --no-renames HEAD^1 HEAD)"
-expect "spaces, two areas"   "ios=true deno=true"   $'PokerStats/My View.swift\nsupabase/my fn/index.ts'
+expect_commit "path with spaces"   "ios=false deno=true"
+
+echo x > "$repo/PokerStats/Café.swift"
+expect_commit "non-ASCII path"     "ios=true deno=false"
+
+echo x > "$repo/PokerStats/Say \"hi\".swift"
+expect_commit "path with a quote"  "ios=true deno=false"
+
+echo x > "$repo/PokerStats/a"$'\t'"b.swift"
+expect_commit "path with a tab"    "ios=true deno=false"
+
+echo x > "$repo/PokerStats/a\\b.swift"
+expect_commit "path with a backslash" "ios=true deno=false"
 
 if (( failures > 0 )); then
   echo "$failures test(s) failed"
