@@ -1,5 +1,6 @@
 import "@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { deleteUserData } from "./cleanup.ts";
 
 Deno.serve(async (req) => {
   // Only allow POST
@@ -47,30 +48,32 @@ Deno.serve(async (req) => {
 
     const userId = user.id;
 
-    // 1. Delete backup files from storage
-    const { data: files } = await supabaseAdmin.storage
-      .from("backups")
-      .list(`${userId}/`);
-
-    if (files && files.length > 0) {
-      const filePaths = files.map((f) => `${userId}/${f.name}`);
-      await supabaseAdmin.storage.from("backups").remove(filePaths);
+    // 1-3. Delete backup files, backup_metadata rows, and the profile row.
+    // Stop on the first failure and keep the auth user so the user can retry.
+    const cleanup = await deleteUserData(supabaseAdmin, userId);
+    if (!cleanup.ok) {
+      console.error(
+        `delete-account: ${cleanup.step} failed for ${userId}: ${cleanup.message}`,
+      );
+      return new Response(
+        JSON.stringify({
+          error: `Failed to ${cleanup.step}: ${cleanup.message}`,
+        }),
+        {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
     }
-
-    // 2. Delete backup metadata rows
-    await supabaseAdmin
-      .from("backup_metadata")
-      .delete()
-      .eq("user_id", userId);
-
-    // 3. Delete profile row
-    await supabaseAdmin.from("profiles").delete().eq("id", userId);
 
     // 4. Delete the auth user (must be last)
     const { error: deleteError } =
       await supabaseAdmin.auth.admin.deleteUser(userId);
 
     if (deleteError) {
+      console.error(
+        `delete-account: delete auth user failed for ${userId}: ${deleteError.message}`,
+      );
       return new Response(
         JSON.stringify({ error: `Failed to delete user: ${deleteError.message}` }),
         {
@@ -85,8 +88,12 @@ Deno.serve(async (req) => {
       { status: 200, headers: { "Content-Type": "application/json" } },
     );
   } catch (err) {
+    console.error("delete-account: unexpected error", err);
+    const message = err instanceof Error
+      ? err.message
+      : "Internal server error";
     return new Response(
-      JSON.stringify({ error: err.message ?? "Internal server error" }),
+      JSON.stringify({ error: message }),
       { status: 500, headers: { "Content-Type": "application/json" } },
     );
   }
