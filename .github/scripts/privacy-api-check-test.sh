@@ -57,6 +57,11 @@ expect "modificationDate key"        fail none         A.swift 'let d = attrs[.m
 expect "resource key"                fail none         A.swift 'let v = try url.resourceValues(forKeys: [.contentModificationDateKey])'
 expect "stat call"                   fail none         A.swift 'var s = stat(); _ = stat(path, &s)'
 expect "declared file timestamp"     pass FileTimestamp A.swift 'let d = attrs[.creationDate]'
+expect "getattrlistat"               fail none         A.swift 'let r = getattrlistat(fd, path, &list, &buf, size, 0)'
+expect "NSFileModificationDate"      fail none         A.swift 'let d = attrs[NSFileModificationDate]'
+expect "NSFileCreationDate"          fail none         A.swift 'let d = attrs[NSFileCreationDate]'
+expect "NSURLCreationDateKey"        fail none         A.swift 'let k = NSURLCreationDateKey'
+expect "NSURLContentModificationDateKey" fail none     A.swift 'let k = NSURLContentModificationDateKey'
 expect "boot time"                   fail none         A.swift 'let t = ProcessInfo.processInfo.systemUptime'
 expect "mach_absolute_time"          fail none         A.swift 'let t = mach_absolute_time()'
 expect "disk space"                  fail none         A.swift 'let k: URLResourceKey = .volumeAvailableCapacityForImportantUsageKey'
@@ -66,8 +71,10 @@ expect "declared keyboards"          pass ActiveKeyboards A.swift 'let m = UITex
 expect "all declared"                pass "UserDefaults FileTimestamp SystemBootTime DiskSpace ActiveKeyboards" A.swift \
   $'let d = UserDefaults.standard\nlet a = attrs[.creationDate]\nlet t = mach_absolute_time()\nlet s = systemFreeSize\nlet m = UITextInputMode.activeInputModes'
 
-expect "test folder ignored"         pass none         FooTests/A.swift 'let d = UserDefaults.standard'
-expect "test file ignored"           pass none         FooTests.swift   'let d = UserDefaults.standard'
+expect "unit test folder ignored"    pass none         PokerStatsTests/A.swift 'let d = UserDefaults.standard'
+expect "UI test folder ignored"      pass none         PokerStatsUITests/A.swift 'let d = UserDefaults.standard'
+expect "other *Tests folder scanned" fail none         FooTests/A.swift 'let d = UserDefaults.standard'
+expect "*Tests.swift file scanned"   fail none         FooTests.swift   'let d = UserDefaults.standard'
 expect "non-Swift file ignored"      pass none         notes.md         'UserDefaults.standard'
 expect "nested folder scanned"       fail none         Services/Cloud/A.swift 'let d = UserDefaults.standard'
 
@@ -76,6 +83,11 @@ expect "doc comment"                 pass none         A.swift '/// Wraps stat(p
 expect "block comment"               pass none         A.swift $'/* UserDefaults\n   mach_absolute_time() */\nlet x = 1'
 expect "code after block comment"    fail none         A.swift '/* note */ let d = UserDefaults.standard'
 expect "URL is not a comment"        fail none         A.swift 'let u = "https://x"; let d = UserDefaults.standard'
+expect "nested block comment"        pass none         A.swift $'/* outer /* inner */ UserDefaults */\nlet x = 1'
+expect "code after nested comment"   fail none         A.swift '/* a /* b */ c */ let d = UserDefaults.standard'
+expect "/* in multi-line string"     fail none         A.swift $'let s = """\n  /* not a comment\n  """\nlet d = UserDefaults.standard\n// */'
+expect "multi-line string kept"      fail none         A.swift $'let s = """\n  UserDefaults\n  """'
+expect "quote in multi-line string"  fail none         A.swift $'let s = """\n  say "hi" /* \\""" \n  """\nlet d = UserDefaults.standard // */'
 expect "lookalike names"             pass none         A.swift $'let statKey = 1\nlet status = state.stats\nfoo.stat(1)\nlet userDefaultsKey = 2'
 
 # A manifest that lists a category without a reason does not declare it.

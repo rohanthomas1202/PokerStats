@@ -231,8 +231,13 @@ jobs:
 
       # The extension builds PokerStatsWidgets/ plus the shared PokerStats/
       # files listed in project.yml, and needs its own manifest for them.
+      # Only each entry's path is read. Excludes and includes are ignored, so
+      # this scans more files than the target builds, never fewer. The yq on
+      # ubuntu-latest must be mikefarah yq v4 for this expression.
       - name: Check the widget extension
         run: |
+          version=$(yq --version)
+          [[ "$version" == *mikefarah/yq*" version v4."* ]] || { echo "Need mikefarah yq v4, found: $version" >&2; exit 1; }
           mapfile -t sources < <(yq '.targets.PokerStatsWidgets.sources[] | (.path // .)' project.yml)
           .github/scripts/privacy-api-check.sh PokerStatsWidgets/PrivacyInfo.xcprivacy "${sources[@]}"
 
