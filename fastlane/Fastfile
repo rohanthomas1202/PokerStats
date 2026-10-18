@@ -8,6 +8,18 @@ SCREENSHOT_DEVICES = [
 
 BUNDLE_ID = "com.rohanthomas.PokerStats"
 
+# Build number: ci_scripts/build_number.sh (UTC YYYYMMDDHHMM), passed as the
+# CURRENT_PROJECT_VERSION build setting so the app and the widget extension
+# get the same value. project.yml's CURRENT_PROJECT_VERSION is only the local
+# default. No App Store Connect API call is needed.
+def build_with_new_build_number
+  build_number = sh("cd .. && ci_scripts/build_number.sh").strip
+  UI.message("Build number: #{build_number}")
+  build_app(scheme: "PokerStats", xcargs: "CURRENT_PROJECT_VERSION=#{build_number}")
+  app = File.join(lane_context[SharedValues::XCODEBUILD_ARCHIVE], "Products/Applications/PokerStats.app")
+  sh("cd .. && ci_scripts/check_build_numbers.sh '#{app}' '#{build_number}'")
+end
+
 platform :ios do
   desc "Generate App Store screenshots"
   lane :screenshots do
@@ -89,8 +101,7 @@ platform :ios do
   desc "Deploy to TestFlight"
   lane :beta do
     sh("cd .. && xcodegen generate")
-    increment_build_number
-    build_app(scheme: "PokerStats")
+    build_with_new_build_number
     upload_to_testflight
   end
 
@@ -100,8 +111,7 @@ platform :ios do
   desc "Upload to App Store Connect (no review submission; the owner submits manually)"
   lane :release do
     sh("cd .. && xcodegen generate")
-    increment_build_number
-    build_app(scheme: "PokerStats")
+    build_with_new_build_number
     upload_to_app_store(submit_for_review: false, automatic_release: false)
   end
 end
