@@ -1,5 +1,5 @@
 import { assertEquals } from "jsr:@std/assert@1";
-import { deleteUserData, REMOVE_BATCH } from "./cleanup.ts";
+import { deleteUserData, MAX_DEPTH, REMOVE_BATCH } from "./cleanup.ts";
 import { fakeClient, USER } from "./test_fakes.ts";
 
 Deno.test("removes every file when there are more than one page", async () => {
@@ -62,15 +62,85 @@ Deno.test("list error stops before anything is deleted", async () => {
   assertEquals(fake.calls, [`list ${USER}/ 0`]);
 });
 
-Deno.test("folder entry (null id) fails the list step", async () => {
-  const fake = fakeClient(5, { folders: ["nested"] });
+Deno.test("files in nested folders are deleted", async () => {
+  const fake = fakeClient(2, { nested: ["old/a.json.gz", "old/b.json.gz"] });
+  const result = await deleteUserData(fake.client, USER);
+  assertEquals(result, { ok: true, filesRemoved: 4 });
+  assertEquals(fake.remaining(), 0);
+  assertEquals(fake.calls, [
+    `list ${USER}/ 0`,
+    `list ${USER}/old/ 0`,
+    "remove 4",
+    `list ${USER}/ 0`,
+    "delete backup_metadata",
+    "delete profiles",
+  ]);
+});
+
+Deno.test("deep nesting is followed and paged at each level", async () => {
+  const deep = Array.from({ length: 150 }, (_, i) => `a/b/c/d/f${i}.json.gz`);
+  const fake = fakeClient(120, { nested: [...deep, "a/x.json.gz"] });
+  const result = await deleteUserData(fake.client, USER, 100);
+  assertEquals(result, { ok: true, filesRemoved: 271 });
+  assertEquals(fake.remaining(), 0);
+  const listing = fake.calls.slice(0, fake.calls.indexOf("remove 271"));
+  assertEquals(listing, [
+    `list ${USER}/ 0`,
+    `list ${USER}/ 100`, // root has 121 entries: 120 files + folder "a"
+    `list ${USER}/a/ 0`,
+    `list ${USER}/a/b/ 0`,
+    `list ${USER}/a/b/c/ 0`,
+    `list ${USER}/a/b/c/d/ 0`,
+    `list ${USER}/a/b/c/d/ 100`,
+  ]);
+});
+
+Deno.test("nesting deeper than MAX_DEPTH fails the list step", async () => {
+  const path = Array.from({ length: MAX_DEPTH + 1 }, (_, i) => `d${i}`).join(
+    "/",
+  );
+  const fake = fakeClient(1, { nested: [`${path}/f.json.gz`] });
+  const result = await deleteUserData(fake.client, USER);
+  assertEquals(result.ok, false);
+  assertEquals(result.ok === false && result.step, "list backup files");
+  assertEquals(fake.calls.some((c) => c.startsWith("remove")), false);
+});
+
+Deno.test("leftover in a nested folder fails verification", async () => {
+  const fake = fakeClient(3, {
+    nested: ["a/b/keep.json.gz", "a/b/gone.json.gz"],
+    sticky: ["a/b/keep.json.gz"],
+  });
+  const result = await deleteUserData(fake.client, USER);
+  assertEquals(result, {
+    ok: false,
+    step: "verify backup files removed",
+    message: `1+ files still under ${USER}/`,
+  });
+  assertEquals(fake.remainingPaths(), [`${USER}/a/b/keep.json.gz`]);
+  assertEquals(fake.calls.includes("delete backup_metadata"), false);
+});
+
+Deno.test("list error inside a nested folder stops before removing", async () => {
+  const fake = fakeClient(0, { nested: ["a/f.json.gz"] });
+  // Fail every list after the root listing.
+  const list = fake.client.storage.from("backups").list;
+  const bucket = fake.client.storage.from("backups");
+  let n = 0;
+  fake.client.storage.from = () => ({
+    ...bucket,
+    list: (prefix, o) =>
+      n++ === 0
+        ? list(prefix, o)
+        : Promise.resolve({ data: null, error: { message: "nested boom" } }),
+  });
   const result = await deleteUserData(fake.client, USER);
   assertEquals(result, {
     ok: false,
     step: "list backup files",
-    message: `unexpected folder ${USER}/nested`,
+    message: "nested boom",
   });
-  assertEquals(fake.calls, [`list ${USER}/ 0`]);
+  assertEquals(fake.remaining(), 1);
 });
 
 Deno.test("short page before the real end fails verification", async () => {

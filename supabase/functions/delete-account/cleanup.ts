@@ -28,9 +28,57 @@ export type CleanupResult =
   | { ok: true; filesRemoved: number }
   | { ok: false; step: string; message: string };
 
-// Storage `list` returns at most `limit` entries (default 100), so page
-// through until a short page. Collect every path before removing anything:
-// removing while paging would shift the offsets and skip files.
+// Folders nested deeper than this fail the step instead of recursing forever
+// (e.g. a storage bug that keeps returning the same folder).
+export const MAX_DEPTH = 32;
+
+type Bucket = ReturnType<CleanupClient["storage"]["from"]>;
+type ListResult = { ok: true; files: string[] } | {
+  ok: false;
+  message: string;
+};
+
+// Lists every file under `prefix` (which ends in "/"), recursing into folder
+// entries (id === null). Storage `list` returns at most `limit` entries
+// (default 100), so each level is paged until a short page. A level's folders
+// are only visited after that level is fully listed.
+async function listFilesRecursive(
+  bucket: Bucket,
+  prefix: string,
+  pageSize: number,
+  depth = 0,
+): Promise<ListResult> {
+  if (depth > MAX_DEPTH) {
+    return {
+      ok: false,
+      message: `folders nested deeper than ${MAX_DEPTH} at ${prefix}`,
+    };
+  }
+  const files: string[] = [];
+  const folders: string[] = [];
+  for (let offset = 0;; offset += pageSize) {
+    const { data, error } = await bucket.list(prefix, {
+      limit: pageSize,
+      offset,
+    });
+    if (error) return { ok: false, message: error.message };
+    const page = data ?? [];
+    for (const entry of page) {
+      if (entry.id === null) folders.push(`${prefix}${entry.name}/`);
+      else files.push(`${prefix}${entry.name}`);
+    }
+    if (page.length < pageSize) break;
+  }
+  for (const folder of folders) {
+    const sub = await listFilesRecursive(bucket, folder, pageSize, depth + 1);
+    if (!sub.ok) return sub;
+    files.push(...sub.files);
+  }
+  return { ok: true, files };
+}
+
+// Collect every path before removing anything: removing while paging would
+// shift the offsets and skip files.
 export async function deleteUserData(
   client: CleanupClient,
   userId: string,
@@ -38,31 +86,14 @@ export async function deleteUserData(
 ): Promise<CleanupResult> {
   const bucket = client.storage.from("backups");
 
-  // Files are stored flat under {user_id}/{filename} (see init_schema.sql).
+  // The app stores files flat under {user_id}/{filename} (see
+  // init_schema.sql), but anything nested under the prefix is removed too.
   const prefix = `${userId}/`;
-  const paths: string[] = [];
-  for (let offset = 0;; offset += pageSize) {
-    const { data, error } = await bucket.list(prefix, {
-      limit: pageSize,
-      offset,
-    });
-    if (error) {
-      return { ok: false, step: "list backup files", message: error.message };
-    }
-    const page = data ?? [];
-    // Folder entries have a null id. Nothing should create them, and we
-    // don't recurse, so fail rather than leave their contents behind.
-    const folder = page.find((f) => f.id === null);
-    if (folder) {
-      return {
-        ok: false,
-        step: "list backup files",
-        message: `unexpected folder ${prefix}${folder.name}`,
-      };
-    }
-    paths.push(...page.map((f) => `${prefix}${f.name}`));
-    if (page.length < pageSize) break;
+  const listed = await listFilesRecursive(bucket, prefix, pageSize);
+  if (!listed.ok) {
+    return { ok: false, step: "list backup files", message: listed.message };
   }
+  const paths = listed.files;
 
   for (let i = 0; i < paths.length; i += REMOVE_BATCH) {
     const { error } = await bucket.remove(paths.slice(i, i + REMOVE_BATCH));
@@ -71,24 +102,22 @@ export async function deleteUserData(
     }
   }
 
-  // A short page before the real end would stop the listing early, so
-  // confirm the prefix is empty before touching the database rows.
-  const { data: left, error: verifyError } = await bucket.list(prefix, {
-    limit: pageSize,
-    offset: 0,
-  });
-  if (verifyError) {
+  // A short page before the real end would stop the listing early, and a
+  // backup uploaded mid-deletion would survive, so list the whole tree again
+  // and confirm nothing is left before touching the database rows.
+  const left = await listFilesRecursive(bucket, prefix, pageSize);
+  if (!left.ok) {
     return {
       ok: false,
       step: "verify backup files removed",
-      message: verifyError.message,
+      message: left.message,
     };
   }
-  if (left && left.length > 0) {
+  if (left.files.length > 0) {
     return {
       ok: false,
       step: "verify backup files removed",
-      message: `${left.length}+ files still under ${prefix}`,
+      message: `${left.files.length}+ files still under ${prefix}`,
     };
   }
 
