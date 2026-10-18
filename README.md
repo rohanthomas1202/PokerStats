@@ -199,6 +199,22 @@ Or in Xcode: **Cmd + U**
 
 ---
 
+## Repo layout
+
+One repo holds the iOS app, the backend, and the web app.
+
+- **iOS app:** `PokerStats/`, `PokerStatsWidgets/`, `PokerStatsTests/`, and `PokerStatsUITests/`. The [Project Structure](#project-structure) section below lists their files.
+- **Backend:** `supabase/` holds the database migrations, row-level security policies, and edge functions.
+- **Web app:** goes in `web/` when the 1.2 milestone starts. It doesn't exist yet.
+- **Shared test data:** goes in `shared/fixtures/`. The iOS and web test suites will both read it, so the two compute the same stats. It doesn't exist yet.
+- **Specs:** product specs are in `docs/specs/`.
+- **Backlog:** this repo's issues, ranked in [#17](https://github.com/rohanthomas1202/PokerStats/issues/17). The `ios`, `backend`, and `web` lane labels decide which engineer takes an item.
+- **CI:** each pull request runs only the jobs its changes touch, and one check, `CI passed`, reports the result ([#98](https://github.com/rohanthomas1202/PokerStats/issues/98)). See [Continuous Integration](#continuous-integration).
+- **Review rules:** `.github/CODEOWNERS` sets who must review each path ([#99](https://github.com/rohanthomas1202/PokerStats/issues/99)).
+- **Releases:** iOS builds are uploaded only from tags ([#100](https://github.com/rohanthomas1202/PokerStats/issues/100)). An `ios-sprint-N` tag uploads a TestFlight build for testers. An `ios-vX.Y` tag uploads an App Store build, and the owner submits it for review by hand.
+
+---
+
 ## Project Structure
 
 ```
@@ -374,10 +390,11 @@ Cmd + U
 
 ### Continuous Integration
 
-GitHub Actions runs `.github/workflows/ci.yml` on every pull request to `main` and on every push to `main`. It has two jobs:
+GitHub Actions runs `.github/workflows/ci.yml` on every pull request to `main` and on every push to `main`. The **Detect changes** job passes the pull request's changed paths to `.github/scripts/ci-areas.sh`, which decides whether the iOS and Deno jobs run. A change under `.github/` runs both, and a push to `main` runs everything. The **CI passed** job fails if any other job failed or was cancelled, so it is the one check to require. The jobs that do the work:
 
 - **iOS build and test** (`macos-26` runner, Xcode 26.6): installs a pinned XcodeGen release, runs `xcodegen generate`, builds the `PokerStats` scheme for the newest available iOS 26 iPhone simulator with code signing off, then runs the `PokerStatsTests` unit tests. Unsigned builds have no App Group entitlement, so `AppGroupContainer` uses an in-memory store when it runs as a unit-test host; a normal launch without the App Group fails with a clear error instead. SwiftPM checkouts and the module cache are cached, and packages resolve only from the committed `Package.resolved`. If tests fail, the `.xcresult` bundle is uploaded as a run artifact. The fastlane screenshot UI tests are not run in CI. CI has no `.env` file and no secrets: the pre-build script writes a placeholder `Secrets.plist`. The build gets its build number from `ci_scripts/build_number.sh`, and `ci_scripts/check_build_numbers.sh` checks that the built app and its widget extension both carry it, with the same version.
 - **Edge functions (Deno)** (`ubuntu-latest`): runs `deno check` and `deno test` in each folder under `supabase/functions/`.
+- **Fastlane never submits** (`ubuntu-latest`, every run): `.github/scripts/fastlane-no-submit.sh` fails if anything under `fastlane/` turns on `submit_for_review` or `automatic_release`. The owner submits to App Review by hand.
 
 Dependabot (`.github/dependabot.yml`) opens weekly PRs to update the GitHub Actions versions used in the workflow.
 
