@@ -15,9 +15,64 @@ BUNDLE_ID = "com.rohanthomas.PokerStats"
 def build_with_new_build_number
   build_number = sh("cd .. && ci_scripts/build_number.sh").strip
   UI.message("Build number: #{build_number}")
-  build_app(scheme: "PokerStats", xcargs: "CURRENT_PROJECT_VERSION=#{build_number}")
+  # Automatic signing via the App Store Connect API key (when present) plus
+  # -allowProvisioningUpdates. Covers the app, the PokerStatsWidgets
+  # extension (Live Activity / widget), and the shared App Group
+  # group.com.rohanthomas.PokerStats. Team ID comes from project.yml.
+  FileUtils.mkdir_p(File.expand_path("../build", __dir__))
+  build_app(
+    scheme: "PokerStats",
+    export_method: "app-store",
+    output_directory: File.expand_path("../build", __dir__),
+    xcargs: "CURRENT_PROJECT_VERSION=#{build_number} -allowProvisioningUpdates"
+  )
   app = File.join(lane_context[SharedValues::XCODEBUILD_ARCHIVE], "Products/Applications/PokerStats.app")
   sh("cd .. && ci_scripts/check_build_numbers.sh '#{app}' '#{build_number}'")
+end
+
+# Auth for upload_to_testflight / upload_to_app_store and for xcodebuild
+# provisioning updates. Key material comes from env (GitHub secrets in CI).
+# Never UI.message or puts the key body.
+def ensure_asc_api_key!
+  key_id = ENV["ASC_KEY_ID"].to_s
+  issuer_id = ENV["ASC_ISSUER_ID"].to_s
+  key_path = ENV["ASC_KEY_PATH"].to_s
+  key_content = ENV["ASC_PRIVATE_KEY"].to_s
+
+  if key_id.empty? || issuer_id.empty? || (key_path.empty? && key_content.empty?)
+    UI.user_error!("ASC_KEY_ID, ASC_ISSUER_ID, and ASC_PRIVATE_KEY (or ASC_KEY_PATH) are required for signing/upload.")
+  end
+
+  args = {
+    key_id: key_id,
+    issuer_id: issuer_id,
+    duration: 1200,
+    in_house: false
+  }
+  if !key_path.empty? && File.exist?(key_path)
+    args[:key_filepath] = key_path
+  else
+    args[:key_content] = key_content
+    args[:is_key_content_base64] = false
+  end
+  app_store_connect_api_key(**args)
+end
+
+def dry_run?(options = {})
+  return true if options[:dry_run]
+  %w[1 true yes].include?(ENV["DRY_RUN"].to_s.downcase)
+end
+
+def what_to_test(options = {})
+  notes_file = options[:notes_file].to_s
+  if !notes_file.empty? && File.exist?(notes_file)
+    return File.read(notes_file).strip
+  end
+  text = ENV["WHAT_TO_TEST"].to_s.strip
+  return text unless text.empty?
+  path = File.expand_path("metadata/en-US/release_notes.txt", __dir__)
+  return File.read(path).strip if File.exist?(path)
+  "PokerStats build"
 end
 
 platform :ios do
@@ -98,20 +153,41 @@ platform :ios do
     )
   end
 
-  desc "Deploy to TestFlight"
-  lane :beta do
+  desc "Upload to TestFlight (dry_run:true builds and signs only)"
+  lane :beta do |options|
+    ensure_asc_api_key!
     sh("cd .. && xcodegen generate")
     build_with_new_build_number
-    upload_to_testflight
+    if dry_run?(options)
+      UI.success("dry_run: built and signed; skipped upload_to_testflight")
+    else
+      upload_to_testflight(
+        changelog: what_to_test(options),
+        distribute_external: false,
+        skip_waiting_for_build_processing: true
+      )
+    end
   end
 
   # Uploads the build and metadata only. Submitting for App Review is done
   # manually by the owner in App Store Connect, every time. Never set
-  # submit_for_review to true, and never call this lane from CI.
+  # submit_for_review to true. The ios-release workflow may call this lane
+  # only on an ios-v* tag (or workflow_dispatch path=appstore); ordinary CI
+  # must never call it.
   desc "Upload to App Store Connect (no review submission; the owner submits manually)"
-  lane :release do
+  lane :release do |options|
+    ensure_asc_api_key!
     sh("cd .. && xcodegen generate")
     build_with_new_build_number
-    upload_to_app_store(submit_for_review: false, automatic_release: false)
+    if dry_run?(options)
+      UI.success("dry_run: built and signed; skipped upload_to_app_store")
+    else
+      upload_to_app_store(
+        submit_for_review: false,
+        automatic_release: false,
+        precheck_include_in_app_purchases: false,
+        force: true
+      )
+    end
   end
 end

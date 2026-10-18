@@ -1,0 +1,166 @@
+name: iOS release
+
+# The only workflow that uploads the iOS app (#100, #31). It runs for:
+#   ios-sprint-N tags   -> TestFlight (fastlane beta) with "What to Test" notes
+#   ios-vX.Y[.Z] tags   -> App Store Connect upload only (fastlane release);
+#                          the owner submits for review by hand in ASC
+#   workflow_dispatch   -> dry run on main: build and sign, no upload
+# Pushes to main, PRs, and web/ or supabase/ changes never upload anything.
+# Do not also use a sprint-release PR label; tags are the only trigger.
+on:
+  push:
+    tags: ["ios-*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  checks: read
+
+concurrency:
+  group: ios-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build and upload
+    runs-on: macos-26
+    timeout-minutes: 90
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+      XCODEGEN_VERSION: 2.46.0
+      XCODEGEN_SHA256: 4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Test release scripts
+        run: .github/scripts/ios-release-test.sh
+
+      # Tags must name an ios-sprint-N or ios-vX.Y commit on main whose
+      # "CI passed" check succeeded. Dispatch runs only on main (dry run).
+      - name: Check trigger
+        id: trigger
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
+              echo "Dry runs run on main only, not $GITHUB_REF." >&2
+              exit 1
+            fi
+            echo "kind=dry-run" >> "$GITHUB_OUTPUT"
+            echo "lane=beta" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          kind=$(.github/scripts/ios-release-kind.sh "$GITHUB_REF_NAME")
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "$GITHUB_REF_NAME points at $GITHUB_SHA, which is not on main." >&2
+            exit 1
+          fi
+          passed=$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/check-runs?check_name=CI%20passed" \
+            --jq '[.check_runs[] | select(.conclusion == "success")] | length')
+          if (( passed == 0 )); then
+            echo "\"CI passed\" has not succeeded on $GITHUB_SHA. Wait for CI on main, then re-run." >&2
+            exit 1
+          fi
+          case "$kind" in
+            testflight) lane=beta ;;
+            appstore)   lane=release ;;
+            *) echo "Unknown kind $kind" >&2; exit 1 ;;
+          esac
+          echo "kind=$kind" >> "$GITHUB_OUTPUT"
+          echo "lane=$lane" >> "$GITHUB_OUTPUT"
+          echo "Release: $kind ($lane) from $GITHUB_REF_NAME at $GITHUB_SHA"
+
+      - name: Install XcodeGen
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/xcodegen.zip" \
+            "https://github.com/yonaskolb/XcodeGen/releases/download/${XCODEGEN_VERSION}/xcodegen.zip"
+          echo "${XCODEGEN_SHA256}  $RUNNER_TEMP/xcodegen.zip" | shasum -a 256 -c -
+          unzip -q "$RUNNER_TEMP/xcodegen.zip" -d "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/xcodegen/bin" >> "$GITHUB_PATH"
+
+      - name: Install fastlane
+        run: |
+          command -v fastlane >/dev/null || brew install fastlane
+          fastlane --version
+
+      # The app's pre-build script turns .env into Secrets.plist. A release
+      # build must never ship the placeholder values, so fail if either is
+      # missing. The anon key is public by design; the service-role key is
+      # never used here.
+      - name: Write .env
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$SUPABASE_URL" || -z "$SUPABASE_ANON_KEY" ]]; then
+            echo "Missing SUPABASE_URL or SUPABASE_ANON_KEY repository secret." >&2
+            exit 1
+          fi
+          printf 'SUPABASE_URL=%s\nSUPABASE_ANON_KEY=%s\n' "$SUPABASE_URL" "$SUPABASE_ANON_KEY" > .env
+
+      # The key goes to a 0600 file in the runner's temp folder and is never
+      # printed. GitHub masks secret values in logs.
+      - name: Write App Store Connect key
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$ASC_KEY_ID" || -z "$ASC_ISSUER_ID" || -z "$ASC_PRIVATE_KEY" ]]; then
+            echo "Missing ASC_KEY_ID, ASC_ISSUER_ID or ASC_PRIVATE_KEY repository secret." >&2
+            echo "Owner: add them under Settings > Secrets and variables > Actions." >&2
+            exit 1
+          fi
+          umask 077
+          printf '%s\n' "$ASC_PRIVATE_KEY" > "$RUNNER_TEMP/AuthKey.p8"
+          echo "ASC_KEY_PATH=$RUNNER_TEMP/AuthKey.p8" >> "$GITHUB_ENV"
+          echo "ASC_KEY_ID=$ASC_KEY_ID" >> "$GITHUB_ENV"
+          echo "ASC_ISSUER_ID=$ASC_ISSUER_ID" >> "$GITHUB_ENV"
+          echo "Wrote ASC API key file (contents not printed)."
+
+      - name: Release notes
+        if: steps.trigger.outputs.kind != 'dry-run'
+        run: |
+          set -euo pipefail
+          .github/scripts/release-notes.sh "$GITHUB_REF_NAME" > "$RUNNER_TEMP/notes.txt"
+          echo "---- What to Test ----"
+          cat "$RUNNER_TEMP/notes.txt"
+
+      - name: Build, sign and upload
+        env:
+          KIND: ${{ steps.trigger.outputs.kind }}
+          LANE: ${{ steps.trigger.outputs.lane }}
+        run: |
+          set -euo pipefail
+          if [[ "$KIND" == "dry-run" ]]; then
+            fastlane ios beta dry_run:true
+          elif [[ "$LANE" == "beta" ]]; then
+            fastlane ios beta notes_file:"$RUNNER_TEMP/notes.txt"
+          elif [[ "$LANE" == "release" ]]; then
+            fastlane ios release dry_run:false
+          else
+            echo "Unexpected lane=$LANE kind=$KIND" >&2
+            exit 1
+          fi
+
+      - name: Save .ipa and dSYMs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: PokerStats-${{ github.ref_name }}-${{ github.run_number }}
+          path: |
+            build/*.ipa
+            build/*.dSYM.zip
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Remove key and .env
+        if: always()
+        run: rm -f "$RUNNER_TEMP/AuthKey.p8" .env

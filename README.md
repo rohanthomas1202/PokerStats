@@ -140,7 +140,7 @@ The table must match `Package.resolved` exactly. The rest of `PokerStats.xcodepr
 ### Tooling (not shipped in the app)
 
 - **XcodeGen**: generates the Xcode project from `project.yml`. Installed with Homebrew, unpinned.
-- **fastlane**: screenshots and App Store uploads (`fastlane/`). There is no `Gemfile`, so the version is not pinned. The `release` lane only uploads the build and metadata (`submit_for_review: false`, `automatic_release: false`). Submitting for App Review is manual and owner-only, done in App Store Connect. No CI workflow runs `fastlane release`. The `beta` and `release` lanes set the build number (`CFBundleVersion`) to the UTC time as `YYYYMMDDHHMM` from `ci_scripts/build_number.sh`, passed as `CURRENT_PROJECT_VERSION` so the app and the widget extension match, then check the archive with `ci_scripts/check_build_numbers.sh` before uploading. The `CURRENT_PROJECT_VERSION` in `project.yml` is only the local default.
+- **fastlane**: screenshots and App Store uploads (`fastlane/`). There is no `Gemfile`, so the version is not pinned. The `release` lane only uploads the build and metadata (`submit_for_review: false`, `automatic_release: false`). Submitting for App Review is manual and owner-only, done in App Store Connect. `ios-release.yml` runs `fastlane ios beta` for `ios-sprint-*` tags and `fastlane ios release` for `ios-v*` tags (see Releases). Ordinary CI never calls either upload lane. The `beta` and `release` lanes set the build number (`CFBundleVersion`) to the UTC time as `YYYYMMDDHHMM` from `ci_scripts/build_number.sh`, passed as `CURRENT_PROJECT_VERSION` so the app and the widget extension match, then check the archive with `ci_scripts/check_build_numbers.sh` before uploading. The `CURRENT_PROJECT_VERSION` in `project.yml` is only the local default.
 - **Supabase edge function** (`supabase/functions/delete-account`): imports `@supabase/supabase-js@2.118.0` from esm.sh and `@supabase/functions-js@2.118.0` from JSR (`deno.json`), both pinned to exact versions. Apple token revocation uses WebCrypto and `fetch` only, with no extra package. It needs the Edge Function secrets `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_CLIENT_ID` and `APPLE_PRIVATE_KEY`.
 
 ---
@@ -380,6 +380,32 @@ GitHub Actions runs `.github/workflows/ci.yml` on every pull request to `main` a
 - **Edge functions (Deno)** (`ubuntu-latest`): runs `deno check` and `deno test` in each folder under `supabase/functions/`.
 
 Dependabot (`.github/dependabot.yml`) opens weekly PRs to update the GitHub Actions versions used in the workflow.
+
+### Releases
+
+`.github/workflows/ios-release.yml` is the only workflow that uploads the iOS app. Pushes to `main` and changes to `web/` or `supabase/` never upload anything.
+
+| Trigger | What happens |
+| --- | --- |
+| Push an `ios-sprint-N` tag | Uploads a build to TestFlight with "What to Test" notes. |
+| Push an `ios-vX.Y` or `ios-vX.Y.Z` tag | Uploads the App Store build. The owner submits it for review by hand in App Store Connect, every time. CI never submits. |
+| Run the workflow by hand (Actions > iOS release > Run workflow, on `main`) | Dry run: builds and signs, no upload. |
+
+A tag must point at a commit on `main` whose "CI passed" check succeeded, or the run stops before building. Only one release runs at a time. The `.ipa` and dSYMs are saved as run artifacts for 30 days.
+
+`ios-sprint-*` runs `fastlane ios beta` (TestFlight). `ios-v*` runs `fastlane ios release` (App Store Connect upload only; never `submit_for_review`). Manual dispatch runs `fastlane ios beta dry_run:true` (build and sign only). The "What to Test" notes for TestFlight are the commit subjects since the previous `ios-*` tag (`.github/scripts/release-notes.sh`). Signing is cloud-managed: Xcode signs with the App Store Connect API key and `-allowProvisioningUpdates`, so no certificate or profile is stored in the repo or in secrets. That covers the widget extension (Live Activity) and the App Group `group.com.rohanthomas.PokerStats`.
+
+The workflow needs these repository secrets, which the owner adds (Settings > Secrets and variables > Actions):
+
+- `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_PRIVATE_KEY`: the App Store Connect API key. Cloud-managed signing needs the Admin role.
+- `SUPABASE_URL`, `SUPABASE_ANON_KEY`: written to `.env` so the build gets the real `Secrets.plist`. The run fails rather than ship the placeholder values.
+
+To close a sprint, Trevor - Release & Compliance tags the sprint-closing commit on `main` and records the build number, commit and notes for that sprint:
+
+```bash
+git tag ios-sprint-3 <commit-on-main>
+git push origin ios-sprint-3
+```
 
 ---
 
