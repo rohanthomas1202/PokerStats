@@ -10,7 +10,9 @@ export interface CleanupClient {
       list(
         prefix: string,
         options: { limit: number; offset: number },
-      ): PromiseLike<Result & { data: { name: string }[] | null }>;
+      ): PromiseLike<
+        Result & { data: { name: string; id: string | null }[] | null }
+      >;
       remove(paths: string[]): PromiseLike<Result>;
     };
   };
@@ -18,6 +20,9 @@ export interface CleanupClient {
     delete(): { eq(column: string, value: string): PromiseLike<Result> };
   };
 }
+
+// Storage remove batch size, independent of the list page size.
+export const REMOVE_BATCH = 1000;
 
 export type CleanupResult =
   | { ok: true; filesRemoved: number }
@@ -34,9 +39,10 @@ export async function deleteUserData(
   const bucket = client.storage.from("backups");
 
   // Files are stored flat under {user_id}/{filename} (see init_schema.sql).
+  const prefix = `${userId}/`;
   const paths: string[] = [];
   for (let offset = 0;; offset += pageSize) {
-    const { data, error } = await bucket.list(`${userId}/`, {
+    const { data, error } = await bucket.list(prefix, {
       limit: pageSize,
       offset,
     });
@@ -44,15 +50,46 @@ export async function deleteUserData(
       return { ok: false, step: "list backup files", message: error.message };
     }
     const page = data ?? [];
-    paths.push(...page.map((f) => `${userId}/${f.name}`));
+    // Folder entries have a null id. Nothing should create them, and we
+    // don't recurse, so fail rather than leave their contents behind.
+    const folder = page.find((f) => f.id === null);
+    if (folder) {
+      return {
+        ok: false,
+        step: "list backup files",
+        message: `unexpected folder ${prefix}${folder.name}`,
+      };
+    }
+    paths.push(...page.map((f) => `${prefix}${f.name}`));
     if (page.length < pageSize) break;
   }
 
-  for (let i = 0; i < paths.length; i += pageSize) {
-    const { error } = await bucket.remove(paths.slice(i, i + pageSize));
+  for (let i = 0; i < paths.length; i += REMOVE_BATCH) {
+    const { error } = await bucket.remove(paths.slice(i, i + REMOVE_BATCH));
     if (error) {
       return { ok: false, step: "remove backup files", message: error.message };
     }
+  }
+
+  // A short page before the real end would stop the listing early, so
+  // confirm the prefix is empty before touching the database rows.
+  const { data: left, error: verifyError } = await bucket.list(prefix, {
+    limit: pageSize,
+    offset: 0,
+  });
+  if (verifyError) {
+    return {
+      ok: false,
+      step: "verify backup files removed",
+      message: verifyError.message,
+    };
+  }
+  if (left && left.length > 0) {
+    return {
+      ok: false,
+      step: "verify backup files removed",
+      message: `${left.length}+ files still under ${prefix}`,
+    };
   }
 
   const { error: metadataError } = await client

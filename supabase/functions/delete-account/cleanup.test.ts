@@ -1,49 +1,6 @@
 import { assertEquals } from "jsr:@std/assert@1";
-import { type CleanupClient, deleteUserData } from "./cleanup.ts";
-
-const USER = "user-1";
-
-// In-memory stand-in for the parts of supabase-js that cleanup uses.
-function fakeClient(
-  fileCount: number,
-  fail: Partial<Record<string, string>> = {},
-) {
-  let files = Array.from({ length: fileCount }, (_, i) => `f${i}.json.gz`);
-  const calls: string[] = [];
-  const err = (key: string) => (fail[key] ? { message: fail[key]! } : null);
-
-  const client: CleanupClient = {
-    storage: {
-      from: () => ({
-        list: (prefix, { limit, offset }) => {
-          calls.push(`list ${prefix} ${offset}`);
-          if (fail.list) {
-            return Promise.resolve({ data: null, error: err("list") });
-          }
-          const data = files.slice(offset, offset + limit).map((name) => ({
-            name,
-          }));
-          return Promise.resolve({ data, error: null });
-        },
-        remove: (paths) => {
-          calls.push(`remove ${paths.length}`);
-          if (fail.remove) return Promise.resolve({ error: err("remove") });
-          files = files.filter((f) => !paths.includes(`${USER}/${f}`));
-          return Promise.resolve({ error: null });
-        },
-      }),
-    },
-    from: (table) => ({
-      delete: () => ({
-        eq: () => {
-          calls.push(`delete ${table}`);
-          return Promise.resolve({ error: err(table) });
-        },
-      }),
-    }),
-  };
-  return { client, calls, remaining: () => files.length };
-}
+import { deleteUserData, REMOVE_BATCH } from "./cleanup.ts";
+import { fakeClient, USER } from "./test_fakes.ts";
 
 Deno.test("removes every file when there are more than one page", async () => {
   const fake = fakeClient(250);
@@ -54,9 +11,8 @@ Deno.test("removes every file when there are more than one page", async () => {
     `list ${USER}/ 0`,
     `list ${USER}/ 100`,
     `list ${USER}/ 200`,
-    "remove 100",
-    "remove 100",
-    "remove 50",
+    "remove 250",
+    `list ${USER}/ 0`,
     "delete backup_metadata",
     "delete profiles",
   ]);
@@ -69,6 +25,18 @@ Deno.test("exact multiple of page size stops on the empty page", async () => {
   assertEquals(fake.remaining(), 0);
 });
 
+Deno.test("remove batches are REMOVE_BATCH regardless of page size", async () => {
+  const fake = fakeClient(2500);
+  const result = await deleteUserData(fake.client, USER, 100);
+  assertEquals(result, { ok: true, filesRemoved: 2500 });
+  assertEquals(REMOVE_BATCH, 1000);
+  assertEquals(fake.calls.filter((c) => c.startsWith("remove")), [
+    "remove 1000",
+    "remove 1000",
+    "remove 500",
+  ]);
+});
+
 Deno.test("no files still deletes rows", async () => {
   const fake = fakeClient(0);
   assertEquals(await deleteUserData(fake.client, USER), {
@@ -77,13 +45,14 @@ Deno.test("no files still deletes rows", async () => {
   });
   assertEquals(fake.calls, [
     `list ${USER}/ 0`,
+    `list ${USER}/ 0`,
     "delete backup_metadata",
     "delete profiles",
   ]);
 });
 
 Deno.test("list error stops before anything is deleted", async () => {
-  const fake = fakeClient(5, { list: "boom" });
+  const fake = fakeClient(5, { fail: { list: "boom" } });
   const result = await deleteUserData(fake.client, USER);
   assertEquals(result, {
     ok: false,
@@ -93,8 +62,31 @@ Deno.test("list error stops before anything is deleted", async () => {
   assertEquals(fake.calls, [`list ${USER}/ 0`]);
 });
 
+Deno.test("folder entry (null id) fails the list step", async () => {
+  const fake = fakeClient(5, { folders: ["nested"] });
+  const result = await deleteUserData(fake.client, USER);
+  assertEquals(result, {
+    ok: false,
+    step: "list backup files",
+    message: `unexpected folder ${USER}/nested`,
+  });
+  assertEquals(fake.calls, [`list ${USER}/ 0`]);
+});
+
+Deno.test("short page before the real end fails verification", async () => {
+  const fake = fakeClient(250, { shortPageAt: 100 });
+  const result = await deleteUserData(fake.client, USER, 100);
+  assertEquals(result, {
+    ok: false,
+    step: "verify backup files removed",
+    message: `100+ files still under ${USER}/`,
+  });
+  assertEquals(fake.remaining(), 100);
+  assertEquals(fake.calls.includes("delete backup_metadata"), false);
+});
+
 Deno.test("remove error stops before row deletes", async () => {
-  const fake = fakeClient(5, { remove: "storage down" });
+  const fake = fakeClient(5, { fail: { remove: "storage down" } });
   const result = await deleteUserData(fake.client, USER);
   assertEquals(result, {
     ok: false,
@@ -105,7 +97,7 @@ Deno.test("remove error stops before row deletes", async () => {
 });
 
 Deno.test("backup_metadata error stops before profile delete", async () => {
-  const fake = fakeClient(1, { backup_metadata: "rls" });
+  const fake = fakeClient(1, { fail: { backup_metadata: "rls" } });
   const result = await deleteUserData(fake.client, USER);
   assertEquals(result, {
     ok: false,
@@ -116,7 +108,7 @@ Deno.test("backup_metadata error stops before profile delete", async () => {
 });
 
 Deno.test("profile error is returned", async () => {
-  const fake = fakeClient(1, { profiles: "fk" });
+  const fake = fakeClient(1, { fail: { profiles: "fk" } });
   const result = await deleteUserData(fake.client, USER);
   assertEquals(result, { ok: false, step: "delete profile", message: "fk" });
 });
