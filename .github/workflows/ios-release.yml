@@ -1,12 +1,17 @@
 name: iOS release
 
 # The only workflow that uploads the iOS app (#100, #31). It runs for:
-#   ios-sprint-N tags   -> TestFlight (fastlane beta) with "What to Test" notes
-#   ios-vX.Y[.Z] tags   -> App Store Connect upload only (fastlane release);
-#                          the owner submits for review by hand in ASC
-#   workflow_dispatch   -> dry run on main: build and sign, no upload
+#   ios-sprint-N tags   -> testflight job: TestFlight (fastlane beta) with
+#                          "What to Test" notes
+#   ios-vX.Y[.Z] tags   -> appstore job: App Store Connect upload only
+#                          (fastlane release), behind the app-store
+#                          environment; the owner submits for review by hand
+#   workflow_dispatch   -> testflight job, dry run on main: build and sign,
+#                          no upload
 # Pushes to main, PRs, and web/ or supabase/ changes never upload anything.
 # Do not also use a sprint-release PR label; tags are the only trigger.
+# Secrets are read only in the steps that need them, from the job's
+# environment; nothing is set at workflow level.
 on:
   push:
     tags: ["ios-*"]
@@ -21,14 +26,13 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  release:
-    name: Build and upload
-    runs-on: macos-26
-    timeout-minutes: 90
-    env:
-      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
-      XCODEGEN_VERSION: 2.46.0
-      XCODEGEN_SHA256: 4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806
+  # No secrets. Decides which upload job runs; the two are exclusive.
+  check:
+    name: Check trigger
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      kind: ${{ steps.trigger.outputs.kind }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -52,8 +56,11 @@ jobs:
               exit 1
             fi
             echo "kind=dry-run" >> "$GITHUB_OUTPUT"
-            echo "lane=beta" >> "$GITHUB_OUTPUT"
             exit 0
+          fi
+          if [[ "$GITHUB_REF_TYPE" != "tag" ]]; then
+            echo "Uploads run only from ios-* tags, not $GITHUB_REF." >&2
+            exit 1
           fi
           kind=$(.github/scripts/ios-release-kind.sh "$GITHUB_REF_NAME")
           if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
@@ -66,14 +73,47 @@ jobs:
             echo "\"CI passed\" has not succeeded on $GITHUB_SHA. Wait for CI on main, then re-run." >&2
             exit 1
           fi
-          case "$kind" in
-            testflight) lane=beta ;;
-            appstore)   lane=release ;;
-            *) echo "Unknown kind $kind" >&2; exit 1 ;;
-          esac
           echo "kind=$kind" >> "$GITHUB_OUTPUT"
-          echo "lane=$lane" >> "$GITHUB_OUTPUT"
-          echo "Release: $kind ($lane) from $GITHUB_REF_NAME at $GITHUB_SHA"
+          echo "Release: $kind from $GITHUB_REF_NAME at $GITHUB_SHA"
+
+  # ios-sprint-N tag -> TestFlight. Dispatch on main -> dry run, no upload.
+  # Only ever runs fastlane ios beta.
+  testflight:
+    name: TestFlight
+    needs: check
+    if: >-
+      (needs.check.outputs.kind == 'testflight' && github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/ios-sprint-')) ||
+      (needs.check.outputs.kind == 'dry-run' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    environment: testflight
+    runs-on: macos-26
+    timeout-minutes: 90
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+      XCODEGEN_VERSION: 2.46.0
+      XCODEGEN_SHA256: 4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806
+    steps:
+      - name: Check ref
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            [[ "$GITHUB_REF" == "refs/heads/main" ]] || { echo "Dry runs run on main only." >&2; exit 1; }
+            exit 0
+          fi
+          if [[ "$GITHUB_REF_TYPE" != "tag" || "$GITHUB_REF" != refs/tags/ios-sprint-* ]]; then
+            echo "TestFlight uploads run only from ios-sprint-N tags, not $GITHUB_REF." >&2
+            exit 1
+          fi
+
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Check tag
+        if: github.event_name != 'workflow_dispatch'
+        run: |
+          set -euo pipefail
+          kind=$(.github/scripts/ios-release-kind.sh "$GITHUB_REF_NAME")
+          [[ "$kind" == "testflight" ]] || { echo "$GITHUB_REF_NAME is not an ios-sprint-N tag." >&2; exit 1; }
 
       - name: Install XcodeGen
         run: |
@@ -99,7 +139,7 @@ jobs:
         run: |
           set -euo pipefail
           if [[ -z "$SUPABASE_URL" || -z "$SUPABASE_ANON_KEY" ]]; then
-            echo "Missing SUPABASE_URL or SUPABASE_ANON_KEY repository secret." >&2
+            echo "Missing SUPABASE_URL or SUPABASE_ANON_KEY secret on the testflight environment." >&2
             exit 1
           fi
           printf 'SUPABASE_URL=%s\nSUPABASE_ANON_KEY=%s\n' "$SUPABASE_URL" "$SUPABASE_ANON_KEY" > .env
@@ -114,50 +154,148 @@ jobs:
         run: |
           set -euo pipefail
           if [[ -z "$ASC_KEY_ID" || -z "$ASC_ISSUER_ID" || -z "$ASC_PRIVATE_KEY" ]]; then
-            echo "Missing ASC_KEY_ID, ASC_ISSUER_ID or ASC_PRIVATE_KEY repository secret." >&2
-            echo "Owner: add them under Settings > Secrets and variables > Actions." >&2
+            echo "Missing ASC_KEY_ID, ASC_ISSUER_ID or ASC_PRIVATE_KEY secret on the testflight environment." >&2
             exit 1
           fi
           umask 077
           printf '%s\n' "$ASC_PRIVATE_KEY" > "$RUNNER_TEMP/AuthKey.p8"
-          echo "ASC_KEY_PATH=$RUNNER_TEMP/AuthKey.p8" >> "$GITHUB_ENV"
-          echo "ASC_KEY_ID=$ASC_KEY_ID" >> "$GITHUB_ENV"
-          echo "ASC_ISSUER_ID=$ASC_ISSUER_ID" >> "$GITHUB_ENV"
+          chmod 600 "$RUNNER_TEMP/AuthKey.p8"
+          {
+            echo "ASC_KEY_PATH=$RUNNER_TEMP/AuthKey.p8"
+            echo "ASC_KEY_ID=$ASC_KEY_ID"
+            echo "ASC_ISSUER_ID=$ASC_ISSUER_ID"
+          } >> "$GITHUB_ENV"
           echo "Wrote ASC API key file (contents not printed)."
 
       - name: Release notes
-        if: steps.trigger.outputs.kind != 'dry-run'
+        if: github.event_name != 'workflow_dispatch'
         run: |
           set -euo pipefail
           .github/scripts/release-notes.sh "$GITHUB_REF_NAME" > "$RUNNER_TEMP/notes.txt"
           echo "---- What to Test ----"
           cat "$RUNNER_TEMP/notes.txt"
 
-      - name: Build, sign and upload
-        env:
-          KIND: ${{ steps.trigger.outputs.kind }}
-          LANE: ${{ steps.trigger.outputs.lane }}
+      - name: Build, sign and upload to TestFlight
         run: |
           set -euo pipefail
-          if [[ "$KIND" == "dry-run" ]]; then
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
             fastlane ios beta dry_run:true
-          elif [[ "$LANE" == "beta" ]]; then
-            fastlane ios beta notes_file:"$RUNNER_TEMP/notes.txt"
-          elif [[ "$LANE" == "release" ]]; then
-            fastlane ios release dry_run:false
           else
-            echo "Unexpected lane=$LANE kind=$KIND" >&2
-            exit 1
+            fastlane ios beta notes_file:"$RUNNER_TEMP/notes.txt"
           fi
 
-      - name: Save .ipa and dSYMs
+      # dSYMs only. The repo is public, so run artifacts are downloadable by
+      # anyone signed in; the .ipa is not kept.
+      - name: Save dSYMs
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: PokerStats-${{ github.ref_name }}-${{ github.run_number }}
-          path: |
-            build/*.ipa
-            build/*.dSYM.zip
+          name: PokerStats-dSYMs-${{ github.ref_name }}-${{ github.run_number }}
+          path: build/*.dSYM.zip
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Remove key and .env
+        if: always()
+        run: rm -f "$RUNNER_TEMP/AuthKey.p8" .env
+
+  # ios-vX.Y[.Z] tag -> App Store Connect upload, never review submission.
+  # The app-store environment holds the job until the owner approves it, once
+  # he is a required reviewer there. Until then the first step fails closed.
+  appstore:
+    name: App Store Connect
+    needs: check
+    if: needs.check.outputs.kind == 'appstore' && github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/ios-v')
+    environment: app-store
+    runs-on: macos-26
+    timeout-minutes: 90
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+      XCODEGEN_VERSION: 2.46.0
+      XCODEGEN_SHA256: 4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806
+    steps:
+      # GitHub creates a missing environment with no protection, so this
+      # job refuses to run until the owner has added himself as a required
+      # reviewer on app-store and then set APP_STORE_UPLOAD_ENABLED=true.
+      - name: Check App Store upload is enabled
+        env:
+          APP_STORE_UPLOAD_ENABLED: ${{ vars.APP_STORE_UPLOAD_ENABLED }}
+        run: |
+          set -euo pipefail
+          if [[ "$APP_STORE_UPLOAD_ENABLED" != "true" ]]; then
+            echo "App Store uploads are off. The owner must add himself as a required reviewer on the app-store environment, then set the repository variable APP_STORE_UPLOAD_ENABLED=true." >&2
+            exit 1
+          fi
+          if [[ "$GITHUB_REF_TYPE" != "tag" || "$GITHUB_REF" != refs/tags/ios-v* ]]; then
+            echo "App Store uploads run only from ios-vX.Y[.Z] tags, not $GITHUB_REF." >&2
+            exit 1
+          fi
+
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Check tag
+        run: |
+          set -euo pipefail
+          kind=$(.github/scripts/ios-release-kind.sh "$GITHUB_REF_NAME")
+          [[ "$kind" == "appstore" ]] || { echo "$GITHUB_REF_NAME is not an ios-vX.Y[.Z] tag." >&2; exit 1; }
+
+      - name: Install XcodeGen
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/xcodegen.zip" \
+            "https://github.com/yonaskolb/XcodeGen/releases/download/${XCODEGEN_VERSION}/xcodegen.zip"
+          echo "${XCODEGEN_SHA256}  $RUNNER_TEMP/xcodegen.zip" | shasum -a 256 -c -
+          unzip -q "$RUNNER_TEMP/xcodegen.zip" -d "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/xcodegen/bin" >> "$GITHUB_PATH"
+
+      - name: Install fastlane
+        run: |
+          command -v fastlane >/dev/null || brew install fastlane
+          fastlane --version
+
+      - name: Write .env
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$SUPABASE_URL" || -z "$SUPABASE_ANON_KEY" ]]; then
+            echo "Missing SUPABASE_URL or SUPABASE_ANON_KEY secret on the app-store environment." >&2
+            exit 1
+          fi
+          printf 'SUPABASE_URL=%s\nSUPABASE_ANON_KEY=%s\n' "$SUPABASE_URL" "$SUPABASE_ANON_KEY" > .env
+
+      - name: Write App Store Connect key
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_PRIVATE_KEY: ${{ secrets.ASC_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$ASC_KEY_ID" || -z "$ASC_ISSUER_ID" || -z "$ASC_PRIVATE_KEY" ]]; then
+            echo "Missing ASC_KEY_ID, ASC_ISSUER_ID or ASC_PRIVATE_KEY secret on the app-store environment." >&2
+            exit 1
+          fi
+          umask 077
+          printf '%s\n' "$ASC_PRIVATE_KEY" > "$RUNNER_TEMP/AuthKey.p8"
+          chmod 600 "$RUNNER_TEMP/AuthKey.p8"
+          {
+            echo "ASC_KEY_PATH=$RUNNER_TEMP/AuthKey.p8"
+            echo "ASC_KEY_ID=$ASC_KEY_ID"
+            echo "ASC_ISSUER_ID=$ASC_ISSUER_ID"
+          } >> "$GITHUB_ENV"
+          echo "Wrote ASC API key file (contents not printed)."
+
+      - name: Build, sign and upload to App Store Connect
+        run: fastlane ios release
+
+      - name: Save dSYMs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: PokerStats-dSYMs-${{ github.ref_name }}-${{ github.run_number }}
+          path: build/*.dSYM.zip
           if-no-files-found: ignore
           retention-days: 30
 

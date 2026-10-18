@@ -1,3 +1,5 @@
+require_relative "asc_key"
+
 default_platform(:ios)
 
 SCREENSHOT_DEVICES = [
@@ -12,50 +14,40 @@ BUNDLE_ID = "com.rohanthomas.PokerStats"
 # CURRENT_PROJECT_VERSION build setting so the app and the widget extension
 # get the same value. project.yml's CURRENT_PROJECT_VERSION is only the local
 # default. No App Store Connect API call is needed.
-def build_with_new_build_number
+def build_with_new_build_number(key)
   build_number = sh("cd .. && ci_scripts/build_number.sh").strip
   UI.message("Build number: #{build_number}")
-  # Automatic signing via the App Store Connect API key (when present) plus
-  # -allowProvisioningUpdates. Covers the app, the PokerStatsWidgets
-  # extension (Live Activity / widget), and the shared App Group
+  # Cloud-managed signing: xcodebuild gets the App Store Connect API key for
+  # both archive and export, since app_store_connect_api_key only covers
+  # fastlane's own uploads. Covers the app, the PokerStatsWidgets extension
+  # (Live Activity / widget), and the shared App Group
   # group.com.rohanthomas.PokerStats. Team ID comes from project.yml.
+  signing = AscKey.xcodebuild_flags(key)
   FileUtils.mkdir_p(File.expand_path("../build", __dir__))
   build_app(
     scheme: "PokerStats",
-    export_method: "app-store",
+    export_method: "app-store-connect",
     output_directory: File.expand_path("../build", __dir__),
-    xcargs: "CURRENT_PROJECT_VERSION=#{build_number} -allowProvisioningUpdates"
+    xcargs: "CURRENT_PROJECT_VERSION=#{build_number} #{signing}",
+    export_xcargs: signing
   )
   app = File.join(lane_context[SharedValues::XCODEBUILD_ARCHIVE], "Products/Applications/PokerStats.app")
   sh("cd .. && ci_scripts/check_build_numbers.sh '#{app}' '#{build_number}'")
 end
 
-# Auth for upload_to_testflight / upload_to_app_store and for xcodebuild
-# provisioning updates. Key material comes from env (GitHub secrets in CI).
-# Never UI.message or puts the key body.
+# Loads the key for fastlane's uploads and returns it for xcodebuild.
 def ensure_asc_api_key!
-  key_id = ENV["ASC_KEY_ID"].to_s
-  issuer_id = ENV["ASC_ISSUER_ID"].to_s
-  key_path = ENV["ASC_KEY_PATH"].to_s
-  key_content = ENV["ASC_PRIVATE_KEY"].to_s
-
-  if key_id.empty? || issuer_id.empty? || (key_path.empty? && key_content.empty?)
-    UI.user_error!("ASC_KEY_ID, ASC_ISSUER_ID, and ASC_PRIVATE_KEY (or ASC_KEY_PATH) are required for signing/upload.")
-  end
-
-  args = {
-    key_id: key_id,
-    issuer_id: issuer_id,
+  key = AscKey.load
+  app_store_connect_api_key(
+    key_id: key[:id],
+    issuer_id: key[:issuer],
+    key_filepath: key[:path],
     duration: 1200,
     in_house: false
-  }
-  if !key_path.empty? && File.exist?(key_path)
-    args[:key_filepath] = key_path
-  else
-    args[:key_content] = key_content
-    args[:is_key_content_base64] = false
-  end
-  app_store_connect_api_key(**args)
+  )
+  key
+rescue ArgumentError => e
+  UI.user_error!(e.message)
 end
 
 def dry_run?(options = {})
@@ -155,9 +147,9 @@ platform :ios do
 
   desc "Upload to TestFlight (dry_run:true builds and signs only)"
   lane :beta do |options|
-    ensure_asc_api_key!
+    key = ensure_asc_api_key!
     sh("cd .. && xcodegen generate")
-    build_with_new_build_number
+    build_with_new_build_number(key)
     if dry_run?(options)
       UI.success("dry_run: built and signed; skipped upload_to_testflight")
     else
@@ -169,24 +161,26 @@ platform :ios do
     end
   end
 
-  # Uploads the build and metadata only. Submitting for App Review is done
-  # manually by the owner in App Store Connect, every time. Never set
-  # submit_for_review to true. The ios-release workflow may call this lane
-  # only on an ios-v* tag (or workflow_dispatch path=appstore); ordinary CI
-  # must never call it.
+  # Uploads the build only. Submitting for App Review is done manually by the
+  # owner in App Store Connect, every time. Never set submit_for_review to
+  # true. Runs only from the appstore job in .github/workflows/ios-release.yml,
+  # which is gated by the app-store environment; never from ci.yml or any
+  # other job. Metadata and screenshots are skipped until the metadata fixes
+  # in #53 land.
   desc "Upload to App Store Connect (no review submission; the owner submits manually)"
   lane :release do |options|
-    ensure_asc_api_key!
+    key = ensure_asc_api_key!
     sh("cd .. && xcodegen generate")
-    build_with_new_build_number
+    build_with_new_build_number(key)
     if dry_run?(options)
       UI.success("dry_run: built and signed; skipped upload_to_app_store")
     else
       upload_to_app_store(
         submit_for_review: false,
         automatic_release: false,
-        precheck_include_in_app_purchases: false,
-        force: true
+        skip_metadata: true,
+        skip_screenshots: true,
+        precheck_include_in_app_purchases: false
       )
     end
   end

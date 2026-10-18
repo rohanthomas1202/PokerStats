@@ -393,11 +393,13 @@ Dependabot (`.github/dependabot.yml`) opens weekly PRs to update the GitHub Acti
 
 A tag must point at a commit on `main` whose "CI passed" check succeeded, or the run stops before building. Only one release runs at a time. The `.ipa` and dSYMs are saved as run artifacts for 30 days.
 
-`ios-sprint-*` runs `fastlane ios beta` (TestFlight). `ios-v*` runs `fastlane ios release` (App Store Connect upload only; never `submit_for_review`). Manual dispatch runs `fastlane ios beta dry_run:true` (build and sign only). The "What to Test" notes for TestFlight are the commit subjects since the previous `ios-*` tag (`.github/scripts/release-notes.sh`). Signing is cloud-managed: Xcode signs with the App Store Connect API key and `-allowProvisioningUpdates`, so no certificate or profile is stored in the repo or in secrets. That covers the widget extension (Live Activity) and the App Group `group.com.rohanthomas.PokerStats`.
+`ios-sprint-*` runs the `testflight` job (`fastlane ios beta`, TestFlight). `ios-v*` runs the `appstore` job (`fastlane ios release`, App Store Connect build upload only; never `submit_for_review`, and metadata and screenshots are skipped until #53 lands). Manual dispatch runs the `testflight` job with `fastlane ios beta dry_run:true` (build and sign only). The two jobs are exclusive, and the `testflight` job never calls the release lane. The "What to Test" notes for TestFlight are the commit subjects since the previous valid `ios-*` release tag (`.github/scripts/release-notes.sh`). Signing is cloud-managed: xcodebuild gets the App Store Connect API key (`-authenticationKeyPath`, `-authenticationKeyID`, `-authenticationKeyIssuerID`) with `-allowProvisioningUpdates` for both archive and export, so no certificate or profile is stored in the repo or in secrets. That covers the widget extension (Live Activity) and the App Group `group.com.rohanthomas.PokerStats`. Only dSYMs are kept as run artifacts; the repo is public, so the `.ipa` is not.
 
-The workflow needs these repository secrets, which the owner adds (Settings > Secrets and variables > Actions):
+The `appstore` job runs in the `app-store` GitHub environment and fails at its first step unless the repository variable `APP_STORE_UPLOAD_ENABLED` is `true`. The owner sets that variable only after adding himself as a required reviewer on `app-store`, so every App Store upload waits for his approval. Branch protection does not replace that reviewer.
 
-- `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_PRIVATE_KEY`: the App Store Connect API key. Cloud-managed signing needs the Admin role.
+Both jobs need these secrets, stored as environment secrets on `testflight` and `app-store` (Settings > Environments), not as repository secrets:
+
+- `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_PRIVATE_KEY`: the App Store Connect API key. Cloud-managed signing needs the Admin role, or App Manager with access to certificates.
 - `SUPABASE_URL`, `SUPABASE_ANON_KEY`: written to `.env` so the build gets the real `Secrets.plist`. The run fails rather than ship the placeholder values.
 
 To close a sprint, Trevor - Release & Compliance tags the sprint-closing commit on `main` and records the build number, commit and notes for that sprint:
