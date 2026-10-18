@@ -9,9 +9,8 @@ are documented in the README Releases section.
 
 ## Closing a sprint
 
-1. Confirm the owner setup in the README Releases section is done (environments,
-   their branch and tag limits, the `app-store` reviewer, then secrets, then
-   `APP_STORE_UPLOAD_ENABLED`). Do not push a release tag before it is.
+1. Confirm every step in the README Owner setup is done, through the dry run.
+   Do not push a release tag before it is.
 2. Confirm the sprint-closing commit is on `main` and "CI passed" is green.
 3. Tag and push:
 
