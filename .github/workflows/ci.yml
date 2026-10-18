@@ -169,11 +169,25 @@ jobs:
             echo "::endgroup::"
           done
 
+  # The owner submits to App Review by hand. Always runs; it takes seconds.
+  fastlane-guard:
+    name: Fastlane never submits
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Test the guard
+        run: .github/scripts/fastlane-no-submit-test.sh
+
+      - name: Check fastlane
+        run: .github/scripts/fastlane-no-submit.sh fastlane
+
   # The one check branch protection requires. Always runs; passes when every
   # job passed or was skipped, fails if any failed or was cancelled.
   gate:
     name: CI passed
-    needs: [changes, ios, deno]
+    needs: [changes, ios, deno, fastlane-guard]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5

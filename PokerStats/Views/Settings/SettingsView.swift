@@ -119,6 +119,10 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
 
+                Link(destination: AppLinks.privacyPolicy) {
+                    Label("Privacy Policy", systemImage: "hand.raised")
+                }
+
                 Link(destination: URL(string: "https://github.com")!) {
                     Label("Send Feedback", systemImage: "envelope")
                 }
