@@ -43,8 +43,12 @@ jobs:
           echo "udid=${udid%% *}" >> "$GITHUB_OUTPUT"
 
       # No .env in CI: the project's pre-build script writes a placeholder
-      # Secrets.plist, so no secrets are needed. Signing is off for the
-      # simulator build.
+      # Secrets.plist, so no secrets are needed.
+      # Signing: ad-hoc ("-") with no team or profile, so no certificates or
+      # secrets are needed. CODE_SIGNING_ALLOWED=NO can't be used: it also
+      # drops the app's entitlements, and without the App Group entitlement
+      # containerURL(forSecurityApplicationGroupIdentifier:) returns nil and
+      # the test host app crashes at launch in AppGroupContainer.
       - name: Build
         run: >
           xcodebuild build-for-testing
@@ -52,7 +56,10 @@ jobs:
           -scheme PokerStats
           -destination "id=${{ steps.sim.outputs.udid }}"
           -derivedDataPath DerivedData
-          CODE_SIGNING_ALLOWED=NO
+          CODE_SIGN_STYLE=Manual
+          CODE_SIGN_IDENTITY=-
+          DEVELOPMENT_TEAM=
+          PROVISIONING_PROFILE_SPECIFIER=
 
       # Unit tests only. PokerStatsUITests is the fastlane screenshot suite.
       - name: Test
