@@ -183,11 +183,22 @@ jobs:
       - name: Check fastlane
         run: .github/scripts/fastlane-no-submit.sh fastlane
 
+  # Tag parsing and TestFlight notes for ios-release.yml. Always runs.
+  release-scripts:
+    name: Release scripts
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Test release scripts
+        run: .github/scripts/ios-release-test.sh
+
   # The one check branch protection requires. Always runs; passes when every
   # job passed or was skipped, fails if any failed or was cancelled.
   gate:
     name: CI passed
-    needs: [changes, ios, deno, fastlane-guard]
+    needs: [changes, ios, deno, fastlane-guard, release-scripts]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
