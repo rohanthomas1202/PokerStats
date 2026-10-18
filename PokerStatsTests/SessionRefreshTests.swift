@@ -181,7 +181,8 @@ struct SessionRefreshTests {
             #expect(!copy.contains("HTTP"))
             #expect(!copy.contains("10.0.0.3"))
         }
-        #expect(server.requests.allSatisfy(\.isRefresh), "the storage request is not sent")
+        let onlyRefreshes = server.requests.allSatisfy { $0.isRefresh }
+        #expect(onlyRefreshes, "the storage request is not sent")
         #expect(storage.storedSession?.refreshToken == "old-refresh")
         #expect(auth.isAuthenticated)
     }
