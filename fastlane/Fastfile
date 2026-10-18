@@ -10,10 +10,14 @@ SCREENSHOT_DEVICES = [
 
 BUNDLE_ID = "com.rohanthomas.PokerStats"
 
-# Build number: ci_scripts/build_number.sh (UTC YYYYMMDDHHMM), passed as the
-# CURRENT_PROJECT_VERSION build setting so the app and the widget extension
-# get the same value. project.yml's CURRENT_PROJECT_VERSION is only the local
-# default. No App Store Connect API call is needed.
+# Build number: ci_scripts/build_number.sh (UTC YYYYMMDDHHMMSS), passed as the
+# CURRENT_PROJECT_VERSION build setting so the app and its extensions get the
+# same value. project.yml's CURRENT_PROJECT_VERSION is only the local
+# default. No App Store Connect API call is needed. Build numbers are
+# timestamps from now on and can't go back to a smaller counter: every later
+# build of a version must be higher than its last upload, so any other upload
+# path (Xcode Cloud, #66) must use the same script or start above the latest
+# timestamp build.
 def build_with_new_build_number(key)
   build_number = sh("cd .. && ci_scripts/build_number.sh").strip
   UI.message("Build number: #{build_number}")
@@ -22,17 +26,20 @@ def build_with_new_build_number(key)
   # fastlane's own uploads. Covers the app, the PokerStatsWidgets extension
   # (Live Activity / widget), and the shared App Group
   # group.com.rohanthomas.PokerStats. Team ID comes from project.yml.
+  # manageAppVersionAndBuildNumber: false stops the export from rewriting
+  # CFBundleVersion, so the IPA carries the build number checked below.
   signing = AscKey.xcodebuild_flags(key)
   FileUtils.mkdir_p(File.expand_path("../build", __dir__))
   build_app(
     scheme: "PokerStats",
     export_method: "app-store-connect",
+    export_options: { manageAppVersionAndBuildNumber: false },
     output_directory: File.expand_path("../build", __dir__),
     xcargs: "CURRENT_PROJECT_VERSION=#{build_number} #{signing}",
     export_xcargs: signing
   )
   app = File.join(lane_context[SharedValues::XCODEBUILD_ARCHIVE], "Products/Applications/PokerStats.app")
-  sh("cd .. && ci_scripts/check_build_numbers.sh '#{app}' '#{build_number}'")
+  sh("cd .. && ci_scripts/check_build_numbers.sh #{app.shellescape} #{build_number.shellescape}")
 end
 
 # Loads the key for fastlane's uploads and returns it for xcodebuild.

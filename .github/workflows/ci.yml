@@ -200,7 +200,8 @@ jobs:
       - name: Check fastlane, workflows and ci_scripts
         run: .github/scripts/fastlane-no-submit.sh fastlane .github/workflows ci_scripts
 
-  # Tag parsing and TestFlight notes for ios-release.yml. Always runs.
+  # Tag parsing and TestFlight notes for ios-release.yml, and the build
+  # number scripts in ci_scripts/. Always runs.
   release-scripts:
     name: Release scripts
     runs-on: ubuntu-latest
@@ -210,6 +211,9 @@ jobs:
 
       - name: Test release scripts
         run: .github/scripts/ios-release-test.sh
+
+      - name: Test build number scripts
+        run: .github/scripts/build-numbers-test.sh
 
   # Every required-reason API category the app or widget extension uses must
   # be declared in that target's PrivacyInfo.xcprivacy (#115). Runs when the
