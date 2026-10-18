@@ -2,6 +2,8 @@ import Foundation
 import SwiftData
 import Observation
 import WidgetKit
+import ActivityKit
+import os
 
 @Observable
 @MainActor
@@ -48,4 +50,26 @@ final class SettingsViewModel {
         showDeleteAllSecondConfirmation = false
         WidgetCenter.shared.reloadAllTimelines()
     }
+
+    /// After the server confirmed account deletion: remove every local model
+    /// (settings too), end any Live Activity, and refresh widgets.
+    func wipeAfterAccountDeletion(from context: ModelContext) {
+        do {
+            try LocalDataWiper(modelContext: context).wipe()
+        } catch {
+            Self.logger.error("Local wipe after account deletion failed: \(error.localizedDescription, privacy: .private)")
+        }
+        let defaults = Settings()
+        defaultBuyIn = String(Int(defaults.defaultBuyIn))
+        defaultStakes = defaults.defaultStakes
+        defaultGameType = defaults.defaultGameType
+        Task {
+            for activity in Activity<SessionActivityAttributes>.activities {
+                await activity.end(nil, dismissalPolicy: .immediate)
+            }
+        }
+        WidgetCenter.shared.reloadAllTimelines()
+    }
+
+    private static let logger = Logger(subsystem: "com.rohanthomas.PokerStats", category: "SettingsViewModel")
 }
