@@ -178,7 +178,8 @@ struct AccountDeletionCleanupTests {
         let settings = SettingsViewModel()
         let vm = AuthViewModel(authService: auth, performDeleteAccount: {
             try await auth.deleteAccount(serverDelete: {
-                #expect(try counts(context) == [2, 3, 1]) // nothing wiped yet
+                let before = try counts(context)
+                #expect(before == [2, 3, 1]) // nothing wiped yet
                 log.events.append("server delete")
             })
         })
