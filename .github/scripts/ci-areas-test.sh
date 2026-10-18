@@ -42,7 +42,7 @@ expect "spaces, two areas"   "ios=true deno=true"   $'PokerStats/My View.swift\n
 # The cases below commit a change to a scratch repo and run the workflow's own
 # ci-changed-files.sh on it, so they cover the real git diff flags.
 git -C "$repo" init -q
-commit() { git -C "$repo" add -A && git -C "$repo" -c user.name=t -c user.email=t@t commit -qm "$1"; }
+commit() { git -C "$repo" add -A && git -C "$repo" -c user.name=t -c user.email=t@t -c commit.gpgsign=false commit -qm "$1"; }
 expect_commit() {
   local name="$1" want="$2" got
   commit "$name"
@@ -77,6 +77,26 @@ expect_commit "path with a tab"    "ios=true deno=false"
 
 echo x > "$repo/PokerStats/a\\b.swift"
 expect_commit "path with a backslash" "ios=true deno=false"
+
+# Only -z keeps this one path whole. Split on the newline it reads as
+# PokerStats/a and supabase/f.ts; quoted, it matches neither area.
+mkdir -p "$repo/PokerStats/a"$'\n'"supabase"
+echo x > "$repo/PokerStats/a"$'\n'"supabase/f.ts"
+expect_commit "path with a newline" "ios=true deno=false"
+
+# With no HEAD^1 the diff fails, and the workflow's pipeline must fail too.
+first=$(mktemp -d)
+trap 'rm -rf "$repo" "$first"' EXIT
+git -C "$first" init -q
+echo x > "$first/f"
+git -C "$first" add -A
+git -C "$first" -c user.name=t -c user.email=t@t -c commit.gpgsign=false commit -qm first
+if (cd "$first" && set -o pipefail && "$dir/ci-changed-files.sh" 2>/dev/null | "$script" >/dev/null); then
+  echo "FAIL diff failure: pipeline exited 0"
+  failures=$((failures + 1))
+else
+  echo "ok   diff failure"
+fi
 
 if (( failures > 0 )); then
   echo "$failures test(s) failed"
