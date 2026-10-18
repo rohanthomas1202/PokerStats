@@ -94,11 +94,14 @@ platform :ios do
     upload_to_testflight
   end
 
-  desc "Deploy to App Store"
+  # Uploads the build and metadata only. Submitting for App Review is done
+  # manually by the owner in App Store Connect, every time. Never set
+  # submit_for_review to true, and never call this lane from CI.
+  desc "Upload to App Store Connect (no review submission; the owner submits manually)"
   lane :release do
     sh("cd .. && xcodegen generate")
     increment_build_number
     build_app(scheme: "PokerStats")
-    upload_to_app_store(submit_for_review: true)
+    upload_to_app_store(submit_for_review: false, automatic_release: false)
   end
 end
