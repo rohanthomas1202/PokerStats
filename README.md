@@ -123,9 +123,9 @@ Third-party Swift packages are allowed. Every package the app uses is listed her
 
 | Name | Pinned version | Purpose | Link |
 |------|----------------|---------|------|
-| None | — | — | — |
+| supabase-swift (products Auth, Functions, PostgREST, Storage) | 2.55.4 | Supabase clients: Sign in with Apple and the session (Keychain storage, token refresh), backups in Storage, `backup_metadata` and `profiles` through PostgREST, and the `delete-account` edge function. Realtime is not used. | [supabase/supabase-swift](https://github.com/supabase/supabase-swift) |
 
-There are no SPM packages yet: `project.yml` has no `packages:` block and there is no `Package.resolved`.
+`Package.resolved` also pins the packages supabase-swift depends on (swift-asn1, swift-clocks, swift-concurrency-extras, swift-crypto, swift-http-types, swift-issue-reporting, xctest-dynamic-overlay). They are not used by the app directly.
 
 ### Policy
 
@@ -399,7 +399,7 @@ GitHub Actions runs `.github/workflows/ci.yml` on every pull request to `main` a
 - **Privacy manifest declarations** (`ubuntu-latest`, runs when the iOS job does): `.github/scripts/privacy-api-check.sh` greps the app's and the widget extension's non-test Swift sources (the widget's list comes from `project.yml`) for required-reason APIs (UserDefaults, file timestamps, system boot time, disk space, active keyboards) and fails unless each category found is declared with a reason in that target's `PrivacyInfo.xcprivacy` (`PokerStats/PrivacyInfo.xcprivacy`, `PokerStatsWidgets/PrivacyInfo.xcprivacy`). Only `PokerStatsTests/` and `PokerStatsUITests/` count as test folders. For the widget it reads each source's `path` and ignores excludes, so it can scan more files than the target builds, never fewer. It covers first-party Swift sources only: third-party SPM packages ship their own privacy manifests, which it does not read. It does not check that a declared reason code fits the category. It is a grep, so an API it does not list is not caught. The iOS job also prints the built app's manifest with `plutil -p`.
 - **Fastlane never submits** (`ubuntu-latest`, every run): `.github/scripts/fastlane-no-submit.sh` fails if anything under `fastlane/`, `.github/workflows/` or `ci_scripts/` turns on `submit_for_review` or `automatic_release` with a literal true value (`true`, `yes`, `on` or `1`, also on the next line, after a YAML tag such as `!!bool` or an anchor, or as a bare CLI flag). It also catches an `ENV.fetch` default when the env var name contains the key (`ENV.fetch("DELIVER_AUTOMATIC_RELEASE", "true")`) or when the key is set to the `ENV.fetch` call (`submit_for_review: ENV.fetch("ANY_NAME", "true")`). It does not detect values set in variables, an `ENV.fetch` block default, a comment line between the key and its value, or env vars set in the Xcode Cloud UI. A quoted key followed by a comma and a true word, even in a comment (`"submit_for_review", on`), fails the check. Only those three paths are scanned, so a release script added anywhere else (the repo root, a Makefile, `.github/scripts/`) must also be added to the path list in `ci.yml`. The owner submits to App Review by hand.
 
-Dependabot (`.github/dependabot.yml`) opens weekly PRs to update the GitHub Actions versions used in the workflow.
+Dependabot (`.github/dependabot.yml`) opens weekly PRs to update the GitHub Actions versions used in the workflow and the Swift packages in `Package.resolved`. A Swift package update PR must also update the `exactVersion` in `project.yml` and the Dependencies table.
 
 ### Releases
 

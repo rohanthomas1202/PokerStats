@@ -140,30 +140,60 @@ struct AccountDeleterTests {
 
     // MARK: - The request SupabaseClient actually sends
 
-    @Test func supabaseClient_deleteAccountRequest_body() throws {
-        let request = try SupabaseClient().makeEdgeFunctionRequest(
+    private func functionsClient(
+        _ server: FakeServer,
+        reply: FakeReply = .status(200, #"{"ok":true}"#)
+    ) -> SupabaseClient {
+        let storage = InMemoryAuthStorage()
+        storage.seed(testSession(accessToken: "jwt", expired: false))
+        return testClient(storage, server: server) { _, _ in reply }
+    }
+
+    @Test func supabaseClient_deleteAccountRequest_body() async throws {
+        let server = FakeServer()
+        try await functionsClient(server).callEdgeFunction(
             "delete-account",
-            accessToken: "jwt",
             body: DeleteAccountRequest(authorizationCode: "c")
         )
-        #expect(request.httpMethod == "POST")
-        #expect(request.url?.path().hasSuffix("/functions/v1/delete-account") == true)
-        #expect(request.value(forHTTPHeaderField: "Content-Type") == "application/json")
-        #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer jwt")
-        let body = try #require(request.httpBody)
+        let request = try #require(server.requests.first)
+        #expect(server.requests.count == 1)
+        #expect(request.method == "POST")
+        #expect(request.path.hasSuffix("/functions/v1/delete-account"))
+        #expect(request.headers["Content-Type"] == "application/json")
+        #expect(request.headers["Authorization"] == "Bearer jwt")
+        let body = try #require(request.body)
         let json = try #require(try JSONSerialization.jsonObject(with: body) as? [String: String])
         #expect(json == ["authorization_code": "c"])
     }
 
-    @Test func supabaseClient_deleteAccountRequest_withoutCode_sendsEmptyObject() throws {
-        let request = try SupabaseClient().makeEdgeFunctionRequest(
+    @Test func supabaseClient_deleteAccountRequest_withoutCode_sendsEmptyObject() async throws {
+        let server = FakeServer()
+        try await functionsClient(server).callEdgeFunction(
             "delete-account",
-            accessToken: "jwt",
             body: DeleteAccountRequest(authorizationCode: nil)
         )
-        let body = try #require(request.httpBody)
+        let body = try #require(server.requests.first?.body)
         let json = try #require(try JSONSerialization.jsonObject(with: body) as? [String: String])
         #expect(json.isEmpty)
+    }
+
+    @Test func supabaseClient_edgeFunctionError_keepsStatusAndBody() async {
+        let server = FakeServer()
+        let errorBody = #"{"error":"apple_reauth_required"}"#
+        do {
+            try await functionsClient(server, reply: .status(409, errorBody)).callEdgeFunction(
+                "delete-account",
+                body: DeleteAccountRequest(authorizationCode: nil)
+            )
+            Issue.record("expected a throw")
+        } catch {
+            guard case SupabaseError.httpError(let status, let message) = error else {
+                Issue.record("expected httpError, got \(error)")
+                return
+            }
+            #expect(status == 409)
+            #expect(message == errorBody)
+        }
     }
 
     // MARK: - Apple revoked, then cleanup failed

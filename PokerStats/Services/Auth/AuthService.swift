@@ -1,3 +1,4 @@
+import Auth
 import Foundation
 import AuthenticationServices
 import SwiftData
@@ -17,35 +18,23 @@ final class AuthService {
     var displayEmail: String { userEmail ?? "Unknown" }
 
     private let client: SupabaseClient
-    private var tokenStore: any TokenStore { client.tokenStore }
     private static let logger = Logger(subsystem: "com.rohanthomas.PokerStats", category: "AuthService")
-    @ObservationIgnored nonisolated(unsafe) private var invalidationObserver: (any NSObjectProtocol)?
+    @ObservationIgnored nonisolated(unsafe) private var authEventsTask: Task<Void, Never>?
 
     init(client: SupabaseClient = .shared) {
         self.client = client
-        // A definitive refresh failure has already cleared the tokens; flip
-        // the UI to match. Posted on the main actor, so this runs inline.
-        invalidationObserver = NotificationCenter.default.addObserver(
-            forName: .supabaseSessionInvalidated,
-            object: client,
-            queue: nil
-        ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.clearSignedInState() }
-        }
     }
 
     deinit {
-        if let invalidationObserver {
-            NotificationCenter.default.removeObserver(invalidationObserver)
-        }
+        authEventsTask?.cancel()
     }
 
     // MARK: - Initialization
 
     func initialize() {
-        if restoreSession() {
-            Task { await silentRefresh() }
-        }
+        KeychainSessionStorage().removeLegacyItems()
+        restoreSession()
+        observeAuthChanges()
 
         // Check Apple credential state if applicable
         checkAppleCredentialState()
@@ -62,30 +51,51 @@ final class AuthService {
         }
     }
 
-    /// Signed-in state comes from the stored tokens. Returns true when the
-    /// stored access token has expired and needs `silentRefresh()`.
+    /// Signed-in state comes from the session the SDK stored. Returns true
+    /// when that session has expired; the SDK refreshes it when the auth
+    /// change stream starts (`observeAuthChanges()`) or on the next request.
     @discardableResult
     func restoreSession() -> Bool {
-        guard let tokenString = tokenStore.read(.accessToken),
-              let userIdString = tokenStore.read(.userId),
-              let id = UUID(uuidString: userIdString) else {
-            return false
+        guard let session = client.auth.currentSession else { return false }
+        apply(session.user)
+        return session.isExpired
+    }
+
+    /// Follows the SDK's auth events. A refresh the server rejects for good
+    /// (refresh token not found or already used, session gone) makes the SDK
+    /// remove the session and emit `.signedOut`; a transient failure emits
+    /// nothing and the session stays. Idempotent.
+    func observeAuthChanges() {
+        guard authEventsTask == nil else { return }
+        let changes = client.auth.authStateChanges
+        authEventsTask = Task { [weak self] in
+            for await (event, session) in changes {
+                guard let self else { return }
+                switch event {
+                case .signedOut, .userDeleted:
+                    self.clearSignedInState()
+                case .initialSession, .signedIn, .tokenRefreshed, .userUpdated:
+                    if let session { self.apply(session.user) }
+                default:
+                    break
+                }
+            }
         }
-        isAuthenticated = true
-        userId = id
-        userEmail = tokenStore.read(.userEmail)
-        return isTokenExpired(tokenString)
+    }
+
+    /// The Apple user ID (`sub`) of the signed-in account's Apple identity.
+    var appleUserId: String? {
+        guard let identity = client.auth.currentUser?.identities?.first(where: { $0.provider == "apple" }) else {
+            return nil
+        }
+        return identity.identityData?["sub"]?.stringValue ?? identity.id
     }
 
     // MARK: - Sign In with Apple
 
-    func signInWithApple(
-        identityToken: Data,
-        authorizationCode: Data,
-        fullName: PersonNameComponents?,
-        appleUserId: String,
-        rawNonce: String
-    ) async throws {
+    /// `rawNonce` is the value whose SHA-256 went to Apple; Supabase checks it
+    /// against the ID token's `nonce` claim.
+    func signInWithApple(identityToken: Data, rawNonce: String) async throws {
         guard let tokenString = String(data: identityToken, encoding: .utf8) else {
             throw AuthServiceError.appleSignInFailed("Invalid identity token")
         }
@@ -94,15 +104,10 @@ final class AuthService {
         error = nil
 
         do {
-            let session = try await client.signInWithIdToken(
-                provider: .apple,
-                idToken: tokenString,
-                nonce: rawNonce
+            let session = try await client.auth.signInWithIdToken(
+                credentials: OpenIDConnectCredentials(provider: .apple, idToken: tokenString, nonce: rawNonce)
             )
-
-            try storeSession(session)
-            try tokenStore.save(appleUserId, for: .appleUserId)
-            isAuthenticated = true
+            apply(session.user)
             isLoading = false
         } catch {
             isLoading = false
@@ -115,21 +120,23 @@ final class AuthService {
     // MARK: - Sign Out
 
     func signOut() async {
-        // Best-effort server sign out
-        if let token = tokenStore.read(.accessToken) {
-            try? await client.signOut(accessToken: token)
-        }
-
-        tokenStore.deleteAll()
+        // The SDK removes the local session first; the server call is best effort.
+        try? await client.auth.signOut()
         clearSignedInState()
     }
 
-    /// Resets the signed-in UI state. Callers clear the stored tokens.
+    /// Resets the signed-in UI state. Callers clear the stored session.
     private func clearSignedInState() {
         isAuthenticated = false
         userEmail = nil
         userId = nil
         error = nil
+    }
+
+    private func apply(_ user: User) {
+        isAuthenticated = true
+        userId = user.id
+        userEmail = user.email
     }
 
     // MARK: - Auto Backup
@@ -187,13 +194,14 @@ final class AuthService {
 
     func deleteAccount() async throws {
         let supabase = self.client
+        let appleUserId = self.appleUserId
         try await deleteAccount(serverDelete: {
             // Apple-linked accounts re-confirm with Sign in with Apple; the
             // fresh authorization code lets the edge function revoke the
             // Apple token before deleting the account (App Review 5.1.1(v)).
             let reauthenticator = AppleReauthenticator()
             let deleter = AccountDeleter(
-                appleUserId: { KeychainHelper.read(.appleUserId) },
+                appleUserId: { appleUserId },
                 appleAuthorizationCode: { try await reauthenticator.authorizationCode() },
                 callDeleteFunction: { try await supabase.callEdgeFunction("delete-account", body: $0) }
             )
@@ -201,8 +209,8 @@ final class AuthService {
         })
     }
 
-    /// Order: stop backups, then the server delete, then clear the Keychain
-    /// and auth state. The caller wipes local SwiftData only after this
+    /// Order: stop backups, then the server delete, then remove the local
+    /// session and auth state. The caller wipes local SwiftData only after this
     /// returns, so a failed server delete leaves local data in place.
     /// Separate so tests can supply the server delete.
     func deleteAccount(serverDelete: @MainActor () async throws -> Void) async throws {
@@ -216,10 +224,10 @@ final class AuthService {
         do {
             try await serverDelete()
 
-            KeychainHelper.deleteAll()
-            isAuthenticated = false
-            userEmail = nil
-            userId = nil
+            // The account is gone, so the server sign-out fails or is ignored;
+            // the SDK removes the local session before calling it.
+            try? await client.auth.signOut(scope: .local)
+            clearSignedInState()
             isLoading = false
         } catch let error as AccountDeletionError {
             // Cancelled, or Apple revoked but cleanup failed: the caller shows these.
@@ -237,32 +245,8 @@ final class AuthService {
 
     // MARK: - Private Helpers
 
-    private func storeSession(_ session: AuthSession) throws {
-        try tokenStore.save(session.accessToken, for: .accessToken)
-        try tokenStore.save(session.refreshToken, for: .refreshToken)
-        try tokenStore.save(session.user.id.uuidString, for: .userId)
-        userId = session.user.id
-        if let email = session.user.email {
-            try tokenStore.save(email, for: .userEmail)
-            userEmail = email
-        }
-    }
-
-    /// Only a definitive auth failure signs the user out (via
-    /// `.supabaseSessionInvalidated`). Transient failures keep the session;
-    /// the next request or launch refreshes again.
-    func silentRefresh() async {
-        do {
-            let session = try await client.refreshStoredSession()
-            userId = session.user.id
-            if let email = session.user.email { userEmail = email }
-        } catch {
-            Self.logger.info("Silent refresh failed: \(String(describing: error), privacy: .private)")
-        }
-    }
-
     private func checkAppleCredentialState() {
-        guard let appleUserId = tokenStore.read(.appleUserId) else { return }
+        guard let appleUserId else { return }
 
         ASAuthorizationAppleIDProvider().getCredentialState(forUserID: appleUserId) { [weak self] state, _ in
             Task { @MainActor in
@@ -271,22 +255,6 @@ final class AuthService {
                 }
             }
         }
-    }
-
-    private func isTokenExpired(_ jwt: String) -> Bool {
-        let parts = jwt.split(separator: ".")
-        guard parts.count == 3 else { return true }
-
-        var base64 = String(parts[1])
-        while base64.count % 4 != 0 { base64 += "=" }
-
-        guard let payloadData = Data(base64Encoded: base64),
-              let payload = try? JSONSerialization.jsonObject(with: payloadData) as? [String: Any],
-              let exp = payload["exp"] as? TimeInterval else {
-            return true
-        }
-
-        return Date().timeIntervalSince1970 >= (exp - 30)
     }
 }
 
