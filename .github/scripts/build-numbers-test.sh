@@ -127,9 +127,10 @@ check "Fastfile line passes the path through" yes "$(has "PokerStatsWidgets.appe
 
 # Prints yes if the build_app call text sets manageAppVersionAndBuildNumber to
 # false in export_options. Key and value only, so a reformat of the hash does
-# not break this. Commented-out lines do not count.
+# not break this. Ruby comments do not count: each line is cut at the first #
+# that is outside a quoted string.
 keeps_build() {
-  sed '/^[[:space:]]*#/d' <<<"$1" \
+  sed -E "s/^(([^\"'#]|\"[^\"]*\"|'[^']*')*)#.*/\\1/" <<<"$1" \
     | grep -Ezq "export_options:[^}]*manageAppVersionAndBuildNumber[\"']?[[:space:]]*(:|=>)[[:space:]]*false([^[:alnum:]_]|\$)" \
     && echo yes || echo no
 }
@@ -141,6 +142,10 @@ check "export check: true" no "$(keeps_build 'export_options: { manageAppVersion
 check "export check: false_override" no "$(keeps_build 'export_options: { manageAppVersionAndBuildNumber: false_override }')"
 check "export check: falsey" no "$(keeps_build 'export_options: { manageAppVersionAndBuildNumber: falsey }')"
 check "export check: commented out" no "$(keeps_build $'export_options: {\n  # manageAppVersionAndBuildNumber: false\n  method: "app-store"\n}')"
+check "export check: trailing comment on another key" no "$(keeps_build $'export_options: {\n  method: "app-store", # manageAppVersionAndBuildNumber: false\n}')"
+check "export check: trailing comment after the key" yes "$(keeps_build $'export_options: {\n  manageAppVersionAndBuildNumber: false # keep the archived build\n}')"
+check "export check: # inside a string" yes "$(keeps_build $'export_options: {\n  method: "app-store#1", manageAppVersionAndBuildNumber: false\n}')"
+check "export check: # inside a single-quoted string" yes "$(keeps_build $'export_options: {\n  method: \'app#store\', manageAppVersionAndBuildNumber: false\n}')"
 
 if (( failures > 0 )); then
   echo "$failures test(s) failed"
