@@ -240,7 +240,7 @@ Changed files:
 
 **What the Fold button does, step by step**
 1. Get `context = AppGroupContainer.shared.mainContext`. Never create a second container.
-2. Fetch the session by `sessionID`. If it's missing or not active, end or refresh the Live Activity and return.
+2. Parse `sessionID` as a UUID. If it doesn't parse, do nothing and return: no write, no button move. Then fetch the session by that ID. If it's missing or not active, end or refresh the Live Activity and return.
 3. Check the setting, that auto-position is calibrated, and that the hero position isn't unknown. Otherwise refresh the Live Activity so the button disappears, and return.
 4. If `session.nextHandNumber != expectedHandNumber`, refresh the Live Activity and return. This is how double taps and stale buttons are ignored.
 5. Build `Hand(preflopAction: .fold, position: heroPosition)` and call `HandLoggingService.log`. It assigns the number, moves the button, and saves; if the save fails it calls `context.rollback()`.
@@ -316,7 +316,7 @@ Changed files:
    - Make the Live Activity start/resume idempotent through `LiveActivityController`.
 10. **Behavior while locked.**
     - Set `authenticationPolicy = .alwaysAllowed` [docs], or the system will ask for Face ID and kill the one-tap value. With no Face ID, Fold and Undo parameters are untrusted: validate them as in §1.5 and §1.9.
-    - Database file protection: keep the iOS default (`completeUntilFirstUserAuthentication`) on the store and never lower it to `none`. Don't raise it to full (`complete`) either, or writes fail while locked. Test after a reboot **before the first unlock**: writes will probably fail [verify]. In that case the action should fail gracefully and leave the Live Activity unchanged.
+    - Database file protection: keep the iOS default (`completeUntilFirstUserAuthentication`) on the store, including the SwiftData store's `-wal` and `-shm` sidecar files, and never lower it to `none`. Don't raise it to full (`complete`) either, or writes fail while locked. Test after a reboot **before the first unlock**: writes will probably fail [verify]. In that case the action should fail gracefully and leave the Live Activity unchanged. The same test confirms that no store file, sidecars included, was created with a different protection class.
 11. **Swift 6 strict concurrency** (`SWIFT_STRICT_CONCURRENCY: complete` on both targets [code]).
     - Mark `perform` `@MainActor`.
     - Keep `@Parameter` types as `String`/`Int`, and convert to `UUID` inside.
@@ -348,6 +348,7 @@ Changed files:
   - `quickFold_unknownPosition_isNoOp`
   - `quickFold_inactiveSession_isNoOp`
   - `quickFold_missingSession_isNoOp`
+  - `quickFold_malformedSessionID_isNoOp`: a `sessionID` that isn't a valid UUID logs no hand, leaves the button where it is, and writes no undo record.
   - `undo_removesHandAndRestoresButtonSeat`
   - `undo_afterAnotherHand_isNoOp`
   - `undo_twice_isNoOp`
@@ -495,7 +496,7 @@ Stack checks are **records in the 1.1 sync data**, not a field inside a backup f
 - Enable row-level security on the table, with policies that limit every row to its owning user.
 - Include tests proving that one user cannot read, insert, update or delete another user's stack checks.
 - Delete Account removes them: either the `delete-account` edge function deletes them, or the table uses `ON DELETE CASCADE` from a row that function already deletes. State which in the PR.
-- The 1.1 Delete Account end-to-end test (1.1 sync spec, section 10.2 and section 14, criterion 13) checks that no stack checks remain on the server for the deleted account.
+- The 1.1 Delete Account end-to-end test (1.1 sync spec, section 10.2 and section 14, criterion 13) checks that no stack checks remain on the server for the deleted account. Criterion 13 in the 1.1 sync spec doesn't name stack checks yet, so the PR that adds the stack checks table must also extend criterion 13 or the Delete Account E2E test plan to cover them.
 
 **On the device**
 - How stack checks are stored locally (a new SwiftData model linked to `Session`, or a field on `Session`) is decided together with the 1.1 sync design. Per-record sync favors a separate model with its own ID and cascade delete.
