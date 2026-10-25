@@ -12,8 +12,9 @@ BUNDLE_ID = "com.rohanthomas.PokerStats"
 
 # App Store builds only (the release lane, #225). With this condition set,
 # PokerStats/Utilities/AppLinks.swift fails to compile while supportEmail is
-# still the [CONTACT_EMAIL] placeholder; it stops firing once #76 fills in the
-# address. $(inherited) keeps the project's own conditions. The single quotes
+# still the [CONTACT_EMAIL] placeholder. The #error is keyed only on this
+# condition, so resolving #76 means filling in the address and deleting the
+# #if APP_STORE_SUBMISSION block in AppLinks.swift. $(inherited) keeps the project's own conditions. The single quotes
 # keep it one argument when fastlane passes xcargs to xcodebuild through a
 # shell. TestFlight (beta), CI and Debug builds never set it.
 APP_STORE_SUBMISSION_XCARG = "SWIFT_ACTIVE_COMPILATION_CONDITIONS='$(inherited) APP_STORE_SUBMISSION'"
