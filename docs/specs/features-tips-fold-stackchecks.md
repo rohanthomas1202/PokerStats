@@ -3,10 +3,10 @@
 - **Author:** Mia (product), for Sam (manager) and the iOS and backend devs.
 - **Status:** Draft for owner review. The owner decisions listed in section 4.4 are **open questions**, not decided.
 - **Issues:** #27 (tips and add-ons), #28 (Live Activity spike), #29 (Lock Screen fold with Undo), #30 (stack checks and live P/L).
-- **Originally based on:** `main` at `c717d4e` (Oct 18, 2026). Section 2 (stack checks) was rewritten for the 1.1 sync direction; see `docs/specs/1.1-sync.md`.
+- **Originally based on:** `main` at `c717d4e` (Oct 18, 2026). Section 2 (stack checks) was rewritten for the 1.1 sync direction; see `docs/specs/1.1-sync.md` (merged in PR #97). The 1.1 sync spec sections cited in section 2.4 (8.3, 8.5, 10.2, 12 and 14) were checked against that file.
 
 **Note on staleness.** Several "today's code" facts below were written against `c717d4e`. Since then `main` has changed:
-- The CI crash from the force-unwrap in `AppGroupContainer` was fixed in PR #15.
+- The CI crash from the force-unwrap in `AppGroupContainer` was fixed in PR #15 (`8cd03b1`). See the "Where the database lives" facts below and section 1.5; don't redo or undo that fix.
 - Restore is atomic now (#32).
 - Auto-restore runs once per device and is blocked by Delete All Data (#49).
 - Delete Account wipes local data only after the server confirms, and it revokes the Apple token (#20, #23).
@@ -49,7 +49,8 @@ How to read the labels:
 **Where the database lives**
 - `AppGroupContainer.createSharedModelContainer()` builds a **new** database container (`ModelContainer`) every time it's called, stored at `<App Group>/PokerStats.store`.
 - The app calls it once, in `PokerStatsApp.init`. The home-screen widget calls it again every time its data refreshes.
-- `sharedContainerURL` force-unwraps the App Group folder. That is the crash in PR #15's CI: `AppGroupContainer.swift:8`, under the test host with code signing turned off.
+- `sharedContainerURL` returns `URL?` (changed in PR #15; it used to force-unwrap, which crashed CI under the test host with code signing turned off).
+- `makeModelContainer(groupURL:isTestHost:)`: when the App Group folder is unavailable, a unit-test host falls back to an in-memory store, and any other launch throws `ContainerError.appGroupUnavailable`. There is deliberately no fallback to Application Support, so a signing or entitlement problem fails loudly instead of splitting the app's data from the widget's.
 
 **How the database schema is handled**
 - The schema (`Schema([Session.self, Hand.self, Settings.self])`) is listed three times: `AppGroupContainer`, `TestHelpers`, `PreviewSampleData`.
@@ -213,13 +214,13 @@ New files:
   - `struct QuickFoldIntent: LiveActivityIntent` with `@Parameter sessionID: String` and `@Parameter expectedHandNumber: Int`.
   - `struct UndoQuickFoldIntent: LiveActivityIntent` with `@Parameter sessionID: String`, `@Parameter handID: String`.
   - Both use `static let authenticationPolicy: IntentAuthenticationPolicy = .alwaysAllowed` [docs], and `@MainActor func perform() async throws -> some IntentResult`.
+  - Intent parameters come from the Live Activity and are untrusted input. `perform` validates them against the database and the stored undo record and does nothing when they don't match (see the Undo steps below and §1.9).
 
 Changed files:
 - `Services/PositionTracker.swift`: add `restoreButton(config:toSeat:) -> TableConfig`.
 - `Services/AppGroupContainer.swift`
   - Add `@MainActor static let shared: ModelContainer`, created lazily once.
-  - Make the App Group folder lookup **not force-unwrap**: fall back to Application Support or an in-memory store when the App Group is unavailable (CI or test host).
-  - This also fixes PR #15's crash and should land as part of, or before, PR #15.
+  - Build `shared` with the existing `createSharedModelContainer()`. Keep its current App Group handling (superseded item, already merged in PR #15): no force-unwrap, in-memory store only for a unit-test host, `ContainerError.appGroupUnavailable` otherwise. Don't add an Application Support fallback.
 - `App/PokerStatsApp.swift`: use `AppGroupContainer.shared` instead of creating its own container. Add a `scenePhase` observer: when the app becomes active, refresh the session data and the Live Activity.
 - `ViewModels/ActiveSessionViewModel.swift`: `addHand`, `deleteHand` and the Live Activity methods delegate to the new services. Remove the 3 copies of the `ContentState` builder.
 - `Views/Session/ActiveSessionView.swift`
@@ -248,7 +249,7 @@ Changed files:
 8. No backup and no network calls (backup still happens only at session end). No home-screen widget reload, since that widget only shows completed sessions.
 
 **What Undo does, step by step**
-1. Load the undo record and check that `handID` matches.
+1. Load the undo record and check that both `handID` and `sessionID` parse as UUIDs and match it. If not, do nothing: no delete, no button move.
 2. Check that the hand still exists and is still the **latest** hand in that session (`handNumber == max`). If not, clear the record, refresh, and return.
 3. Delete the hand and put the button back to `buttonSeatBefore`. Save, clear the record, and update the Live Activity.
 
@@ -274,7 +275,7 @@ Changed files:
 9. Ending or abandoning the session removes both buttons from the final Live Activity.
 10. Swipe-deleting the latest hand in the app moves the button back one seat; deleting an older hand doesn't.
 11. Existing in-app logging is unchanged: same taps, same timing. `HandLoggerViewModel` has zero diff.
-12. All existing tests and the new tests pass in CI (PR #15 workflow).
+12. All existing tests and the new tests pass in CI (`.github/workflows/ci.yml`, added in PR #15).
 
 ## 1.8 Pitfalls and mitigations
 
@@ -314,8 +315,8 @@ Changed files:
    - Hold the view model in `@State` keyed by session ID.
    - Make the Live Activity start/resume idempotent through `LiveActivityController`.
 10. **Behavior while locked.**
-    - Set `authenticationPolicy = .alwaysAllowed` [docs], or the system will ask for Face ID and kill the one-tap value.
-    - Database file protection: don't set full file protection on the store, or writes fail while locked. Test after a reboot **before the first unlock**: writes will probably fail [verify]. In that case the action should fail gracefully and leave the Live Activity unchanged.
+    - Set `authenticationPolicy = .alwaysAllowed` [docs], or the system will ask for Face ID and kill the one-tap value. With no Face ID, Fold and Undo parameters are untrusted: validate them as in §1.5 and §1.9.
+    - Database file protection: keep the iOS default (`completeUntilFirstUserAuthentication`) on the store and never lower it to `none`. Don't raise it to full (`complete`) either, or writes fail while locked. Test after a reboot **before the first unlock**: writes will probably fail [verify]. In that case the action should fail gracefully and leave the Live Activity unchanged.
 11. **Swift 6 strict concurrency** (`SWIFT_STRICT_CONCURRENCY: complete` on both targets [code]).
     - Mark `perform` `@MainActor`.
     - Keep `@Parameter` types as `String`/`Int`, and convert to `UUID` inside.
@@ -331,6 +332,7 @@ Changed files:
     - Clear the undo record on restore and on delete.
 15. **Accidental taps at the table** (a pocketed phone, someone else's hand).
     - The position label, Undo, and the Settings toggle cover this. Prefer `.alwaysAllowed` for speed, but document it. Revisit if QA sees phantom folds.
+    - An Undo can only remove the hand named in the stored undo record, and only while it's the latest hand (§1.9 tests).
 16. **Protecting the under-3-second promise.** None of this may add a step to the in-app logger. Diff `HandLoggerViewModel` and keep it to zero changes.
 17. **App Review.** No real risk for buttons on Live Activities. Don't add marketing or upsell content to the Live Activity.
 18. **Privacy.** The Lock Screen already shows stakes, location and amount invested [code]. Adding position doesn't add sensitive data. F2's P/L does (see there).
@@ -349,6 +351,9 @@ Changed files:
   - `undo_removesHandAndRestoresButtonSeat`
   - `undo_afterAnotherHand_isNoOp`
   - `undo_twice_isNoOp`
+  - `undo_handIDNotMatchingRecord_isNoOp`: an `UndoQuickFoldIntent` whose `handID` differs from the stored undo record deletes nothing and leaves the button where it is.
+  - `undo_handNotLatest_isNoOp`: `handID` matches the record but a later hand exists in the session (for example one that arrived by sync). Nothing is deleted, the button doesn't move, and the record is cleared.
+  - `undo_sessionIDNotMatchingRecord_isNoOp` and `undo_malformedHandID_isNoOp`: no change.
   - `undo_afterSeatsChanged_restoresExactSeat`
   - `deleteLatestHand_restoresButton`
   - `deleteOlderHand_doesNotMoveButton`
@@ -380,7 +385,7 @@ Setup:
 13. Long session: either simulate by ending the activity from a debug menu, or run 8 hours on a spare device. After the app returns to the foreground, a new activity appears.
 
 **Effort: Medium, 5–7 dev-days plus ~2 QA days on device.** Breakdown:
-- Shared container and CI-safe App Group fallback: 0.5–1 day
+- Shared container (the CI-safe App Group handling already merged in PR #15): 0.5 day
 - Services extraction: 1–1.5 days
 - Button actions and Live Activity UI: 1.5–2 days
 - Foreground re-sync, view model lifetime fix: 1 day
@@ -476,15 +481,21 @@ Stack checks are **records in the 1.1 sync data**, not a field inside a backup f
 - `buyIn` is read live, so fixing a buy-in typo later still gives correct numbers.
 - `topUpsAtCheck` is a snapshot, so a later rebuy doesn't change earlier checks.
 - The current estimated stack = `last.stack + (session.rebuys + session.addOns - last.topUpsAtCheck)`.
-- These formulas must be identical on iOS and web (1.1 sync spec, section 12).
+- These formulas must be identical on iOS and web (1.1 sync spec, section 12, "Stats parity between iOS and web").
 
 **Sync behavior** (follows `docs/specs/1.1-sync.md`)
 - Private per user, like sessions and hands. Nothing is visible to other users.
 - Created offline and queued like hands. Saving a check never waits for the network.
-- Only the session's logging device adds checks (1.1 sync spec, section 8.3). Other devices see them read-only.
+- Only the session's logging device adds checks (1.1 sync spec, section 8.3, "An active session on two devices"). Other devices see them read-only.
 - Deleting a check during the session deletes it everywhere. Deleting a session deletes its checks, and restoring the session from Recently Deleted restores them.
 - Delete All Data ("Delete from all devices") and Delete Account remove them from the server.
-- An older app version that doesn't know stack checks must not delete them, or it stops syncing with "Update PokerStats to keep syncing" (1.1 sync spec, section 8.5).
+- An older app version that doesn't know stack checks must not delete them, or it stops syncing with "Update PokerStats to keep syncing" (1.1 sync spec, section 8.5, "Different app versions").
+
+**Server-side controls** (required in the same PR that adds the stack checks Supabase table; Kate blocks any migration without them)
+- Enable row-level security on the table, with policies that limit every row to its owning user.
+- Include tests proving that one user cannot read, insert, update or delete another user's stack checks.
+- Delete Account removes them: either the `delete-account` edge function deletes them, or the table uses `ON DELETE CASCADE` from a row that function already deletes. State which in the PR.
+- The 1.1 Delete Account end-to-end test (1.1 sync spec, section 10.2 and section 14, criterion 13) checks that no stack checks remain on the server for the deleted account.
 
 **On the device**
 - How stack checks are stored locally (a new SwiftData model linked to `Session`, or a field on `Session`) is decided together with the 1.1 sync design. Per-record sync favors a separate model with its own ID and cascade delete.
@@ -547,6 +558,7 @@ Stack checks are **records in the 1.1 sync data**, not a field inside a backup f
   - Abandoned session ends at −invested
   - Duplicate timestamps
 - Sync tests (with the 1.1 sync suite): create, delete and cascade-delete of stack checks; an unknown-record-type case for older clients.
+- Server tests (in the PR that adds the table): RLS denies another user's read, insert, update and delete; Delete Account leaves no stack checks (section 2.4, server-side controls).
 - `LiveActivityStateTests`: an old JSON without `livePL` still decodes. The P/L is left out when the setting is off.
 
 **Manual end-to-end (two devices, signed in; needs 1.1 sync)**
@@ -592,7 +604,7 @@ Stack checks are **records in the 1.1 sync data**, not a field inside a backup f
 8. **Validation and number parsing.**
    - Locale decimal separators break `Double(text)` (e.g. "1,5"). Stay with `.numberPad` whole numbers like the rest of the app, and strip grouping separators before parsing.
    - Hard cap and soft warning as in §2.3. Stack 0 is valid (busted).
-9. **Widget target build break.** `Session.swift` is compiled into the widget [code]. Forgetting to add the stack check model file to the widget's sources breaks the build. CI from PR #15 catches it, which is another reason CI must be fixed first.
+9. **Widget target build break.** `Session.swift` is compiled into the widget [code]. Forgetting to add the stack check model file to the widget's sources breaks the build. CI (`.github/workflows/ci.yml`, from PR #15) builds the app with its embedded widget and catches it.
 10. **Charts performance and correctness.** Compute the chart series in the view model once per appear, not in the view body.
     - Dedupe identical timestamps.
     - Clamp the time range to the session's start and end (or now).
@@ -799,7 +811,7 @@ Until the owner answers, the rest of this spec is written assuming **A**. If B i
 
 | Item | F3 (#27) | F1 (#29, #28) | F2 (#30) |
 |---|---|---|---|
-| **CI green** (PR #15 fixed the `AppGroupContainer` force-unwrap) | Should be green so the new tests run | **Hard**: F1 rewrites `AppGroupContainer` | **Hard**: catches the widget-target build break |
+| **CI green** (done: PR #15 fixed the `AppGroupContainer` force-unwrap) | Should be green so the new tests run | **Hard**: F1 adds `AppGroupContainer.shared` and must keep the merged App Group handling | **Hard**: catches the widget-target build break |
 | **#1 Sign in with Apple config** | None | None | Needed for the two-device sync tests |
 | **#4 / #5 backup and restore end-to-end** | Run #5 on a fixed build. Option A doesn't change the recorded values; option B needs #5 re-baselined, so do F3-B after #5 | None | **None.** F2 no longer touches the backup format |
 | **1.1 Sync** (`docs/specs/1.1-sync.md`, Max's technical design) | None | None (Lock Screen folds sync as ordinary hands once sync exists) | **Hard**: stack checks are a synced record type |
@@ -847,8 +859,8 @@ None of these is decided. The recommendations are suggestions only.
 ## 5. Sources
 
 - Apple, LiveActivityIntent: https://developer.apple.com/documentation/appintents/liveactivityintent
-- Apple, Adding interactivity to widgets and Live Activities (mirror): https://apple-docs.everest.mt/docs/widgetkit/adding-interactivity-to-widgets-and-live-activities/
-- Apple, Displaying live data with Live Activities (8-hour limit, 4 KB) (mirror): https://apple-docs.everest.mt/docs/activitykit/displaying-live-data-with-live-activities/
+- Apple, Adding interactivity to widgets and Live Activities: https://developer.apple.com/documentation/widgetkit/adding-interactivity-to-widgets-and-live-activities
+- Apple, Displaying live data with Live Activities (8-hour limit, 4 KB): https://developer.apple.com/documentation/activitykit/displaying-live-data-with-live-activities
 - Apple, IntentAuthenticationPolicy: https://developer.apple.com/documentation/appintents/intentauthenticationpolicy
 - Apple Developer Forums, SwiftData changes from a Live Activity button not visible in the app: https://developer.apple.com/forums/thread/764290
 - Poker Analytics 6.7 (stack tracking): https://www.poker-analytics.net/blog/2025/12/poker-analytics-6-7/
