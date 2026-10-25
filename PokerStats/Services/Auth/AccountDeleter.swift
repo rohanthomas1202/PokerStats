@@ -14,8 +14,8 @@ enum AccountDeletionError: LocalizedError, Equatable {
     /// The server revoked the Apple token, then a later cleanup step failed.
     /// Apple signs the user out, but their account data is still on the server.
     case cleanupFailedAfterAppleRevoke
-    /// 422 `apple_account_mismatch`: the Apple ID chosen in the sheet isn't the
-    /// one this account signed in with. Nothing was deleted.
+    /// 422 `apple_account_mismatch`: the Apple ID on this device isn't the one
+    /// this account signed in with. Nothing was deleted.
     case appleAccountMismatch
     /// 422 `apple_identity_missing` or `apple_token_invalid`, or any other
     /// `retryable: false` failure. Retrying can't help. Nothing was deleted.
@@ -40,10 +40,23 @@ enum AccountDeletionError: LocalizedError, Equatable {
 }
 
 /// The `delete-account` failure body: `{ error, code, retryable, step, apple_revoked? }`.
+/// Each field is decoded on its own, so one field with an unexpected type
+/// leaves that field nil instead of dropping the rest (notably `apple_revoked`).
 struct DeleteAccountFailureBody: Decodable {
     let code: String?
     let retryable: Bool?
     let appleRevoked: Bool?
+
+    private enum CodingKeys: String, CodingKey {
+        case code, retryable, appleRevoked
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        code = try? container.decodeIfPresent(String.self, forKey: .code)
+        retryable = try? container.decodeIfPresent(Bool.self, forKey: .retryable)
+        appleRevoked = try? container.decodeIfPresent(Bool.self, forKey: .appleRevoked)
+    }
 
     /// The body of a `delete-account` non-2xx response, or nil for any other error.
     static func from(_ error: Error) -> (status: Int, body: DeleteAccountFailureBody?)? {

@@ -310,4 +310,23 @@ struct AccountDeleterTests {
         let (thrownError, _) = await thrown(by: error, appleUserId: nil)
         #expect(thrownError as? AccountDeletionError == .cleanupFailedAfterAppleRevoke)
     }
+
+    @Test func appleRevoked_keptWhenOtherFieldsHaveUnexpectedTypes() async {
+        let error = SupabaseError.httpError(
+            statusCode: 500,
+            message: #"{"error":"x","code":42,"step":["s"],"retryable":"true","apple_revoked":true}"#
+        )
+        let (thrownError, _) = await thrown(by: error, appleUserId: nil)
+        #expect(thrownError as? AccountDeletionError == .cleanupFailedAfterAppleRevoke)
+    }
+
+    @Test func failureBody_badlyTypedField_isNil_othersKept() throws {
+        let body = try #require(DeleteAccountFailureBody.from(SupabaseError.httpError(
+            statusCode: 422,
+            message: #"{"code":"apple_account_mismatch","retryable":"no","apple_revoked":"yes"}"#
+        ))?.body)
+        #expect(body.code == "apple_account_mismatch")
+        #expect(body.retryable == nil)
+        #expect(body.appleRevoked == nil)
+    }
 }

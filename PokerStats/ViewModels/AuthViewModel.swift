@@ -165,7 +165,7 @@ final class AuthViewModel {
             /// Apple ID was disconnected but server cleanup failed. The user may
             /// be signed out and must sign in with Apple again before retrying.
             case appleDisconnected
-            /// Trying again can't help; the alert has no Try Again button.
+            /// Trying again now can't help; the alert has only OK, no Try Again.
             case notRetryable
         }
 
@@ -186,7 +186,7 @@ final class AuthViewModel {
         static let appleAccountMismatch = DeleteAccountFailure(
             kind: .notRetryable,
             title: "Couldn't Delete Account",
-            message: "This Apple ID doesn't match your account. Delete again and choose the Apple ID you signed in with."
+            message: "The Apple ID on this device doesn't match your account. Your account wasn't deleted. To delete it, use a device signed in with the Apple ID you used for PokerStats."
         )
         /// The address is a placeholder until the owner picks one (#76).
         static let needsSupport = DeleteAccountFailure(
@@ -194,9 +194,10 @@ final class AuthViewModel {
             title: "Couldn't Delete Account",
             message: "Your account couldn't be deleted. Contact support at [CONTACT_EMAIL]."
         )
-        /// Try Again is shown, but never run automatically.
+        /// The server isn't ready (503), so an immediate retry would fail again.
+        /// Only OK is shown, matching "Try again later."
         static let temporarilyUnavailable = DeleteAccountFailure(
-            kind: .retryable,
+            kind: .notRetryable,
             title: "Couldn't Delete Account",
             message: "Account deletion is temporarily unavailable. Your account wasn't deleted. Try again later."
         )
