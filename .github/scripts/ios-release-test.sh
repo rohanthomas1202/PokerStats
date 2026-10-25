@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Tests for ios-release-kind.sh, release-notes.sh, fastlane/asc_key.rb, and
-# the upload gates in ios-release.yml and the Fastfile.
+# Tests for ios-release-kind.sh, release-notes.sh, fastlane/asc_key.rb,
+# ci_scripts/generate_project.sh, and the upload gates and package lock in
+# ios-release.yml and the Fastfile.
 # Run: .github/scripts/ios-release-test.sh
 set -euo pipefail
 
@@ -142,6 +143,54 @@ check "build_app export method" yes "$(has 'export_method: "app-store-connect"' 
 check "build_app xcargs get signing flags" yes "$(has '^    xcargs: ".*#\{signing\}"' "$build_app")"
 check "build_app export_xcargs get signing flags" yes "$(has '^    export_xcargs: signing' "$build_app")"
 check "signing flags come from AscKey" yes "$(has 'signing = AscKey.xcodebuild_flags\(key\)' "$(cat "$ff")")"
+
+# Package lock (#218): both upload lanes generate the project through
+# generate_project.sh, and build_app resolves only from Package.resolved.
+beta_lane=$(awk '/^  lane :beta/ {grab=1} grab {print} grab && /^  end$/ {exit}' "$ff")
+check "build_app disables package updates" yes "$(has '^    disable_package_automatic_updates: true$' "$build_app")"
+check "build_app does not skip package resolution" no "$(has 'skip_package_dependencies_resolution' "$build_app")"
+for lane in beta release; do
+  body=$beta_lane; [[ $lane == release ]] && body=$release_lane
+  check "$lane lane uses generate_project.sh" yes "$(has 'sh\("cd \.\. && ci_scripts/generate_project\.sh"\)' "$body")"
+  check "$lane lane has no bare xcodegen" no "$(has 'xcodegen generate' "$body")"
+done
+check "ci_post_clone.sh uses generate_project.sh" yes "$(has 'ci_scripts/generate_project\.sh' "$(cat "$root/ci_scripts/ci_post_clone.sh")")"
+
+# generate_project.sh in a throwaway repo, with a stand-in xcodegen that
+# deletes Package.resolved the way the real one can.
+resolved="PokerStats.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
+gen_repo="$tmp/gen"
+mkdir -p "$gen_repo/ci_scripts" "$gen_repo/$(dirname "$resolved")"
+cp "$root/ci_scripts/generate_project.sh" "$gen_repo/ci_scripts/"
+printf '{"pins":["committed"]}\n' > "$gen_repo/$resolved"
+cat > "$tmp/xcodegen" <<'SH'
+#!/bin/sh
+rm -rf PokerStats.xcodeproj/project.xcworkspace
+echo generated > generated.txt
+SH
+chmod +x "$tmp/xcodegen"
+git -C "$gen_repo" init -q
+git -C "$gen_repo" -c user.name=test -c user.email=test@example.com add -A
+git -C "$gen_repo" -c user.name=test -c user.email=test@example.com commit -q -m init
+gen() {
+  rm -f "$gen_repo/generated.txt"
+  XCODEGEN="$tmp/xcodegen" "$gen_repo/ci_scripts/generate_project.sh" 2>&1 && echo "exit 0" || echo "exit $?"
+}
+out=$(gen)
+check "generate: clean tree passes" "exit 0" "$(tail -n1 <<<"$out")"
+check "generate: ran xcodegen" yes "$( [[ -f "$gen_repo/generated.txt" ]] && echo yes || echo no)"
+check "generate: Package.resolved restored" '{"pins":["committed"]}' "$(cat "$gen_repo/$resolved" 2>/dev/null)"
+printf '{"pins":["drifted"]}\n' > "$gen_repo/$resolved"
+out=$(gen)
+check "generate: drifted file fails" yes "$(grep -q '^exit [1-9]' <<<"$out" && grep -q 'differs from the commit' <<<"$out" && echo yes || echo no)"
+check "generate: drift stops before xcodegen" no "$( [[ -f "$gen_repo/generated.txt" ]] && echo yes || echo no)"
+rm -f "$gen_repo/$resolved"
+out=$(gen)
+check "generate: missing file fails" yes "$(grep -q '^exit [1-9]' <<<"$out" && grep -q 'is missing' <<<"$out" && echo yes || echo no)"
+git -C "$gen_repo" rm -q --cached "$resolved"
+printf '{"pins":["committed"]}\n' > "$gen_repo/$resolved"
+out=$(gen)
+check "generate: uncommitted file fails" yes "$(grep -q '^exit [1-9]' <<<"$out" && grep -q 'is not committed' <<<"$out" && echo yes || echo no)"
 
 # asc_key.rb, run with plain Ruby.
 if ! command -v ruby >/dev/null; then

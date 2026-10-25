@@ -28,6 +28,10 @@ def build_with_new_build_number(key)
   # group.com.rohanthomas.PokerStats. Team ID comes from project.yml.
   # manageAppVersionAndBuildNumber: false stops the export from rewriting
   # CFBundleVersion, so the IPA carries the build number checked below.
+  # disable_package_automatic_updates passes -disableAutomaticPackageResolution
+  # (as ci.yml does), so the package resolve and the archive use the committed
+  # Package.resolved and fail if it is missing or out of date. The lanes check
+  # that file against the commit before this runs (generate_project.sh).
   signing = AscKey.xcodebuild_flags(key)
   FileUtils.mkdir_p(File.expand_path("../build", __dir__))
   build_app(
@@ -36,7 +40,8 @@ def build_with_new_build_number(key)
     export_options: { manageAppVersionAndBuildNumber: false },
     output_directory: File.expand_path("../build", __dir__),
     xcargs: "CURRENT_PROJECT_VERSION=#{build_number} #{signing}",
-    export_xcargs: signing
+    export_xcargs: signing,
+    disable_package_automatic_updates: true
   )
   app = File.join(lane_context[SharedValues::XCODEBUILD_ARCHIVE], "Products/Applications/PokerStats.app")
   sh("cd .. && ci_scripts/check_build_numbers.sh #{app.shellescape} #{build_number.shellescape}")
@@ -155,7 +160,7 @@ platform :ios do
   desc "Upload to TestFlight (dry_run:true builds and signs only)"
   lane :beta do |options|
     key = ensure_asc_api_key!
-    sh("cd .. && xcodegen generate")
+    sh("cd .. && ci_scripts/generate_project.sh")
     build_with_new_build_number(key)
     if dry_run?(options)
       UI.success("dry_run: built and signed; skipped upload_to_testflight")
@@ -177,7 +182,7 @@ platform :ios do
   desc "Upload to App Store Connect (no review submission; the owner submits manually)"
   lane :release do |options|
     key = ensure_asc_api_key!
-    sh("cd .. && xcodegen generate")
+    sh("cd .. && ci_scripts/generate_project.sh")
     build_with_new_build_number(key)
     if dry_run?(options)
       UI.success("dry_run: built and signed; skipped upload_to_app_store")
