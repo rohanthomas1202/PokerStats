@@ -113,4 +113,64 @@ struct AuthViewModelDeleteTests {
         #expect(wiped.value == 1)
         #expect(vm.deleteAccountFailure == nil)
     }
+
+    // MARK: - Failure codes (#105)
+
+    private func outcome(after error: AccountDeletionError) async -> (AuthViewModel.DeleteAccountFailure?, Int) {
+        let wiped = Counter()
+        let vm = viewModel { throw error }
+        await vm.deleteAccount { wiped.value += 1 }.value
+        #expect(!vm.isDeletingAccount)
+        return (vm.deleteAccountFailure, wiped.value)
+    }
+
+    @Test func appleAccountMismatch_showsChooseTheRightAppleID_noTryAgain() async {
+        let (failure, wiped) = await outcome(after: .appleAccountMismatch)
+        #expect(wiped == 0)
+        #expect(failure == .appleAccountMismatch)
+        #expect(failure?.kind == .notRetryable)
+        #expect(failure?.message == "This Apple ID doesn't match your account. Delete again and choose the Apple ID you signed in with.")
+    }
+
+    @Test func needsSupport_showsContactSupport_noTryAgain() async {
+        let (failure, wiped) = await outcome(after: .needsSupport)
+        #expect(wiped == 0)
+        #expect(failure == .needsSupport)
+        #expect(failure?.kind == .notRetryable)
+        #expect(failure?.message == "Your account couldn't be deleted. Contact support at [CONTACT_EMAIL].")
+    }
+
+    @Test func temporarilyUnavailable_showsTryLater_withTryAgain() async {
+        let (failure, wiped) = await outcome(after: .temporarilyUnavailable)
+        #expect(wiped == 0)
+        #expect(failure == .temporarilyUnavailable)
+        #expect(failure?.kind == .retryable)
+        #expect(failure?.message == "Account deletion is temporarily unavailable. Your account wasn't deleted. Try again later.")
+    }
+
+    @Test func temporarilyUnavailable_isNotRetriedAutomatically() async {
+        let attempts = Counter()
+        let vm = viewModel {
+            attempts.value += 1
+            throw AccountDeletionError.temporarilyUnavailable
+        }
+        await vm.deleteAccount().value
+        #expect(attempts.value == 1)
+    }
+
+    /// End to end through AuthService: a typed error isn't flattened to the generic one.
+    @Test func authService_passesTypedErrorsThrough() async {
+        let auth = AuthService()
+        let vm = AuthViewModel(authService: auth, performDeleteAccount: {
+            try await auth.deleteAccount(serverDelete: {
+                throw AccountDeleter.mapped(SupabaseError.httpError(
+                    statusCode: 422,
+                    message: #"{"error":"x","code":"apple_account_mismatch","step":"s","retryable":false}"#
+                ))
+            })
+        })
+        await vm.deleteAccount().value
+        #expect(vm.deleteAccountFailure == .appleAccountMismatch)
+        #expect(auth.error == nil)
+    }
 }

@@ -74,7 +74,7 @@ struct AccountDeleterTests {
 
     private let reauthRequired = SupabaseError.httpError(
         statusCode: 400,
-        message: #"{"error":"Apple re-authentication required","code":"apple_reauth_required","step":"revoke apple token","retryable":true}"#
+        message: #"{"error":"Apple re-authentication required","code":"apple_reauth_required","step":"apple reauth","retryable":false}"#
     )
 
     @Test func noKeychainAppleId_serverAsksForCode_reauthenticatesAndRetriesOnce() async throws {
@@ -226,5 +226,88 @@ struct AccountDeleterTests {
             }
         )
         await #expect(throws: SupabaseError.self) { try await sut.run() }
+    }
+
+    // MARK: - Failure codes (#42, PR #96)
+
+    private func failure(_ status: Int, _ code: String, retryable: Bool) -> SupabaseError {
+        .httpError(
+            statusCode: status,
+            message: #"{"error":"x","code":"\#(code)","step":"s","retryable":\#(retryable)}"#
+        )
+    }
+
+    /// Runs a deleter whose every call fails with `error`, and returns what `run()` threw.
+    private func thrown(by error: Error, appleUserId: String? = "001234.abc") async -> (Error?, Recorder) {
+        let recorder = Recorder()
+        let sut = deleter(appleUserId: appleUserId, recorder: recorder, function: { _ in throw error })
+        do {
+            try await sut.run()
+            return (nil, recorder)
+        } catch {
+            return (error, recorder)
+        }
+    }
+
+    @Test func appleAccountMismatch_mapsToMismatch() async {
+        let (error, recorder) = await thrown(by: failure(422, "apple_account_mismatch", retryable: false))
+        #expect(error as? AccountDeletionError == .appleAccountMismatch)
+        #expect(recorder.requests.count == 1)
+    }
+
+    @Test func appleIdentityMissing_mapsToNeedsSupport_evenWithoutCode() async {
+        let (error, recorder) = await thrown(by: failure(422, "apple_identity_missing", retryable: false), appleUserId: nil)
+        #expect(error as? AccountDeletionError == .needsSupport)
+        #expect(recorder.reauthCalls == 0)
+        #expect(recorder.requests == [DeleteAccountRequest(authorizationCode: nil)])
+    }
+
+    @Test func appleTokenInvalid_mapsToNeedsSupport() async {
+        let (error, _) = await thrown(by: failure(422, "apple_token_invalid", retryable: false))
+        #expect(error as? AccountDeletionError == .needsSupport)
+    }
+
+    @Test func serverNotConfigured_mapsToTemporarilyUnavailable_withoutAutoRetry() async {
+        let (error, recorder) = await thrown(by: failure(503, "server_not_configured", retryable: true), appleUserId: nil)
+        #expect(error as? AccountDeletionError == .temporarilyUnavailable)
+        #expect(recorder.reauthCalls == 0)
+        #expect(recorder.requests.count == 1)
+    }
+
+    @Test func deleteFailed_staysGenericRetryable() async {
+        let (error, _) = await thrown(by: failure(500, "delete_failed", retryable: true))
+        #expect(error is SupabaseError)
+    }
+
+    @Test func reauthRequiredAfterCodeSent_staysGenericRetryable() async {
+        let (error, recorder) = await thrown(by: reauthRequired)
+        #expect(error is SupabaseError)
+        #expect(recorder.reauthCalls == 1)
+        #expect(recorder.requests.count == 1)
+    }
+
+    @Test func unknownCode_fallsBackToRetryable() async {
+        let (notRetryable, _) = await thrown(by: failure(409, "something_new", retryable: false))
+        #expect(notRetryable as? AccountDeletionError == .needsSupport)
+        let (retryable, _) = await thrown(by: failure(409, "something_new", retryable: true))
+        #expect(retryable is SupabaseError)
+    }
+
+    @Test func unparseableOrMissingRetryable_isGenericRetryable() async {
+        let (html, _) = await thrown(by: SupabaseError.httpError(statusCode: 502, message: "<html>Bad Gateway</html>"))
+        #expect(html is SupabaseError)
+        let (noFields, _) = await thrown(by: SupabaseError.httpError(statusCode: 500, message: #"{"error":"x"}"#))
+        #expect(noFields is SupabaseError)
+        let (network, _) = await thrown(by: FunctionFailed())
+        #expect(network is FunctionFailed)
+    }
+
+    @Test func appleRevoked_winsOverCode() async {
+        let error = SupabaseError.httpError(
+            statusCode: 500,
+            message: #"{"error":"x","code":"delete_failed","step":"delete profiles","retryable":true,"apple_revoked":true}"#
+        )
+        let (thrownError, _) = await thrown(by: error, appleUserId: nil)
+        #expect(thrownError as? AccountDeletionError == .cleanupFailedAfterAppleRevoke)
     }
 }

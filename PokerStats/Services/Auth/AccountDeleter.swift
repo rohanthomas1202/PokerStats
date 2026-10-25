@@ -14,6 +14,14 @@ enum AccountDeletionError: LocalizedError, Equatable {
     /// The server revoked the Apple token, then a later cleanup step failed.
     /// Apple signs the user out, but their account data is still on the server.
     case cleanupFailedAfterAppleRevoke
+    /// 422 `apple_account_mismatch`: the Apple ID chosen in the sheet isn't the
+    /// one this account signed in with. Nothing was deleted.
+    case appleAccountMismatch
+    /// 422 `apple_identity_missing` or `apple_token_invalid`, or any other
+    /// `retryable: false` failure. Retrying can't help. Nothing was deleted.
+    case needsSupport
+    /// 503 `server_not_configured`. Nothing was deleted; try again later.
+    case temporarilyUnavailable
 
     var errorDescription: String? {
         switch self {
@@ -21,7 +29,28 @@ enum AccountDeletionError: LocalizedError, Equatable {
             "Account deletion was cancelled."
         case .cleanupFailedAfterAppleRevoke:
             "Apple ID disconnected, but account data wasn't fully deleted."
+        case .appleAccountMismatch:
+            "This Apple ID doesn't match your account."
+        case .needsSupport:
+            "Your account couldn't be deleted."
+        case .temporarilyUnavailable:
+            "Account deletion is temporarily unavailable."
         }
+    }
+}
+
+/// The `delete-account` failure body: `{ error, code, retryable, step, apple_revoked? }`.
+struct DeleteAccountFailureBody: Decodable {
+    let code: String?
+    let retryable: Bool?
+    let appleRevoked: Bool?
+
+    /// The body of a `delete-account` non-2xx response, or nil for any other error.
+    static func from(_ error: Error) -> (status: Int, body: DeleteAccountFailureBody?)? {
+        guard case SupabaseError.httpError(let status, let message) = error else { return nil }
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        return (status, try? decoder.decode(Self.self, from: Data(message.utf8)))
     }
 }
 
@@ -37,6 +66,14 @@ struct AccountDeleter {
     let callDeleteFunction: @MainActor (DeleteAccountRequest) async throws -> Void
 
     func run() async throws {
+        do {
+            try await send()
+        } catch {
+            throw Self.mapped(error)
+        }
+    }
+
+    private func send() async throws {
         // Signed in with Apple on this device: confirm with Apple up front.
         if appleUserId() != nil {
             try await sendWithFreshAppleCode()
@@ -54,26 +91,33 @@ struct AccountDeleter {
 
     private func sendWithFreshAppleCode() async throws {
         let code = try await appleAuthorizationCode()
-        do {
-            try await callDeleteFunction(DeleteAccountRequest(authorizationCode: code))
-        } catch let error where Self.isCleanupFailedAfterAppleRevoke(error) {
-            throw AccountDeletionError.cleanupFailedAfterAppleRevoke
-        }
+        try await callDeleteFunction(DeleteAccountRequest(authorizationCode: code))
     }
 
-    /// A `delete-account` failure body flagged `"apple_revoked": true`.
-    static func isCleanupFailedAfterAppleRevoke(_ error: Error) -> Bool {
-        guard case SupabaseError.httpError(_, let message) = error,
-              let data = message.data(using: .utf8),
-              let body = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            return false
+    /// Maps a `delete-account` failure to an `AccountDeletionError` by `code`,
+    /// then by `retryable`. Anything left (`delete_failed`, a second
+    /// `apple_reauth_required`, a retryable or unreadable body, a network
+    /// error) is returned unchanged and shown as the generic retryable error.
+    static func mapped(_ error: Error) -> Error {
+        guard let body = DeleteAccountFailureBody.from(error)?.body else { return error }
+        if body.appleRevoked == true { return AccountDeletionError.cleanupFailedAfterAppleRevoke }
+        switch body.code {
+        case "apple_account_mismatch":
+            return AccountDeletionError.appleAccountMismatch
+        case "apple_identity_missing", "apple_token_invalid":
+            return AccountDeletionError.needsSupport
+        case "server_not_configured":
+            return AccountDeletionError.temporarilyUnavailable
+        case "apple_reauth_required", "delete_failed":
+            return error
+        default:
+            return body.retryable == false ? AccountDeletionError.needsSupport : error
         }
-        return body["apple_revoked"] as? Bool == true
     }
 
     /// The `delete-account` 400 that means "send a fresh Apple authorization code".
     static func isAppleReauthRequired(_ error: Error) -> Bool {
-        guard case SupabaseError.httpError(statusCode: 400, let message) = error else { return false }
-        return message.contains("\"apple_reauth_required\"")
+        guard let failure = DeleteAccountFailureBody.from(error) else { return false }
+        return failure.status == 400 && failure.body?.code == "apple_reauth_required"
     }
 }
