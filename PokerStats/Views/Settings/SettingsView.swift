@@ -212,12 +212,15 @@ struct SettingsView: View {
                 Button("Sign In") {
                     authViewModel?.isShowingSignIn = true
                 }
+                Button("Cancel", role: .cancel) { }
+            } else if failure.kind == .notRetryable {
+                Button("OK", role: .cancel) { }
             } else {
                 Button("Try Again") {
                     authViewModel?.retryDeleteAccount()
                 }
+                Button("Cancel", role: .cancel) { }
             }
-            Button("Cancel", role: .cancel) { }
         } message: { failure in
             Text(failure.message)
         }

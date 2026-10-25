@@ -165,6 +165,8 @@ final class AuthViewModel {
             /// Apple ID was disconnected but server cleanup failed. The user may
             /// be signed out and must sign in with Apple again before retrying.
             case appleDisconnected
+            /// Trying again can't help; the alert has no Try Again button.
+            case notRetryable
         }
 
         let kind: Kind
@@ -180,6 +182,23 @@ final class AuthViewModel {
             kind: .appleDisconnected,
             title: "Couldn't Finish Deleting Account",
             message: "Your Apple ID was disconnected, but some account data wasn't deleted. Sign in with Apple again, then try again."
+        )
+        static let appleAccountMismatch = DeleteAccountFailure(
+            kind: .notRetryable,
+            title: "Couldn't Delete Account",
+            message: "This Apple ID doesn't match your account. Delete again and choose the Apple ID you signed in with."
+        )
+        /// The address is a placeholder until the owner picks one (#76).
+        static let needsSupport = DeleteAccountFailure(
+            kind: .notRetryable,
+            title: "Couldn't Delete Account",
+            message: "Your account couldn't be deleted. Contact support at [CONTACT_EMAIL]."
+        )
+        /// Try Again is shown, but never run automatically.
+        static let temporarilyUnavailable = DeleteAccountFailure(
+            kind: .retryable,
+            title: "Couldn't Delete Account",
+            message: "Account deletion is temporarily unavailable. Your account wasn't deleted. Try again later."
         )
     }
 
@@ -207,6 +226,12 @@ final class AuthViewModel {
                 // User dismissed the Apple sheet; nothing was deleted.
             } catch AccountDeletionError.cleanupFailedAfterAppleRevoke {
                 deleteAccountFailure = .appleDisconnected
+            } catch AccountDeletionError.appleAccountMismatch {
+                deleteAccountFailure = .appleAccountMismatch
+            } catch AccountDeletionError.needsSupport {
+                deleteAccountFailure = .needsSupport
+            } catch AccountDeletionError.temporarilyUnavailable {
+                deleteAccountFailure = .temporarilyUnavailable
             } catch {
                 deleteAccountFailure = .retryable
             }

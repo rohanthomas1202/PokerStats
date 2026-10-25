@@ -230,7 +230,7 @@ final class AuthService {
             clearSignedInState()
             isLoading = false
         } catch let error as AccountDeletionError {
-            // Cancelled, or Apple revoked but cleanup failed: the caller shows these.
+            // Cancelled, or a server failure with its own alert: the caller shows these.
             isLoading = false
             throw error
         } catch {
