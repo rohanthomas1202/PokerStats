@@ -215,6 +215,18 @@ jobs:
       - name: Test build number scripts
         run: .github/scripts/build-numbers-test.sh
 
+  # The ruleset files in .github/rulesets/ and repo-settings-check.sh (#200).
+  # Fails if main.json stops requiring the gate job's name. Always runs.
+  repo-settings:
+    name: Repo settings files
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Test rulesets and settings check
+        run: .github/scripts/repo-settings-test.sh
+
   # Every required-reason API category the app or widget extension uses must
   # be declared in that target's PrivacyInfo.xcprivacy (#115). Runs when the
   # iOS job does.
@@ -249,7 +261,7 @@ jobs:
   # job passed or was skipped, fails if any failed or was cancelled.
   gate:
     name: CI passed
-    needs: [changes, ios, deno, fastlane-guard, release-scripts, privacy-manifest]
+    needs: [changes, ios, deno, fastlane-guard, release-scripts, repo-settings, privacy-manifest]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
