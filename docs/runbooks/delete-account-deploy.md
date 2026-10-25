@@ -155,6 +155,8 @@ Write down your choice. Step 6 deploys it, and steps 7, 9 and 10 depend on it.
 
 ## 6. Deploy
 
+Run every command in this step from the repository root, on `main`. The `cp` line and the deploy commands use paths relative to it.
+
 First save a copy of what's deployed now, so step 9 can put it back. The download writes into `supabase/functions/delete-account/` under the folder it's given, so point it at a separate folder or it overwrites your checkout:
 
 ```bash
@@ -170,7 +172,7 @@ The download holds only the function's files, not `config.toml`, so the `cp` lin
 
 If the download fails because the function doesn't exist on `PROJECT_REF`, there's nothing to roll back to; carry on.
 
-Then run the one command for your choice, from the repository root on `main`:
+Then run the one command for your choice:
 
 ```bash
 # Option A: verify_jwt = true (from config.toml)
