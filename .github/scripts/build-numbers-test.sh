@@ -125,10 +125,22 @@ out=$(cd "$root/fastlane" && ruby -rshellwords -e '
 check "Fastfile line escapes a quoted path" yes "$(has "exit 0" "$out")"
 check "Fastfile line passes the path through" yes "$(has "PokerStatsWidgets.appex: CFBundleVersion $n" "$out")"
 
+# Prints yes if the build_app call text sets manageAppVersionAndBuildNumber to
+# false in export_options. Key and value only, so a reformat of the hash does
+# not break this. Commented-out lines do not count.
+keeps_build() {
+  sed '/^[[:space:]]*#/d' <<<"$1" \
+    | grep -Ezq "export_options:[^}]*manageAppVersionAndBuildNumber[\"']?[[:space:]]*(:|=>)[[:space:]]*false([^[:alnum:]_]|\$)" \
+    && echo yes || echo no
+}
 build_app=$(awk '/^  build_app\(/ {grab=1} grab {print} grab && /^  \)$/ {exit}' "$ff")
-# Key and value only, so a reformat of the hash does not break this.
-keeps=$(grep -Ezq "export_options:[^}]*manageAppVersionAndBuildNumber[\"']?[[:space:]]*(:|=>)[[:space:]]*false" <<<"$build_app" && echo yes || echo no)
-check "export keeps the archived build number" yes "$keeps"
+check "export keeps the archived build number" yes "$(keeps_build "$build_app")"
+check "export check: hash rocket" yes "$(keeps_build 'export_options: { "manageAppVersionAndBuildNumber" => false }')"
+check "export check: multi-line hash" yes "$(keeps_build $'export_options: {\n  method: "app-store",\n  manageAppVersionAndBuildNumber: false\n}')"
+check "export check: true" no "$(keeps_build 'export_options: { manageAppVersionAndBuildNumber: true }')"
+check "export check: false_override" no "$(keeps_build 'export_options: { manageAppVersionAndBuildNumber: false_override }')"
+check "export check: falsey" no "$(keeps_build 'export_options: { manageAppVersionAndBuildNumber: falsey }')"
+check "export check: commented out" no "$(keeps_build $'export_options: {\n  # manageAppVersionAndBuildNumber: false\n  method: "app-store"\n}')"
 
 if (( failures > 0 )); then
   echo "$failures test(s) failed"

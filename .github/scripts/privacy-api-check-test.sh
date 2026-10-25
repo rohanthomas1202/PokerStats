@@ -96,6 +96,20 @@ expect "// in interpolated string"  fail none         A.swift 'let s = "\(f("//"
 expect "nested interpolation"       fail none         A.swift 'let s = "a\(g("/*\(h(")"))c"))d"; let d = UserDefaults.standard // */'
 expect "comment after interpolation" pass none        A.swift 'let s = "\(f("x"))" // UserDefaults'
 expect "lookalike names"             pass none         A.swift $'let statKey = 1\nlet status = state.stats\nfoo.stat(1)\nlet userDefaultsKey = 2'
+expect "unclosed string keeps the line" fail none      A.swift 'let s = "abc // UserDefaults'
+expect "unbalanced \\( keeps the line" fail none      A.swift 'let s = "\(f(" // UserDefaults'
+
+# Many unbalanced \( on one line must not make the scan superlinear (#189).
+# A quadratic scan takes minutes on this, a linear one well under a second.
+long=$(printf '"\\(%.0s' {1..20000})
+rm -rf "$tmp/App" && mkdir -p "$tmp/App"
+printf 'let s = %s\n' "$long" > "$tmp/App/A.swift"
+manifest "$tmp/PrivacyInfo.xcprivacy"
+if timeout 20 "$script" "$tmp/PrivacyInfo.xcprivacy" "$tmp/App" >/dev/null 2>&1; then
+  echo "ok   long unbalanced line"
+else
+  echo "FAIL long unbalanced line: want pass within 20 s"; failures=$((failures + 1))
+fi
 
 # A manifest that lists a category without a reason does not declare it.
 rm -rf "$tmp/App" && mkdir -p "$tmp/App"
