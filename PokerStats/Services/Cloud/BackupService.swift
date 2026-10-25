@@ -5,7 +5,7 @@ import SwiftData
 
 @MainActor
 final class BackupService {
-    private let client = SupabaseClient.shared
+    private let client: SupabaseClient
     private let authService: AuthService
     private let modelContext: ModelContext
 
@@ -24,9 +24,10 @@ final class BackupService {
         return decoder
     }()
 
-    init(authService: AuthService, modelContext: ModelContext) {
+    init(authService: AuthService, modelContext: ModelContext, client: SupabaseClient = .shared) {
         self.authService = authService
         self.modelContext = modelContext
+        self.client = client
     }
 
     // MARK: - Create & Upload Backup

@@ -9,9 +9,10 @@ private let refreshTokenNotFound = #"{"code":"refresh_token_not_found","message"
 private func client(
     _ storage: InMemoryAuthStorage,
     reply: FakeReply,
-    server: FakeServer = FakeServer()
+    server: FakeServer = FakeServer(),
+    log: AuthLog? = nil
 ) -> SupabaseClient {
-    testClient(storage, server: server) { request, _ in
+    testClient(storage, server: server, log: log) { request, _ in
         if request.path.hasSuffix("/auth/v1/logout") { return .status(204, "") }
         return reply
     }
@@ -23,11 +24,22 @@ private func signedInStorage(expired: Bool = true) -> InMemoryAuthStorage {
     return storage
 }
 
-/// Starts following auth events and lets the initial event arrive.
+/// Starts following auth events and waits for the initial session event,
+/// which the SDK sends once the listener is registered. Call it instead of
+/// `restoreSession()` for a stored session that hasn't expired.
 @MainActor
 private func observe(_ auth: AuthService) async {
     auth.observeAuthChanges()
-    await settle()
+    await waitUntil("initial session") { auth.isAuthenticated }
+}
+
+/// Auth events one client's stream has delivered, in order.
+private final class EventLog: @unchecked Sendable {
+    private let lock = NSLock()
+    private var seen: [AuthChangeEvent] = []
+
+    var events: [AuthChangeEvent] { lock.withLock { seen } }
+    func append(_ event: AuthChangeEvent) { lock.withLock { seen.append(event) } }
 }
 
 @Suite("Session Refresh Tests")
@@ -50,7 +62,8 @@ struct SessionRefreshTests {
         RefreshCase("401 invalid JWT", .status(401, #"{"msg":"Invalid JWT"}"#), definitive: false),
         RefreshCase("401 no body", .status(401, ""), definitive: false),
         // Without an error code the SDK can't tell this is about the refresh
-        // token, so it keeps the session; Supabase Auth sends the code.
+        // token, so it keeps the session at launch; Supabase Auth sends the
+        // code. The next request signs out (accountRejectedDuringRequest).
         RefreshCase("400 invalid_grant without code", .status(400, #"{"error":"invalid_grant","error_description":"Invalid Refresh Token"}"#), definitive: false),
         RefreshCase("400 refresh_token_not_found", .status(400, refreshTokenNotFound), definitive: true),
         RefreshCase("400 refresh_token_already_used", .status(400, #"{"code":"refresh_token_already_used","message":"Invalid Refresh Token: Already Used"}"#), definitive: true),
@@ -60,13 +73,13 @@ struct SessionRefreshTests {
     func refreshFailure(_ testCase: RefreshCase) async {
         let storage = signedInStorage()
         let server = FakeServer()
-        let auth = AuthService(client: client(storage, reply: testCase.reply, server: server))
+        let log = AuthLog()
+        let auth = AuthService(client: client(storage, reply: testCase.reply, server: server, log: log))
         #expect(auth.restoreSession()) // expired, needs refresh
         #expect(auth.isAuthenticated)
 
         auth.observeAuthChanges()
-        await waitUntil("\(testCase.name): refresh attempts") { server.refreshCount == testCase.attempts }
-        await settle()
+        await waitUntil("\(testCase.name): refresh finished") { log.count(AuthLog.refreshEnded) == 1 }
 
         if testCase.definitive {
             await waitUntil("\(testCase.name): UI signed out") { !auth.isAuthenticated }
@@ -106,7 +119,6 @@ struct SessionRefreshTests {
         let server = FakeServer()
         let sut = client(storage, reply: .status(200, sessionResponseBody()), server: server)
         let auth = AuthService(client: sut)
-        auth.restoreSession()
         await observe(auth)
 
         let session = try await sut.auth.refreshSession()
@@ -191,9 +203,7 @@ struct SessionRefreshTests {
         let storage = signedInStorage(expired: false)
         let sut = client(storage, reply: .status(400, refreshTokenNotFound))
         let auth = AuthService(client: sut)
-        auth.restoreSession()
         await observe(auth)
-        #expect(auth.isAuthenticated)
 
         // The access token expires while the app is running.
         storage.seed(testSession(expired: true))
@@ -210,18 +220,82 @@ struct SessionRefreshTests {
         await waitUntil("UI signed out") { !auth.isAuthenticated }
     }
 
-    @Test func otherClientsInvalidation_doesNotSignThisServiceOut() async {
+    @Test func otherClientsInvalidation_doesNotSignThisServiceOut() async throws {
         let mine = signedInStorage(expired: false)
-        let auth = AuthService(client: client(mine, reply: .status(200, sessionResponseBody())))
-        auth.restoreSession()
+        let mineClient = client(mine, reply: .status(200, sessionResponseBody()))
+        let auth = AuthService(client: mineClient)
         await observe(auth)
+        let events = EventLog()
+        let probe = Task {
+            for await (event, _) in mineClient.auth.authStateChanges { events.append(event) }
+        }
+        defer { probe.cancel() }
+        await waitUntil("probe listening") { events.events.contains(.initialSession) }
 
         let other = client(signedInStorage(), reply: .status(400, refreshTokenNotFound))
         _ = try? await other.auth.refreshSession()
-        await settle()
-
-        #expect(auth.isAuthenticated)
+        #expect(other.auth.currentSession == nil, "the other client signed out")
         #expect(mine.storedSession?.refreshToken == "old-refresh")
+
+        // Events arrive in order: once this client's own refresh shows up, a
+        // sign-out sent before it would already be in the log.
+        _ = try await mineClient.auth.refreshSession()
+        await waitUntil("own refresh seen") { events.events.contains(.tokenRefreshed) }
+        #expect(!events.events.contains(.signedOut))
+        await waitUntil("own refresh shown") { auth.userEmail == "new@example.com" }
+        #expect(auth.isAuthenticated)
+    }
+
+    /// The SDK keeps the session for a banned or deleted user and for an
+    /// `invalid_grant` without a code; a request signs out locally instead
+    /// of showing "Couldn't reach the server" while still signed in (#133).
+    @Test(arguments: [
+        ("403 user_banned", #"{"code":"user_banned","message":"User is banned"}"#, 403),
+        ("404 user_not_found", #"{"code":"user_not_found","message":"User not found"}"#, 404),
+        ("400 invalid_grant without code", #"{"error":"invalid_grant","error_description":"Invalid Refresh Token"}"#, 400),
+    ])
+    func accountRejectedDuringRequest_signsOut(name: String, body: String, status: Int) async {
+        let storage = signedInStorage(expired: false)
+        let server = FakeServer()
+        let sut = client(storage, reply: .status(status, body), server: server)
+        let auth = AuthService(client: sut)
+        await observe(auth)
+
+        // The access token expires while the app is running.
+        storage.seed(testSession(expired: true))
+        do {
+            _ = try await sut.storage.from("backups").list(path: TestUser.id.uuidString)
+            Issue.record("\(name): expected a throw")
+        } catch {
+            guard case SupabaseError.sessionExpired = error else {
+                Issue.record("\(name): expected sessionExpired, got \(error)")
+                return
+            }
+        }
+        #expect(storage.storedSession == nil, "\(name): session removed")
+        #expect(server.refreshCount == 1)
+        #expect(!server.requests.contains { $0.path.contains("/storage/") }, "\(name): the storage request is not sent")
+        await waitUntil("\(name): UI signed out") { !auth.isAuthenticated }
+        #expect(auth.userId == nil)
+    }
+
+    @Test func otherCodesDuringRequest_keepSession() async {
+        let storage = signedInStorage()
+        let sut = client(storage, reply: .status(400, #"{"code":"validation_failed","message":"bad"}"#))
+        let auth = AuthService(client: sut)
+        auth.restoreSession()
+
+        do {
+            _ = try await SupabaseClient.accessToken(sut.auth)
+            Issue.record("expected a throw")
+        } catch {
+            guard case SupabaseError.refreshUnavailable = error else {
+                Issue.record("expected refreshUnavailable, got \(error)")
+                return
+            }
+        }
+        #expect(storage.storedSession?.refreshToken == "old-refresh")
+        #expect(auth.isAuthenticated)
     }
 
     // MARK: - Single-flight refresh
@@ -230,7 +304,8 @@ struct SessionRefreshTests {
         let storage = signedInStorage()
         let server = FakeServer()
         let gate = TransportGate()
-        let sut = testClient(storage, server: server) { _, index in
+        let log = AuthLog()
+        let sut = testClient(storage, server: server, log: log) { _, index in
             if index == 0 { await gate.wait() }
             return .status(200, sessionResponseBody())
         }
@@ -238,9 +313,9 @@ struct SessionRefreshTests {
         auth.restoreSession()
 
         let first = Task { try await SupabaseClient.accessToken(sut.auth) }
-        let second = Task { try await SupabaseClient.accessToken(sut.auth) }
         await waitUntil("first refresh sent") { server.refreshCount == 1 }
-        await settle() // the second caller joins the flight
+        let second = Task { try await SupabaseClient.accessToken(sut.auth) }
+        await waitUntil("second caller joined the flight") { log.count(AuthLog.joinedRefresh) == 1 }
         gate.open()
 
         let tokens = try await [first.value, second.value]
@@ -256,8 +331,9 @@ struct SessionRefreshTests {
         let storage = signedInStorage()
         let server = FakeServer()
         let gate = TransportGate()
+        let log = AuthLog()
         // The SDK retries a 503 once inside the same flight: requests 0 and 1.
-        let sut = testClient(storage, server: server) { _, index in
+        let sut = testClient(storage, server: server, log: log) { _, index in
             if index == 0 { await gate.wait() }
             return index < 2 ? .status(503, "upstream") : .status(200, sessionResponseBody())
         }
@@ -265,9 +341,9 @@ struct SessionRefreshTests {
         auth.restoreSession()
 
         let first = Task { try await SupabaseClient.accessToken(sut.auth) }
-        let second = Task { try await SupabaseClient.accessToken(sut.auth) }
         await waitUntil("first refresh sent") { server.refreshCount == 1 }
-        await settle()
+        let second = Task { try await SupabaseClient.accessToken(sut.auth) }
+        await waitUntil("second caller joined the flight") { log.count(AuthLog.joinedRefresh) == 1 }
         gate.open()
 
         for caller in [first, second] {
@@ -299,7 +375,8 @@ struct SessionRefreshTests {
         let storage = signedInStorage()
         let server = FakeServer()
         let gate = TransportGate()
-        let sut = testClient(storage, server: server) { request, _ in
+        let log = AuthLog()
+        let sut = testClient(storage, server: server, log: log) { request, _ in
             if request.path.hasSuffix("/auth/v1/logout") { return .status(204, "") }
             await gate.wait()
             return .status(200, sessionResponseBody())
@@ -312,18 +389,50 @@ struct SessionRefreshTests {
         await auth.signOut()
         #expect(!auth.isAuthenticated)
         gate.open()
-        await settle()
+        await waitUntil("refresh finished") { log.count(AuthLog.refreshEnded) == 1 }
 
         #expect(storage.storedSession == nil, "the refreshed session is not stored")
         #expect(!auth.isAuthenticated)
         #expect(auth.userEmail == nil)
     }
 
-    @Test func signInDuringFailingRefresh_keepsTheNewSession() async throws {
+    @Test func signOutDuringRequestRefresh_failsWithSessionChanged() async {
         let storage = signedInStorage()
         let server = FakeServer()
         let gate = TransportGate()
         let sut = testClient(storage, server: server) { request, _ in
+            if request.path.hasSuffix("/auth/v1/logout") { return .status(204, "") }
+            await gate.wait()
+            return .status(200, sessionResponseBody())
+        }
+        let auth = AuthService(client: sut)
+        auth.restoreSession()
+
+        let request = Task { try await SupabaseClient.accessToken(sut.auth) }
+        await waitUntil("refresh sent") { server.refreshCount == 1 }
+        await auth.signOut()
+        gate.open()
+
+        do {
+            _ = try await request.value
+            Issue.record("expected a throw")
+        } catch {
+            guard case SupabaseError.sessionChanged = error else {
+                Issue.record("expected sessionChanged, got \(error)")
+                return
+            }
+            #expect(error.localizedDescription == "You signed out or switched accounts before this finished.")
+        }
+        #expect(storage.storedSession == nil)
+        #expect(!auth.isAuthenticated)
+    }
+
+    @Test func signInDuringFailingRefresh_keepsTheNewSession() async throws {
+        let storage = signedInStorage()
+        let server = FakeServer()
+        let gate = TransportGate()
+        let log = AuthLog()
+        let sut = testClient(storage, server: server, log: log) { request, _ in
             if request.isRefresh {
                 await gate.wait()
                 return .status(400, refreshTokenNotFound)
@@ -337,7 +446,7 @@ struct SessionRefreshTests {
 
         try await auth.signInWithApple(identityToken: Data("id.token".utf8), rawNonce: "raw-nonce")
         gate.open()
-        await settle()
+        await waitUntil("refresh finished") { log.count(AuthLog.refreshEnded) == 1 }
 
         #expect(storage.storedSession?.refreshToken == "b-refresh", "the old refresh's failure keeps the new session")
         #expect(auth.isAuthenticated)

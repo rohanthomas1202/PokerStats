@@ -6,18 +6,22 @@ import Storage
 
 enum SupabaseError: LocalizedError, Sendable {
     case httpError(statusCode: Int, message: String)
-    /// No session, or the server rejected the refresh token. The SDK has
-    /// already removed the stored session.
+    /// No session, the server rejected the refresh token, or the account is
+    /// banned or gone. The stored session has been removed.
     case sessionExpired
     /// A token refresh failed for a non-auth reason (offline, timeout, 5xx).
     /// The session is kept; the next request tries again.
     case refreshUnavailable
+    /// The user signed out or signed in to another account while this
+    /// request's token refresh was in flight, so the SDK dropped its result.
+    case sessionChanged
 
     var errorDescription: String? {
         switch self {
         case .httpError(let code, let message): "HTTP \(code): \(message)"
         case .sessionExpired: "Session expired. Please sign in again."
         case .refreshUnavailable: "Couldn't reach the server. Check your connection and try again."
+        case .sessionChanged: "You signed out or switched accounts before this finished."
         }
     }
 }
@@ -42,12 +46,14 @@ final class SupabaseClient: Sendable {
     /// Key the session is stored under in `sessionStorage`.
     static let sessionStorageKey = "com.rohanthomas.PokerStats.session"
 
-    /// Tests pass an in-memory session storage and a fake transport.
+    /// Tests pass an in-memory session storage, a fake transport, and a
+    /// logger to see Auth's refresh steps.
     init(
         url: URL = URL(string: Secrets.supabaseURL)!,
         anonKey: String = Secrets.supabaseAnonKey,
         sessionStorage: any AuthLocalStorage = KeychainSessionStorage(),
         autoRefreshToken: Bool = true,
+        authLogger: (any SupabaseLogger)? = nil,
         transport: @escaping Transport = { try await URLSession.shared.data(for: $0) }
     ) {
         let headers = ["apikey": anonKey]
@@ -56,6 +62,7 @@ final class SupabaseClient: Sendable {
             headers: headers,
             storageKey: Self.sessionStorageKey,
             localStorage: sessionStorage,
+            logger: authLogger,
             fetch: transport,
             autoRefreshToken: autoRefreshToken,
             emitLocalSessionAsInitialSession: true
@@ -96,17 +103,38 @@ final class SupabaseClient: Sendable {
     }
 
     /// The current access token, refreshed first if it has expired. Maps the
-    /// refresh outcome to the app's errors: a missing or rejected session is
-    /// `.sessionExpired`; anything else (offline, timeout, 5xx, a 401 that
-    /// isn't about the refresh token) keeps the session and is `.refreshUnavailable`.
+    /// refresh outcome to the app's errors: a missing or rejected session, or
+    /// a banned or deleted user, is `.sessionExpired`; a refresh dropped
+    /// because the session changed meanwhile is `.sessionChanged`; anything
+    /// else (offline, timeout, 5xx, a 401 that isn't about the refresh token)
+    /// keeps the session and is `.refreshUnavailable`.
     static func accessToken(_ auth: AuthClient) async throws -> String {
+        let storedAtStart = auth.currentSession
         do {
             return try await auth.session.accessToken
         } catch AuthError.sessionMissing {
             throw SupabaseError.sessionExpired
+        } catch AuthError.refreshDiscarded {
+            throw SupabaseError.sessionChanged
+        } catch let error as AuthError where isAccountRejected(error) {
+            // The SDK keeps the session for these codes. Sign out locally, but
+            // only if no one signed in since this request started.
+            if let storedAtStart, auth.currentSession?.refreshToken == storedAtStart.refreshToken {
+                try? await auth.signOut(scope: .local)
+            }
+            throw SupabaseError.sessionExpired
         } catch {
             throw SupabaseError.refreshUnavailable
         }
+    }
+
+    /// A refresh the server refused because the user is banned or gone, or
+    /// an OAuth `invalid_grant` that came without a Supabase error code.
+    private static func isAccountRejected(_ error: AuthError) -> Bool {
+        guard case .api(_, let code, let data, _) = error else { return false }
+        if code == .userBanned || code == .userNotFound { return true }
+        struct OAuthError: Decodable { let error: String? }
+        return (try? JSONDecoder().decode(OAuthError.self, from: data))?.error == "invalid_grant"
     }
 
     // MARK: - Edge Functions
