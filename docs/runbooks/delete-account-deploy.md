@@ -60,7 +60,7 @@ supabase functions list --project-ref bplrxbatvglxreulodtj
 - If `PROJECT_REF` is not the project where `delete-account` is listed, the app has been calling a project without the function. Deploy to `PROJECT_REF` anyway: that is the project the app calls.
 - The project in `PROJECT_REF` must be the one whose Auth holds your users, with the `profiles` and `backup_metadata` tables and the `backups` bucket. Check in the dashboard (`https://supabase.com/dashboard/project/<PROJECT_REF>`) before going on.
 - The `SUPABASE_URL` secret in the `testflight` and `app-store` GitHub environments must use the same ref. GitHub won't show a secret's value. If you aren't sure, set it again (Settings > Environments > each environment > `SUPABASE_URL`).
-- Once you know the answer, tell engineering. The docs that name the other ref get a "historical" note in a follow-up, and the Services ID domain in step 3 uses this ref too.
+- Once you know the answer, update `progress.md` and tell engineering (step 10, item 3). The docs that name the other ref get a "historical" note in a follow-up, and the Services ID domain in step 3 uses this ref too.
 
 Every command from here on uses `"$PROJECT_REF"`. If you open a new terminal, set it again.
 
@@ -162,8 +162,11 @@ DEPLOY_COMMIT="$(git rev-parse HEAD)"; echo "Deploying $DEPLOY_COMMIT"
 supabase functions list --project-ref "$PROJECT_REF" | tee "$HOME/delete-account-before-$(date +%Y%m%d).txt"
 mkdir -p "$HOME/delete-account-backup/supabase"
 supabase functions download delete-account --project-ref "$PROJECT_REF" --use-api --workdir "$HOME/delete-account-backup"
-ls -R "$HOME/delete-account-backup/supabase/functions"
+cp supabase/config.toml "$HOME/delete-account-backup/supabase/config.toml"
+ls -R "$HOME/delete-account-backup/supabase"
 ```
+
+The download holds only the function's files, not `config.toml`, so the `cp` line puts this checkout's `supabase/config.toml` next to them for the rollback in step 9. The listing should show `config.toml` and, under `functions/delete-account/`, at least `index.ts` and `deno.json`.
 
 If the download fails because the function doesn't exist on `PROJECT_REF`, there's nothing to roll back to; carry on.
 
@@ -283,13 +286,19 @@ cd - && git worktree remove /tmp/pokerstats-rollback
 
 Run only the deploy line for your option. Under Option A, the CLI reads `verify_jwt` from that commit's `config.toml`, so check it there first: `git show "$ROLLBACK_COMMIT":supabase/config.toml`.
 
-Option 2, put back the exact version that was deployed before step 6, from the copy saved there:
+Option 2, put back the exact version that was deployed before step 6, from the copy saved there. Run the line for your option from step 5, from the repository root:
 
 ```bash
+ls "$HOME/delete-account-backup/supabase/config.toml" "$HOME/delete-account-backup/supabase/functions/delete-account/index.ts" "$HOME/delete-account-backup/supabase/functions/delete-account/deno.json"
+# Option A:
+supabase functions deploy delete-account --project-ref "$PROJECT_REF" --use-api --workdir "$HOME/delete-account-backup"
+# Option B:
 supabase functions deploy delete-account --project-ref "$PROJECT_REF" --use-api --no-verify-jwt --workdir "$HOME/delete-account-backup"
 ```
 
-The version deployed before this runbook went out with `--no-verify-jwt` (`progress.md:38`), so this restores that setting too. The backup folder has no `config.toml`, so pass the flag you want explicitly. If this deploy fails (for example because the downloaded files don't have the layout the CLI expects), use Option 1 with the commit closest to that version.
+With `--workdir`, the CLI reads `config.toml` from `$HOME/delete-account-backup/supabase/`, not from your checkout. That is why step 6 copies it there: it sets `import_map = "./functions/delete-account/deno.json"` and `entrypoint = "./functions/delete-account/index.ts"` (`supabase/config.toml:5-8`), and under Option A it supplies `verify_jwt`. This `config.toml` hasn't changed since the version deployed before this runbook (998c7c9), so it matches how that version was built. If the `ls` line reports a missing `config.toml`, step 6's `cp` didn't run; write the one that version was built with, `git show 998c7c9:supabase/config.toml > "$HOME/delete-account-backup/supabase/config.toml"`, and run `ls` again. If it reports a missing `index.ts` or `deno.json`, the download isn't in the layout the config expects, so don't deploy from it: use Option 1 with the commit closest to that version.
+
+The version deployed before this runbook went out with `--no-verify-jwt` (`progress.md:38`). Option B restores that setting. Option A deploys the old code with the gateway check on.
 
 Rolling back to any version before PR #35 removes Apple token revocation, which App Review requires (5.1.1(v)). Treat that as a short-term fix only.
 
@@ -304,5 +313,5 @@ Rolling back to any version before PR #35 removes Apple token revocation, which 
    ```
 
    Replace the `<...>` part with your choice before running. Close #1, #6, #20 and #21 when their acceptance items are met; this runbook doesn't close them by itself.
-3. Tell engineering which project ref was right (step 2), so the docs that name the other one get marked historical.
+3. Once you know which project ref is right (step 2), update the Step 1 line in `progress.md`: name that ref and remove the "unconfirmed" note. Then tell engineering, so the docs that name the other ref (`docs/superpowers/specs/2026-04-21-delete-account-design.md`, `docs/superpowers/plans/2026-04-21-delete-account.md`, `docs/specs/1.1-sync.md`, `docs/design/1.1-sync.md`) get marked historical.
 4. **Key lifetime.** Apple allows a client-secret JWT to live up to 6 months. `delete-account` doesn't store one: it mints a fresh one from the `.p8` on every call, valid for 5 minutes (`exp = iat + 300`, PR #35). So nothing needs rotating for this function unless the `.p8` key is revoked in the Apple Developer account. If you ever revoke it, create a new key (step 3), set `APPLE_KEY_ID` and `APPLE_PRIVATE_KEY` again (step 4), and run the step 7 checks. The 6-month limit only applies to the Supabase Apple provider's "Secret Key (for OAuth)" for a web flow, if you set one (step 3).
