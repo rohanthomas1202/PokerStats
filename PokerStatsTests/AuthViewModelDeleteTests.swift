@@ -124,12 +124,12 @@ struct AuthViewModelDeleteTests {
         return (vm.deleteAccountFailure, wiped.value)
     }
 
-    @Test func appleAccountMismatch_showsChooseTheRightAppleID_noTryAgain() async {
+    @Test func appleAccountMismatch_showsUseMatchingAppleID_noTryAgain() async {
         let (failure, wiped) = await outcome(after: .appleAccountMismatch)
         #expect(wiped == 0)
         #expect(failure == .appleAccountMismatch)
         #expect(failure?.kind == .notRetryable)
-        #expect(failure?.message == "This Apple ID doesn't match your account. Delete again and choose the Apple ID you signed in with.")
+        #expect(failure?.message == "The Apple ID on this device doesn't match your account. Your account wasn't deleted. To delete it, use a device signed in with the Apple ID you used for PokerStats.")
     }
 
     @Test func needsSupport_showsContactSupport_noTryAgain() async {
@@ -140,11 +140,11 @@ struct AuthViewModelDeleteTests {
         #expect(failure?.message == "Your account couldn't be deleted. Contact support at [CONTACT_EMAIL].")
     }
 
-    @Test func temporarilyUnavailable_showsTryLater_withTryAgain() async {
+    @Test func temporarilyUnavailable_showsTryLater_okOnly() async {
         let (failure, wiped) = await outcome(after: .temporarilyUnavailable)
         #expect(wiped == 0)
         #expect(failure == .temporarilyUnavailable)
-        #expect(failure?.kind == .retryable)
+        #expect(failure?.kind == .notRetryable)
         #expect(failure?.message == "Account deletion is temporarily unavailable. Your account wasn't deleted. Try again later.")
     }
 
