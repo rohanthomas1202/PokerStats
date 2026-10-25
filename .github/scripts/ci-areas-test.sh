@@ -85,12 +85,23 @@ echo x > "$repo/PokerStats/a"$'\n'"supabase/f.ts"
 expect_commit "path with a newline" "ios=true deno=false"
 
 # With no HEAD^1 the diff fails, and the workflow's pipeline must fail too.
+# ci-changed-files.sh is checked on its own first, with git's message, so a
+# broken ci-areas.sh that also exits nonzero cannot make this pass.
 first=$(mktemp -d)
-trap 'rm -rf "$repo" "$first"' EXIT
+trap 'rm -rf "$repo" "$first" "$first.err"' EXIT
 git -C "$first" init -q
 echo x > "$first/f"
 git -C "$first" add -A
 git -C "$first" -c user.name=t -c user.email=t@t -c commit.gpgsign=false commit -qm first
+if (cd "$first" && "$dir/ci-changed-files.sh" >/dev/null 2>"$first.err"); then
+  echo "FAIL diff failure: ci-changed-files.sh exited 0"
+  failures=$((failures + 1))
+elif grep -q "HEAD^1" "$first.err"; then
+  echo "ok   diff failure: ci-changed-files.sh fails on HEAD^1"
+else
+  echo "FAIL diff failure: git error does not name HEAD^1: $(cat "$first.err")"
+  failures=$((failures + 1))
+fi
 if (cd "$first" && set -o pipefail && "$dir/ci-changed-files.sh" 2>/dev/null | "$script" >/dev/null); then
   echo "FAIL diff failure: pipeline exited 0"
   failures=$((failures + 1))

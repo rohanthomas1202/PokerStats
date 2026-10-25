@@ -87,18 +87,27 @@ app="$tmp/no-plugins/PokerStats.app"
 bundle "$app" "$n" 1.0
 out=$(run_check "$app" "$n")
 check "no PlugIns folder fails" yes "$(has "exit 1" "$out")"
-check "no PlugIns folder says why" yes "$(has "error: no .appex in $app/PlugIns" "$out")"
+check "no PlugIns folder says why" yes "$(has "error: no PokerStatsWidgets.appex in $app/PlugIns" "$out")"
 
 mkdir "$app/PlugIns"
 bundle "$app/PlugIns/NotAnExtension.bundle" "$n" 1.0
 out=$(run_check "$app" "$n")
-check "PlugIns with no .appex fails" yes "$(has "error: no .appex in $app/PlugIns" "$out")"
+check "PlugIns with no .appex fails" yes "$(has "exit 1" "$out")"
+check "PlugIns with no .appex says why" yes "$(has "error: no PokerStatsWidgets.appex in $app/PlugIns" "$out")"
+
+# Another extension does not stand in for the widget.
+bundle "$app/PlugIns/Another.appex" "$n" 1.0
+out=$(run_check "$app" "$n")
+check "other .appex without the widget fails" yes "$(has "exit 1" "$out")"
+check "other .appex without the widget says why" yes "$(has "error: no PokerStatsWidgets.appex in $app/PlugIns" "$out")"
 
 app="$tmp/no-plist/PokerStats.app"
 bundle "$app" "$n" 1.0
+bundle "$app/PlugIns/PokerStatsWidgets.appex" "$n" 1.0
 mkdir -p "$app/PlugIns/Empty.appex"
 out=$(run_check "$app" "$n")
 check ".appex without Info.plist fails" no "$(has "exit 0" "$out")"
+check ".appex without Info.plist says why" yes "$(has "Empty.appex/Info.plist" "$out")"
 
 # The Fastfile's check line, run as written with a stubbed sh, on an archive
 # path with a space and a single quote.
@@ -117,7 +126,9 @@ check "Fastfile line escapes a quoted path" yes "$(has "exit 0" "$out")"
 check "Fastfile line passes the path through" yes "$(has "PokerStatsWidgets.appex: CFBundleVersion $n" "$out")"
 
 build_app=$(awk '/^  build_app\(/ {grab=1} grab {print} grab && /^  \)$/ {exit}' "$ff")
-check "export keeps the archived build number" yes "$(has 'export_options: { manageAppVersionAndBuildNumber: false },' "$build_app")"
+# Key and value only, so a reformat of the hash does not break this.
+keeps=$(grep -Ezq "export_options:[^}]*manageAppVersionAndBuildNumber[\"']?[[:space:]]*(:|=>)[[:space:]]*false" <<<"$build_app" && echo yes || echo no)
+check "export keeps the archived build number" yes "$keeps"
 
 if (( failures > 0 )); then
   echo "$failures test(s) failed"

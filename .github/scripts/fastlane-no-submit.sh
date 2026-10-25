@@ -6,8 +6,11 @@
 # case), on the same line or the next one:
 #   Ruby       key: true, :key => true, key(true), key true, key = true,
 #              store(:key, true) (a positional symbol key),
+#              send(:key=, true) (a setter symbol),
 #              ENV.fetch("DELIVER_AUTOMATIC_RELEASE", "true") (the env var
-#              name contains the key), key: ENV.fetch("ANY_NAME", "true")
+#              name contains the key), key: ENV.fetch("ANY_NAME", "true"),
+#              each also without parentheses (ENV.fetch "X", "true") and with
+#              nested defaults (ENV.fetch("A", ENV.fetch("B", "true")))
 #   env/YAML   DELIVER_SUBMIT_FOR_REVIEW=yes, ENV["..."] = "on", KEY: "true",
 #              KEY: !!bool true, KEY: !!int 1, KEY: &anchor true
 #   CLI flag   --submit_for_review or --automatic_release with no value
@@ -16,20 +19,25 @@
 # a comment line between the key and its value (or between an ENV.fetch
 # comma and its default), and env vars set in the Xcode Cloud UI, which stay
 # a manual check.
-# Known false positive: a quoted key followed by a comma and a true word,
-# as in the comment `"submit_for_review", on any lane`. Unquoted prose such
-# as `submit_for_review, on any lane` passes.
+# Known false positives: a quoted key or a symbol key (leading colon)
+# followed by a comma and a true word, even in a comment, as in
+# `"submit_for_review", on any lane` or `# options like :submit_for_review,
+# on demand only`. Unquoted prose without a colon, such as
+# `submit_for_review, on any lane`, passes.
 set -euo pipefail
 
 key='(submit_for_review|automatic_release)'
 # A separator may be followed by a newline; a bare space may not. A comma
 # counts only right after a closing quote, as in ENV.fetch("KEY", "true"), or
-# after a symbol key, as in store(:submit_for_review, true), so prose like
-# "submit_for_review, on any lane" passes. The value may sit inside
-# ENV.fetch(...)'s default, behind YAML tags (!!bool, !!int) or an anchor (&a).
-sep="([]\"'[:blank:]]*((:|=>|=|\\()[[:space:]]*(ENV\\.fetch\\([^,)]*,[[:space:]]*)?)?|[\"'][[:blank:]]*,[[:space:]]*)"
-yaml="((!![[:alnum:]]+|&[^[:space:]]+)[[:blank:]]+){0,2}"
-setting="(${key}${sep}|:${key}[[:blank:]]*,[[:space:]]*)${yaml}[\"']?(true|yes|on|1)([^[:alnum:]_]|\$)"
+# after a symbol key, as in store(:submit_for_review, true) or the setter
+# send(:submit_for_review=, true), so prose like "submit_for_review, on any
+# lane" passes. The value may sit inside ENV.fetch's default (with or without
+# parentheses, nested too), behind YAML tags (!!bool, !!int) or an anchor
+# (&name; a shell && is not an anchor).
+fetch="(ENV\\.fetch(\\(|[[:blank:]]+)[^,)]*,[[:space:]]*)*"
+sep="([]\"'[:blank:]]*((:|=>|=|\\()[[:space:]]*)?|[\"'][[:blank:]]*,[[:space:]]*)"
+yaml="((!![[:alnum:]]+|&[[:alnum:]_-]+)[[:blank:]]+){0,2}"
+setting="(${key}${sep}|:${key}=?[[:blank:]]*,[[:space:]]*)${fetch}${yaml}[\"']?(true|yes|on|1)([^[:alnum:]_]|\$)"
 # [^[:blank:][:print:]] is a line break: grep can't take \n in a pattern.
 flag="--${key}[[:blank:]]*([^[:blank:][:print:]]|[;&|)\"'\\]|[[:blank:]]-|\$)"
 

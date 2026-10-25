@@ -123,12 +123,15 @@ type IdTokenClaims = { iss?: unknown; aud?: unknown; sub?: unknown };
 // Does not verify the signature or exp. Safe only for the id_token returned
 // directly by Apple's token endpoint over TLS; do not reuse for a
 // client-supplied token.
-function decodeJwtClaims(jwt: string): IdTokenClaims | undefined {
+function decodeUnverifiedJwtClaims(jwt: string): IdTokenClaims | undefined {
   try {
     const part = jwt.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
     const padded = part + "=".repeat((4 - part.length % 4) % 4);
     const claims = JSON.parse(atob(padded));
-    return typeof claims === "object" && claims !== null ? claims : undefined;
+    return typeof claims === "object" && claims !== null &&
+        !Array.isArray(claims)
+      ? claims
+      : undefined;
   } catch {
     return undefined;
   }
@@ -222,7 +225,7 @@ async function exchangeAndRevoke(opts: RevokeOptions): Promise<RevokeResult> {
   const tokens = await tokenRes.json();
 
   const claims = typeof tokens.id_token === "string"
-    ? decodeJwtClaims(tokens.id_token)
+    ? decodeUnverifiedJwtClaims(tokens.id_token)
     : undefined;
   if (!claims) {
     return {
