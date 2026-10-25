@@ -88,6 +88,7 @@ func sessionResponseBody(
 /// What the fake server sends back.
 enum FakeReply: Sendable {
     case status(Int, String)
+    case data(Int, Data)
     case urlError(URLError.Code)
 }
 
@@ -100,6 +101,21 @@ struct SeenRequest: Sendable {
     let body: Data?
 
     var isRefresh: Bool { path.hasSuffix("/auth/v1/token") && query == "grant_type=refresh_token" }
+
+    /// Header value, matching the name case-insensitively.
+    func header(_ name: String) -> String? {
+        headers.first { $0.key.caseInsensitiveCompare(name) == .orderedSame }?.value
+    }
+
+    /// Decoded query items by name.
+    var queryItems: [String: String] {
+        var components = URLComponents()
+        components.percentEncodedQuery = query
+        return Dictionary(
+            (components.queryItems ?? []).map { ($0.name, $0.value ?? "") },
+            uniquingKeysWith: { first, _ in first }
+        )
+    }
 
     var json: [String: Any]? {
         body.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
@@ -136,30 +152,37 @@ final class FakeServer: @unchecked Sendable {
 func testClient(
     _ storage: InMemoryAuthStorage,
     server: FakeServer = FakeServer(),
+    log: AuthLog? = nil,
     respond: @escaping @Sendable (SeenRequest, Int) async throws -> FakeReply
 ) -> SupabaseClient {
     SupabaseClient(
         url: URL(string: "https://example.supabase.co")!,
         anonKey: "anon-key",
         sessionStorage: storage,
-        autoRefreshToken: false
+        autoRefreshToken: false,
+        authLogger: log
     ) { request in
         let (seen, index) = server.record(request)
         switch try await respond(seen, index) {
         case .urlError(let code):
             throw URLError(code)
         case .status(let code, let body):
-            // Supabase Auth answers the API version the SDK asks for; with it,
-            // the error code is the string in `code`.
-            let response = HTTPURLResponse(
-                url: request.url!,
-                statusCode: code,
-                httpVersion: nil,
-                headerFields: ["X-Supabase-Api-Version": "2024-01-01"]
-            )!
-            return (Data(body.utf8), response)
+            return (Data(body.utf8), fakeResponse(request, code))
+        case .data(let code, let body):
+            return (body, fakeResponse(request, code))
         }
     }
+}
+
+/// Supabase Auth answers the API version the SDK asks for; with it, the
+/// error code is the string in `code`.
+private func fakeResponse(_ request: URLRequest, _ code: Int) -> HTTPURLResponse {
+    HTTPURLResponse(
+        url: request.url!,
+        statusCode: code,
+        httpVersion: nil,
+        headerFields: ["X-Supabase-Api-Version": "2024-01-01"]
+    )!
 }
 
 /// Holds the fake transport until the test opens it.
@@ -199,7 +222,21 @@ func waitUntil(_ what: String, _ condition: () async -> Bool) async {
     Issue.record("timed out waiting for \(what)")
 }
 
-/// Gives queued auth events time to arrive before checking nothing changed.
-func settle() async {
-    try? await Task.sleep(for: .milliseconds(200))
+/// Records supabase-swift Auth's log lines, so a test can wait for a step
+/// inside the SDK (a caller joining a refresh, a refresh finishing) instead
+/// of sleeping. The lines are the SDK's own `SessionManager` messages.
+final class AuthLog: SupabaseLogger, @unchecked Sendable {
+    static let joinedRefresh = "Refresh already in flight"
+    static let refreshEnded = "Refresh task ended"
+
+    private let lock = NSLock()
+    private var lines: [String] = []
+
+    func log(message: SupabaseLogMessage) {
+        lock.withLock { lines.append(message.message) }
+    }
+
+    func count(_ line: String) -> Int {
+        lock.withLock { lines.filter { $0 == line }.count }
+    }
 }
