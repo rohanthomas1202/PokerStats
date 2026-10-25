@@ -10,4 +10,18 @@ struct AppLinksTests {
     @Test func privacyPolicy_isTheHostedPolicy() {
         #expect(AppLinks.privacyPolicy.absoluteString == "https://rohanthomas1202.github.io/PokerStats/privacy/")
     }
+
+    /// The needs-support alert reads the one shared constant, so filling in
+    /// AppLinks.supportEmail (#76) fixes every place that shows it.
+    @MainActor
+    @Test func needsSupportAlert_usesSharedSupportEmail() {
+        #expect(AuthViewModel.DeleteAccountFailure.needsSupport.message.contains(AppLinks.supportEmail))
+    }
+
+    /// Records that the placeholder is still in place. When #76 is decided and
+    /// supportEmail is filled in, this fails as a reminder to remove the
+    /// placeholder gate in AppLinks.swift.
+    @Test func supportEmail_isStillThePlaceholderUntil76() {
+        #expect(AppLinks.supportEmail == AppLinks.supportEmailPlaceholder)
+    }
 }

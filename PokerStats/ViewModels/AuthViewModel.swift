@@ -192,7 +192,7 @@ final class AuthViewModel {
         static let needsSupport = DeleteAccountFailure(
             kind: .notRetryable,
             title: "Couldn't Delete Account",
-            message: "Your account couldn't be deleted. Contact support at [CONTACT_EMAIL]."
+            message: "Your account couldn't be deleted. Contact support at \(AppLinks.supportEmail)."
         )
         /// The server isn't ready (503), so an immediate retry would fail again.
         /// Only OK is shown, matching "Try again later."
