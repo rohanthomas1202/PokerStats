@@ -62,6 +62,8 @@ expect "NSFileModificationDate"      fail none         A.swift 'let d = attrs[NS
 expect "NSFileCreationDate"          fail none         A.swift 'let d = attrs[NSFileCreationDate]'
 expect "NSURLCreationDateKey"        fail none         A.swift 'let k = NSURLCreationDateKey'
 expect "NSURLContentModificationDateKey" fail none     A.swift 'let k = NSURLContentModificationDateKey'
+expect "NSURLContentAccessDateKey"   fail none         A.swift 'let k = NSURLContentAccessDateKey'
+expect "NSURLAttributeModificationDateKey" fail none   A.swift 'let k = NSURLAttributeModificationDateKey'
 expect "boot time"                   fail none         A.swift 'let t = ProcessInfo.processInfo.systemUptime'
 expect "mach_absolute_time"          fail none         A.swift 'let t = mach_absolute_time()'
 expect "disk space"                  fail none         A.swift 'let k: URLResourceKey = .volumeAvailableCapacityForImportantUsageKey'
@@ -73,6 +75,7 @@ expect "all declared"                pass "UserDefaults FileTimestamp SystemBoot
 
 expect "unit test folder ignored"    pass none         PokerStatsTests/A.swift 'let d = UserDefaults.standard'
 expect "UI test folder ignored"      pass none         PokerStatsUITests/A.swift 'let d = UserDefaults.standard'
+expect "nested test folder ignored"  pass none         Sub/PokerStatsTests/A.swift 'let d = UserDefaults.standard'
 expect "other *Tests folder scanned" fail none         FooTests/A.swift 'let d = UserDefaults.standard'
 expect "*Tests.swift file scanned"   fail none         FooTests.swift   'let d = UserDefaults.standard'
 expect "non-Swift file ignored"      pass none         notes.md         'UserDefaults.standard'
@@ -88,6 +91,10 @@ expect "code after nested comment"   fail none         A.swift '/* a /* b */ c *
 expect "/* in multi-line string"     fail none         A.swift $'let s = """\n  /* not a comment\n  """\nlet d = UserDefaults.standard\n// */'
 expect "multi-line string kept"      fail none         A.swift $'let s = """\n  UserDefaults\n  """'
 expect "quote in multi-line string"  fail none         A.swift $'let s = """\n  say "hi" /* \\""" \n  """\nlet d = UserDefaults.standard // */'
+expect "/* in interpolated string"  fail none         A.swift 'let s = "\(f("/*"))"; let d = UserDefaults.standard // */'
+expect "// in interpolated string"  fail none         A.swift 'let s = "\(f("//"))"; let d = UserDefaults.standard'
+expect "nested interpolation"       fail none         A.swift 'let s = "a\(g("/*\(h(")"))c"))d"; let d = UserDefaults.standard // */'
+expect "comment after interpolation" pass none        A.swift 'let s = "\(f("x"))" // UserDefaults'
 expect "lookalike names"             pass none         A.swift $'let statKey = 1\nlet status = state.stats\nfoo.stat(1)\nlet userDefaultsKey = 2'
 
 # A manifest that lists a category without a reason does not declare it.

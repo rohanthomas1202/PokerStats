@@ -5,10 +5,11 @@
 # required-reason API symbols and fails unless every category it finds is
 # declared, with at least one reason, in MANIFEST (a PrivacyInfo.xcprivacy).
 # A missing MANIFEST counts as declaring nothing. Comments (nested block
-# comments too) are ignored, and so are the PokerStatsTests/ and
-# PokerStatsUITests/ folders. String literals, """ ones included, are scanned
-# as code, so a "/*" inside one does not start a comment. Raw strings (#"..."#)
-# are not parsed specially.
+# comments too) are ignored, and so are folders named PokerStatsTests/ and
+# PokerStatsUITests/ at any depth. String literals, """ ones included, are
+# scanned as code, so a "/*" inside one does not start a comment, also inside
+# an interpolation. Raw strings (#"..."#) and interpolations in multi-line
+# strings are not parsed specially.
 #
 # The patterns are a plain grep, not a compiler: a new use of an API that is
 # not listed here passes, and a lookalike name can fail. Categories:
@@ -61,11 +62,14 @@ done
 
 # Prints FILE:LINE:TEXT for each match of PATTERN, with comments blanked out
 # (line numbers kept). String literals are kept, so "https://" is not a comment.
-# The block comment pattern recurses, because Swift block comments nest.
+# The block comment pattern recurses, because Swift block comments nest. A
+# one-line string's \(...) interpolation is matched as balanced parentheses,
+# so a string literal inside it, as in "\(f("/*"))", does not end the outer
+# string early.
 scan() {
   local pattern="$1" file
   for file in "${files[@]}"; do
-    perl -0777 -pe 's{("""(?:\\.|.)*?"""|"(?:\\.|[^"\\\n])*")|//[^\n]*|(/\*(?:[^/*]|/(?!\*)|\*(?!/)|(?2))*\*/)}{ defined $1 ? $1 : ($& =~ tr/\n//cdr) }gse' "$file" \
+    perl -0777 -pe 's{("""(?:\\.|.)*?"""|(?&str))|//[^\n]*|(?&block)(?(DEFINE)(?<str>"(?:\\\((?&interp)\)|\\.|[^"\\\n])*")(?<interp>(?:(?&str)|\((?&interp)\)|[^()"\n])*)(?<block>/\*(?:[^/*]|/(?!\*)|\*(?!/)|(?&block))*\*/))}{ defined $1 ? $1 : ($& =~ tr/\n//cdr) }gse' "$file" \
       | { grep -nE "$pattern" || true; } \
       | while IFS= read -r line; do printf '%s:%s\n' "$file" "$line"; done
   done

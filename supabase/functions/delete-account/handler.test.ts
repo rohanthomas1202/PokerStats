@@ -695,7 +695,9 @@ Deno.test("apple: id_token payload that is JSON but not an object returns 500 de
   assertNoSecrets(logs, env);
 });
 
-Deno.test("apple: id_token array payload returns 422 apple_token_invalid", async () => {
+// An array is JSON but not a claims object, so it gets the same answer as
+// any other non-object payload.
+Deno.test("apple: id_token array payload returns 500 delete_failed", async () => {
   const env = await appleEnv();
   const apple = fakeApple({ calls: [] }, {
     token: {
@@ -711,16 +713,11 @@ Deno.test("apple: id_token array payload returns 422 apple_token_invalid", async
   const { result, logs } = await captureErrors(() =>
     call(handler, post(undefined, { authorization_code: CODE }))
   );
-  assertEquals(result, {
-    status: 422,
-    body: nonRetryable(
-      "apple_token_invalid",
-      "Apple token failed verification",
-    ),
-  });
+  assertEquals(result, { status: 500, body: deleteFailed });
   assertEquals(apple.requests.length, 1); // no revoke
   assertEquals(fake.calls, []);
   assertEquals(deletedUsers, []);
+  assertEquals(logs.includes("no readable id_token"), true);
   assertNoSecrets(logs, env);
 });
 

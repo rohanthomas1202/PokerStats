@@ -78,6 +78,15 @@ expect "positional, no space"   fail fastlane/Fastfile    'opts.store(:automatic
 expect "positional, next line"  fail fastlane/Fastfile    $'opts.store(:submit_for_review,\n  true)'
 expect "positional false"       pass fastlane/Fastfile    'opts.store(:submit_for_review, false)'
 expect "fetch default next line" fail fastlane/Fastfile   $'upload_to_app_store(automatic_release: ENV.fetch("X",\n  "true"))'
+expect "ENV.fetch without parens" fail fastlane/Fastfile  'ENV.fetch "DELIVER_SUBMIT_FOR_REVIEW", "true"'
+expect "fetch other var, no parens" fail fastlane/Fastfile 'upload_to_app_store(submit_for_review: ENV.fetch "X", "true")'
+expect "nested ENV.fetch default" fail fastlane/Fastfile  'upload_to_app_store(automatic_release: ENV.fetch("A", ENV.fetch("B", "true")))'
+expect "nested fetch, env name"  fail fastlane/Fastfile   'ENV.fetch("DELIVER_AUTOMATIC_RELEASE", ENV.fetch("X", "on"))'
+expect "nested fetch false"      pass fastlane/Fastfile   'upload_to_app_store(automatic_release: ENV.fetch("A", ENV.fetch("B", "false")))'
+expect "setter symbol"           fail fastlane/Fastfile   'opts.send(:submit_for_review=, true)'
+expect "shell && is not an anchor" pass ci_scripts/release.sh '[ -n "$submit_for_review" ] && true'
+# Known false positive, documented in the script header and README.
+expect "symbol-key prose"        fail fastlane/Fastfile   '# options like :submit_for_review, on demand only'
 
 # expect_status NAME WANT_STATUS PATH...  (runs from the scratch repo)
 expect_status() {
