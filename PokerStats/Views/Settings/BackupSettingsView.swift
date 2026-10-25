@@ -36,7 +36,7 @@ struct BackupSettingsView: View {
             } header: {
                 Text("Backup")
             } footer: {
-                Text("Backups are encrypted and stored securely in the cloud. Only you can access your data.")
+                Text("Backups are sent securely and encrypted on our servers. Other accounts can't see them. They aren't end-to-end encrypted.")
             }
 
             // Success/error messages
