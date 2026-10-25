@@ -24,5 +24,7 @@ git push origin ios-sprint-N
 5. App Store path (`ios-vX.Y`): same steps with an `ios-v*` tag. CI uploads only;
    the owner submits for review in App Store Connect. The `release` lane builds
    with `APP_STORE_SUBMISSION`, so the build fails to compile while
-   `AppLinks.supportEmail` is still `[CONTACT_EMAIL]`. Fill in the address
-   (#76) first; the gate then stops firing. TestFlight builds are unaffected.
+   `AppLinks.supportEmail` is still `[CONTACT_EMAIL]`. The `#error` is keyed
+   only on that condition, so resolving #76 means filling in the address and
+   deleting the `#if APP_STORE_SUBMISSION` block in
+   `PokerStats/Utilities/AppLinks.swift`. TestFlight builds are unaffected.
