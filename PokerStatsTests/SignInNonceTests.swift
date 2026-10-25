@@ -50,20 +50,29 @@ struct SignInNonceTests {
 
     // MARK: - Request Supabase receives
 
-    @Test func supabaseClient_idTokenRequest_carriesRawNonce() throws {
-        let request = try SupabaseClient().makeSignInWithIdTokenRequest(
-            provider: .apple,
-            idToken: "id.token.jwt",
-            nonce: "raw-nonce"
-        )
-        #expect(request.httpMethod == "POST")
-        #expect(request.url?.path().hasSuffix("/auth/v1/token") == true)
-        #expect(request.url?.query() == "grant_type=id_token")
-        #expect(request.value(forHTTPHeaderField: "Content-Type") == "application/json")
-        #expect(request.value(forHTTPHeaderField: "Authorization") == nil)
-        let body = try #require(request.httpBody)
-        let json = try #require(try JSONSerialization.jsonObject(with: body) as? [String: String])
-        #expect(json == ["provider": "apple", "id_token": "id.token.jwt", "nonce": "raw-nonce"])
+    @Test func authService_idTokenRequest_carriesRawNonce() async throws {
+        let server = FakeServer()
+        let storage = InMemoryAuthStorage()
+        let client = testClient(storage, server: server) { _, _ in .status(200, sessionResponseBody()) }
+        let auth = AuthService(client: client)
+
+        try await auth.signInWithApple(identityToken: Data("id.token.jwt".utf8), rawNonce: "raw-nonce")
+
+        #expect(server.requests.count == 1)
+        let request = try #require(server.requests.first)
+        #expect(request.method == "POST")
+        #expect(request.path.hasSuffix("/auth/v1/token"))
+        #expect(request.query == "grant_type=id_token")
+        #expect(request.headers["Content-Type"] == "application/json")
+        #expect(request.headers["apikey"] == "anon-key")
+        #expect(request.headers["Authorization"] == nil)
+        let json = try #require(request.json)
+        #expect(json["provider"] as? String == "apple")
+        #expect(json["id_token"] as? String == "id.token.jwt")
+        #expect(json["nonce"] as? String == "raw-nonce")
+        #expect(auth.isAuthenticated)
+        #expect(auth.userEmail == "new@example.com")
+        #expect(storage.storedSession?.refreshToken == "new-refresh")
     }
 
     // MARK: - View model: Apple gets the hash, Supabase the raw value

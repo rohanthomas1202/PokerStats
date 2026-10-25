@@ -1,4 +1,6 @@
 import Foundation
+import PostgREST
+import Storage
 import SwiftData
 
 @MainActor
@@ -62,11 +64,10 @@ final class BackupService {
         let storagePath = "\(userId.uuidString.lowercased())/\(timestamp)_v\(BackupPayload.currentSchemaVersion).json.gz"
 
         // 6. Upload to storage
-        try await client.uploadFile(
-            bucket: "backups",
-            path: storagePath,
+        try await client.storage.from("backups").upload(
+            storagePath,
             data: compressedData,
-            contentType: "application/gzip"
+            options: FileOptions(contentType: "application/gzip", upsert: true)
         )
 
         // 7. Count hands
@@ -91,14 +92,11 @@ final class BackupService {
             handCount: handCount
         )
 
-        let responseData = try await client.request(
-            endpoint: "/rest/v1/backup_metadata",
-            method: .post,
-            body: metadataBody,
-            headers: ["Prefer": "return=representation"]
-        )
-
-        let metadataArray = try decoder.decode([BackupMetadata].self, from: responseData)
+        let metadataArray: [BackupMetadata] = try await client.database
+            .from("backup_metadata")
+            .insert(metadataBody, returning: .representation)
+            .execute()
+            .value
         guard let metadata = metadataArray.first else {
             throw BackupError.metadataCreationFailed
         }
@@ -108,13 +106,11 @@ final class BackupService {
             let lastBackupAt: Date
         }
 
-        _ = try? await client.request(
-            endpoint: "/rest/v1/profiles",
-            method: .patch,
-            body: ProfileUpdate(lastBackupAt: .now),
-            queryItems: [URLQueryItem(name: "id", value: "eq.\(userId.uuidString)")],
-            headers: ["Prefer": "return=minimal"]
-        )
+        _ = try? await client.database
+            .from("profiles")
+            .update(ProfileUpdate(lastBackupAt: .now))
+            .eq("id", value: userId.uuidString)
+            .execute()
 
         // 10. Enforce retention
         try await enforceRetention(userId: userId)
@@ -129,26 +125,20 @@ final class BackupService {
             throw BackupError.notAuthenticated
         }
 
-        let data = try await client.request(
-            endpoint: "/rest/v1/backup_metadata",
-            method: .get,
-            queryItems: [
-                URLQueryItem(name: "user_id", value: "eq.\(userId.uuidString)"),
-                URLQueryItem(name: "order", value: "created_at.desc"),
-                URLQueryItem(name: "limit", value: "10")
-            ]
-        )
-
-        return try decoder.decode([BackupMetadata].self, from: data)
+        return try await client.database
+            .from("backup_metadata")
+            .select()
+            .eq("user_id", value: userId.uuidString)
+            .order("created_at", ascending: false)
+            .limit(10)
+            .execute()
+            .value
     }
 
     // MARK: - Download Backup
 
     func downloadBackup(metadata: BackupMetadata) async throws -> BackupPayload {
-        let compressedData = try await client.downloadFile(
-            bucket: "backups",
-            path: metadata.storagePath
-        )
+        let compressedData = try await client.storage.from("backups").download(path: metadata.storagePath)
 
         let jsonData = try decompress(compressedData)
         let payload = try decoder.decode(BackupPayload.self, from: jsonData)
@@ -192,14 +182,14 @@ final class BackupService {
         let toDelete = Array(backups.dropFirst(keep))
         for backup in toDelete {
             // Delete storage object
-            try? await client.deleteFile(bucket: "backups", path: backup.storagePath)
+            _ = try? await client.storage.from("backups").remove(paths: [backup.storagePath])
 
             // Delete metadata row
-            _ = try? await client.request(
-                endpoint: "/rest/v1/backup_metadata",
-                method: .delete,
-                queryItems: [URLQueryItem(name: "id", value: "eq.\(backup.id.uuidString)")]
-            )
+            _ = try? await client.database
+                .from("backup_metadata")
+                .delete()
+                .eq("id", value: backup.id.uuidString)
+                .execute()
         }
     }
 

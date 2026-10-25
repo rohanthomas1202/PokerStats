@@ -27,9 +27,6 @@ final class AuthViewModel {
         self.performAppleSignIn = performAppleSignIn ?? { credential in
             try await authService.signInWithApple(
                 identityToken: credential.identityToken,
-                authorizationCode: credential.authorizationCode,
-                fullName: credential.fullName,
-                appleUserId: credential.appleUserId,
                 rawNonce: credential.rawNonce
             )
         }
