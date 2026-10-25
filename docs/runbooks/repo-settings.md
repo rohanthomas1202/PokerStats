@@ -4,8 +4,10 @@ This runbook is for the owner. It covers the settings in #25 (branch protection 
 
 Two ruleset files hold the agreed settings:
 
-- `.github/rulesets/main.json`: targets the default branch. Requires a pull request before merging, with 0 required approvals and no code owner review. Requires the status check `CI passed` (the `gate` job in `.github/workflows/ci.yml`, from GitHub Actions) and nothing else. Blocks force pushes and deletion. The Repository admin role is on the bypass list, mode Always.
+- `.github/rulesets/main.json`: targets the default branch. Requires a pull request before merging, with 0 required approvals and no code owner review. Dismisses stale approvals when new commits are pushed and requires approval of the most recent push (#217). Requires the status check `CI passed` (the `gate` job in `.github/workflows/ci.yml`, from GitHub Actions) and nothing else. Blocks force pushes and deletion. The Repository admin role is on the bypass list, mode Always.
 - `.github/rulesets/ios-tags.json`: targets `refs/tags/ios-*`. Restricts creations, updates and deletions. The Repository admin role is on the bypass list, mode Always.
+
+Require approval of the most recent reviewable push means the latest push to a PR must be approved by someone other than the person who pushed it, even with 0 required approvals. The bots push as `rohanthomas1202`, so their PRs need a GitHub approval from `Agent-Kate-QA` or `Agent-Jules-UX`, and Dependabot PRs need one too. With stale approvals dismissed, a push after an approval needs a new one. Logins with the admin role, including the bots, can still merge past it through the bypass.
 
 The CI job **Repo settings files** fails if `main.json` stops requiring the gate job's name, so renaming the gate breaks CI instead of blocking every merge.
 
@@ -18,6 +20,7 @@ The CI job **Repo settings files** fails if `main.json` stops requiring the gate
    - Enforcement status is Active and the target is the default branch.
    - Bypass list has Repository admin, set to Always.
    - Require a pull request before merging is on, with Required approvals 0 and Require review from Code Owners off.
+   - Dismiss stale pull request approvals when new commits are pushed is on, and Require approval of the most recent reviewable push is on.
    - Require status checks to pass lists only `CI passed`, source GitHub Actions. Require branches to be up to date is off.
    - Block force pushes and Restrict deletions are on.
 5. **Import the `ios-*` tag ruleset.** Same steps with `ios-tags.json`. Check that the target is `refs/tags/ios-*` (shown as `ios-*`), Restrict creations, Restrict updates and Restrict deletions are on, and the bypass list has Repository admin set to Always.

@@ -22,6 +22,8 @@ check() { # name jq-filter-on-$json
 # Active rules on main, from any ruleset. Readable with read access.
 if json=$(gh api "repos/$repo/rules/branches/main" 2>"$err"); then
   check "main: pull request required" 'any(.[]; .type == "pull_request")'
+  check "main: stale approvals dismissed on push" 'any(.[]; .type == "pull_request" and .parameters.dismiss_stale_reviews_on_push == true)'
+  check "main: most recent push must be approved" 'any(.[]; .type == "pull_request" and .parameters.require_last_push_approval == true)'
   check "main: required status checks are exactly \"CI passed\" from GitHub Actions" \
     '[.[] | select(.type == "required_status_checks") | .parameters.required_status_checks[] | {context, integration_id}] | unique == [{"context": "CI passed", "integration_id": 15368}]'
   check "main: force pushes blocked" 'any(.[]; .type == "non_fast_forward")'
