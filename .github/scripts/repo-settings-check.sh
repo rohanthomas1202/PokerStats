@@ -22,8 +22,8 @@ check() { # name jq-filter-on-$json
 # Active rules on main, from any ruleset. Readable with read access.
 if json=$(gh api "repos/$repo/rules/branches/main" 2>"$err"); then
   check "main: pull request required" 'any(.[]; .type == "pull_request")'
-  check "main: required status checks are exactly \"CI passed\"" \
-    '[.[] | select(.type == "required_status_checks") | .parameters.required_status_checks[].context] | unique == ["CI passed"]'
+  check "main: required status checks are exactly \"CI passed\" from GitHub Actions" \
+    '[.[] | select(.type == "required_status_checks") | .parameters.required_status_checks[] | {context, integration_id}] | unique == [{"context": "CI passed", "integration_id": 15368}]'
   check "main: force pushes blocked" 'any(.[]; .type == "non_fast_forward")'
   check "main: deletion blocked" 'any(.[]; .type == "deletion")'
 else
@@ -45,16 +45,17 @@ else
   report "can't read" "rulesets" "$(tr -d '\n' <"$err")"
 fi
 
-admin_bypass='any(.bypass_actors[]?; .actor_type == "RepositoryRole" and .actor_id == 5 and .bypass_mode == "always")'
+# The bypass list must be exactly the Repository admin role, as in the files.
+admin_only='[.bypass_actors[]? | {actor_id, actor_type, bypass_mode}] == [{"actor_id": 5, "actor_type": "RepositoryRole", "bypass_mode": "always"}]'
 bypass() { # name ruleset-selector
   json=$(jq -c "[.[] | select(.enforcement == \"active\") | $2]" <<<"$rulesets")
   if jq -e 'length > 0 and all(.[]; has("bypass_actors") | not)' >/dev/null <<<"$json"; then
     report "can't read" "$1" "bypass_actors not returned to this login"
   else
-    check "$1" "any(.[]; $admin_bypass)"
+    check "$1" "length > 0 and all(.[]; $admin_only)"
   fi
 }
-bypass "main: Repository admin role bypasses, mode Always" \
+bypass "main: only the Repository admin role bypasses, mode Always" \
   'select(.target == "branch" and any(.conditions.ref_name.include[]; . == "~DEFAULT_BRANCH" or . == "refs/heads/main" or . == "~ALL"))'
 
 tags='select(.target == "tag" and any(.conditions.ref_name.include[]; . == "refs/tags/ios-*"))'
@@ -62,7 +63,7 @@ json=$(jq -c "[.[] | select(.enforcement == \"active\") | $tags | [.rules[].type
 check "ios-* tags: creations restricted" 'any(.[]; index("creation"))'
 check "ios-* tags: updates restricted" 'any(.[]; index("update"))'
 check "ios-* tags: deletions restricted" 'any(.[]; index("deletion"))'
-bypass "ios-* tags: Repository admin role bypasses, mode Always" "$tags"
+bypass "ios-* tags: only the Repository admin role bypasses, mode Always" "$tags"
 
 # Both Dependabot endpoints need admin access to the repo.
 if [[ "$(gh api "repos/$repo" --jq '.permissions.admin')" != true ]]; then

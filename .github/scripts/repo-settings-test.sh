@@ -69,7 +69,7 @@ echo "$*" >> "$STUB_LOG"
 r=repos/o/r
 on() { [[ "$STUB_SET" == 1 ]]; }
 case "$2" in
-  "$r/rules/branches/main") if on; then jq '.rules' "$STUB_MAIN"; else echo '[]'; fi ;;
+  "$r/rules/branches/main") if on; then jq "$STUB_FILTER | .rules" "$STUB_MAIN"; else echo '[]'; fi ;;
   "$r/rulesets?per_page=100") if on; then echo '[{"id":1},{"id":2}]'; else echo '[]'; fi ;;
   "$r/rulesets/1") jq "$STUB_FILTER" "$STUB_MAIN" ;;
   "$r/rulesets/2") jq "$STUB_FILTER" "$STUB_TAGS" ;;
@@ -92,6 +92,12 @@ run_check() { # name set admin filter want-exit want-pass want-fail want-cant-re
 run_check "both rulesets and Dependabot on" 1 true  '.'                   0 11 0 0
 run_check "nothing set (today)"             0 true  '.'                   1 0 11 0
 run_check "no admin, no bypass_actors"      1 false 'del(.bypass_actors)' 1 7 0 4
+checks='(.rules[] | select(.type == "required_status_checks") | .parameters.required_status_checks[0])'
+extra='.bypass_actors += [{"actor_id": 1, "actor_type": "DeployKey", "bypass_mode": "always"}]'
+run_check "status check with no integration_id"       1 true "$checks |= del(.integration_id)" 1 10 1 0
+run_check "status check from another integration_id"  1 true "$checks.integration_id = 1"       1 10 1 0
+run_check "extra bypass actor on main"                1 true "if .name == \"main\" then $extra else . end"       1 10 1 0
+run_check "extra bypass actor on ios-* tags"          1 true "if .name == \"ios-* tags\" then $extra else . end" 1 10 1 0
 if grep -q REJECTED "$tmp/log"; then fail "check makes only GET calls: $(grep REJECTED "$tmp/log")"; else ok "check makes only GET calls"; fi
 
 if (( failures > 0 )); then
