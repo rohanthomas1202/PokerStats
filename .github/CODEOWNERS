@@ -1,0 +1,8 @@
+# GitHub uses the last matching line. Kate is on every line because the
+# engineer bots open PRs from the owner's account, and an author can't
+# approve their own PR. Reviewers need write access for this to apply (#25).
+* @Agent-Kate-QA
+/PokerStats/Views/ @Agent-Jules-UX @Agent-Kate-QA
+/PokerStatsWidgets/ @Agent-Jules-UX @Agent-Kate-QA
+/web/ @Agent-Jules-UX @Agent-Kate-QA
+/supabase/migrations/ @rohanthomas1202 @Agent-Kate-QA

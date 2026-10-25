@@ -224,6 +224,10 @@ const fakeIdToken = (sub: string, claims: Record<string, unknown> = {}) =>
     })).replace(/=+$/, "")
   }.s`;
 
+// JWT whose payload is the given JSON value (any type), for decode edge cases.
+const jwtWithPayload = (payload: unknown) =>
+  `h.${btoa(JSON.stringify(payload)).replace(/=+$/, "")}.s`;
+
 type AppleReply = { status: number; body?: unknown };
 
 // Fake Apple endpoints. Logs "apple token"/"apple revoke" into the shared
@@ -641,6 +645,80 @@ Deno.test("apple: token response without id_token returns 500 delete_failed", as
   assertEquals(apple.requests.length, 1); // no revoke
   assertEquals(fake.calls, []);
   assertEquals(deletedUsers, []);
+});
+
+Deno.test("apple: id_token that fails to decode returns 500 delete_failed", async () => {
+  const env = await appleEnv();
+  const apple = fakeApple({ calls: [] }, {
+    token: {
+      status: 200,
+      body: { refresh_token: REFRESH, id_token: "not-a-jwt" },
+    },
+  });
+  const { handler, deletedUsers, fake } = setup({
+    userFields: appleUser,
+    env,
+    fetch: apple.fetchFn,
+  });
+  const { result, logs } = await captureErrors(() =>
+    call(handler, post(undefined, { authorization_code: CODE }))
+  );
+  assertEquals(result, { status: 500, body: deleteFailed });
+  assertEquals(apple.requests.length, 1); // no revoke
+  assertEquals(fake.calls, []);
+  assertEquals(deletedUsers, []);
+  assertEquals(logs.includes("no readable id_token"), true);
+  assertNoSecrets(logs, env);
+});
+
+Deno.test("apple: id_token payload that is JSON but not an object returns 500 delete_failed", async () => {
+  const env = await appleEnv();
+  const apple = fakeApple({ calls: [] }, {
+    token: {
+      status: 200,
+      body: { refresh_token: REFRESH, id_token: jwtWithPayload(42) },
+    },
+  });
+  const { handler, deletedUsers, fake } = setup({
+    userFields: appleUser,
+    env,
+    fetch: apple.fetchFn,
+  });
+  const { result, logs } = await captureErrors(() =>
+    call(handler, post(undefined, { authorization_code: CODE }))
+  );
+  assertEquals(result, { status: 500, body: deleteFailed });
+  assertEquals(apple.requests.length, 1); // no revoke
+  assertEquals(fake.calls, []);
+  assertEquals(deletedUsers, []);
+  assertEquals(logs.includes("no readable id_token"), true);
+  assertNoSecrets(logs, env);
+});
+
+// An array is JSON but not a claims object, so it gets the same answer as
+// any other non-object payload.
+Deno.test("apple: id_token array payload returns 500 delete_failed", async () => {
+  const env = await appleEnv();
+  const apple = fakeApple({ calls: [] }, {
+    token: {
+      status: 200,
+      body: { refresh_token: REFRESH, id_token: jwtWithPayload([]) },
+    },
+  });
+  const { handler, deletedUsers, fake } = setup({
+    userFields: appleUser,
+    env,
+    fetch: apple.fetchFn,
+  });
+  const { result, logs } = await captureErrors(() =>
+    call(handler, post(undefined, { authorization_code: CODE }))
+  );
+  assertEquals(result, { status: 500, body: deleteFailed });
+  assertEquals(apple.requests.length, 1); // no revoke
+  assertEquals(fake.calls, []);
+  assertEquals(deletedUsers, []);
+  assertEquals(logs.includes("no readable id_token"), true);
+  assertNoSecrets(logs, env);
 });
 
 Deno.test("non-Apple user skips revocation even without secrets", async () => {

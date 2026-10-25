@@ -37,7 +37,7 @@ Upload screenshots to App Store Connect
 [bundle exec] fastlane ios beta
 ```
 
-Deploy to TestFlight
+Upload to TestFlight (dry_run:true builds and signs only)
 
 ### ios release
 

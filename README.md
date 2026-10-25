@@ -140,8 +140,8 @@ The table must match `Package.resolved` exactly. The rest of `PokerStats.xcodepr
 ### Tooling (not shipped in the app)
 
 - **XcodeGen**: generates the Xcode project from `project.yml`. Installed with Homebrew, unpinned.
-- **fastlane**: screenshots and App Store uploads (`fastlane/`). There is no `Gemfile`, so the version is not pinned. The `release` lane only uploads the build and metadata (`submit_for_review: false`, `automatic_release: false`). Submitting for App Review is manual and owner-only, done in App Store Connect. No CI workflow runs `fastlane release`. The `beta` and `release` lanes set the build number (`CFBundleVersion`) to the UTC time as `YYYYMMDDHHMM` from `ci_scripts/build_number.sh`, passed as `CURRENT_PROJECT_VERSION` so the app and the widget extension match, then check the archive with `ci_scripts/check_build_numbers.sh` before uploading. The `CURRENT_PROJECT_VERSION` in `project.yml` is only the local default.
-- **Supabase edge function** (`supabase/functions/delete-account`): imports `@supabase/supabase-js@2.118.0` from esm.sh and `@supabase/functions-js@2.118.0` from JSR (`deno.json`), both pinned to exact versions. Apple token revocation uses WebCrypto and `fetch` only, with no extra package. It needs the Edge Function secrets `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_CLIENT_ID` and `APPLE_PRIVATE_KEY`.
+- **fastlane**: screenshots and App Store uploads (`fastlane/`). There is no `Gemfile`, so the version is not pinned. The `release` lane only uploads the build and metadata (`submit_for_review: false`, `automatic_release: false`). Submitting for App Review is manual and owner-only, done in App Store Connect. `ios-release.yml` runs `fastlane ios beta` for `ios-sprint-*` tags and `fastlane ios release` for `ios-v*` tags (see Releases). Ordinary CI never calls either upload lane. The `beta` and `release` lanes set the build number (`CFBundleVersion`) to the UTC time as `YYYYMMDDHHMMSS` from `ci_scripts/build_number.sh`, passed as `CURRENT_PROJECT_VERSION` so the app and its extensions match, then check the archive with `ci_scripts/check_build_numbers.sh` before uploading. The export sets `manageAppVersionAndBuildNumber` to false, so the uploaded IPA keeps the checked build number. See Continuous Integration for why build numbers can't go back to a smaller counter. The `CURRENT_PROJECT_VERSION` in `project.yml` is only the local default.
+- **Supabase edge function** (`supabase/functions/delete-account`): imports `@supabase/supabase-js@2.118.0` from esm.sh and `@supabase/functions-js@2.118.0` from JSR (`deno.json`), both pinned to exact versions. Apple token revocation uses WebCrypto and `fetch` only, with no extra package. It needs the Edge Function secrets `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_CLIENT_ID` and `APPLE_PRIVATE_KEY`. The owner steps to create the Apple key, set those secrets, deploy the function and check it are in [docs/runbooks/delete-account-deploy.md](docs/runbooks/delete-account-deploy.md).
 
 ---
 
@@ -196,6 +196,23 @@ xcodebuild test \
 ```
 
 Or in Xcode: **Cmd + U**
+
+---
+
+## Repo layout
+
+One repo holds the iOS app, the backend, and the web app.
+
+- **iOS app:** `PokerStats/`, `PokerStatsWidgets/`, `PokerStatsTests/`, and `PokerStatsUITests/`. The [Project Structure](#project-structure) section below lists their files.
+- **Backend:** `supabase/` holds the database migrations, row-level security policies, and edge functions. Deploying `delete-account`: [docs/runbooks/delete-account-deploy.md](docs/runbooks/delete-account-deploy.md).
+- **Web app:** goes in `web/` when the 1.2 milestone starts. It doesn't exist yet.
+- **Shared test data:** goes in `shared/fixtures/`. The iOS and web test suites will both read it, so the two compute the same stats. It doesn't exist yet.
+- **Specs:** product specs are in `docs/specs/`.
+- **Backlog:** this repo's issues, ranked in [#17](https://github.com/rohanthomas1202/PokerStats/issues/17). The `ios`, `backend`, and `web` lane labels decide which engineer takes an item.
+- **CI:** each pull request runs only the jobs its changes touch, and one check, `CI passed`, reports the result ([#98](https://github.com/rohanthomas1202/PokerStats/issues/98)). The `Detect changes` job runs `ci-areas-test.sh` before it picks the jobs. See [Continuous Integration](#continuous-integration).
+- **Review rules:** `.github/CODEOWNERS` sets who must review each path ([#99](https://github.com/rohanthomas1202/PokerStats/issues/99)).
+- **Releases:** `.github/workflows/ios-release.yml` uploads iOS builds only from tags. An `ios-sprint-N` tag uploads a TestFlight build for testers. An `ios-vX.Y` tag uploads an App Store build, and each of those uploads waits for the owner's approval through the `app-store` environment and the `APP_STORE_UPLOAD_ENABLED` variable. CI never submits for review; the owner does that by hand. [#100](https://github.com/rohanthomas1202/PokerStats/issues/100) and [#31](https://github.com/rohanthomas1202/PokerStats/issues/31) stay open until the owner setup is done and a dry run on `main` is green (see Releases).
+- **Build and release scripts:** `fastlane/` holds the fastlane lanes, `ci_scripts/` holds the Xcode Cloud and build-number scripts, and `.github/scripts/` holds the scripts and tests the CI workflows call.
 
 ---
 
@@ -374,12 +391,57 @@ Cmd + U
 
 ### Continuous Integration
 
-GitHub Actions runs `.github/workflows/ci.yml` on every pull request to `main` and on every push to `main`. It has two jobs:
+GitHub Actions runs `.github/workflows/ci.yml` on every pull request to `main` and on every push to `main`. The **Detect changes** job passes the pull request's changed paths to `.github/scripts/ci-areas.sh`, which decides whether the iOS and Deno jobs run. A change under `.github/` runs both, and a push to `main` runs everything. The **CI passed** job fails if any other job failed or was cancelled, so it is the one check to require. The jobs that do the work:
 
-- **iOS build and test** (`macos-26` runner, Xcode 26.6): installs a pinned XcodeGen release, runs `xcodegen generate`, builds the `PokerStats` scheme for the newest available iOS 26 iPhone simulator with code signing off, then runs the `PokerStatsTests` unit tests. Unsigned builds have no App Group entitlement, so `AppGroupContainer` uses an in-memory store when it runs as a unit-test host; a normal launch without the App Group fails with a clear error instead. SwiftPM checkouts and the module cache are cached, and packages resolve only from the committed `Package.resolved`. If tests fail, the `.xcresult` bundle is uploaded as a run artifact. The fastlane screenshot UI tests are not run in CI. CI has no `.env` file and no secrets: the pre-build script writes a placeholder `Secrets.plist`. The build gets its build number from `ci_scripts/build_number.sh`, and `ci_scripts/check_build_numbers.sh` checks that the built app and its widget extension both carry it, with the same version.
+- **iOS build and test** (`macos-26` runner, Xcode 26.6): installs a pinned XcodeGen release, runs `xcodegen generate`, builds the `PokerStats` scheme for the newest available iOS 26 iPhone simulator with code signing off, then runs the `PokerStatsTests` unit tests. Unsigned builds have no App Group entitlement, so `AppGroupContainer` uses an in-memory store when it runs as a unit-test host; a normal launch without the App Group fails with a clear error instead. SwiftPM checkouts and the module cache are cached, and packages resolve only from the committed `Package.resolved`. If tests fail, the `.xcresult` bundle is uploaded as a run artifact. The fastlane screenshot UI tests are not run in CI. CI has no `.env` file and no secrets: the pre-build script writes a placeholder `Secrets.plist`. The build gets its build number from `ci_scripts/build_number.sh`, and `ci_scripts/check_build_numbers.sh` checks that the built app and every `.appex` in its `PlugIns` folder carry it, with the app's version. The check fails if `PlugIns/PokerStatsWidgets.appex` is missing. It looks only at `PlugIns/*.appex`: an ExtensionKit extension under `Extensions/`, an App Clip or a nested extension is not checked, so extend the script before adding a target like that. Build numbers are UTC timestamps (`YYYYMMDDHHMMSS`, 14 digits) from now on, and they can't go back to a smaller counter: once a timestamp build is uploaded for a version, App Store Connect rejects a later build of that version unless its number is higher. Any other upload path, such as Xcode Cloud (#66), must use `ci_scripts/build_number.sh` or start above the latest timestamp build.
+- **Release scripts** (`ubuntu-latest`, every run): `.github/scripts/ios-release-test.sh` tests the tag parsing, the TestFlight notes, `fastlane/asc_key.rb` and the upload gates in `ios-release.yml` and the Fastfile. `.github/scripts/build-numbers-test.sh` tests `ci_scripts/build_number.sh` (14 digits, two runs a second apart differ) and runs `ci_scripts/check_build_numbers.sh` on fake app bundles, with a Python stand-in for PlistBuddy. It also runs the Fastfile's check line on an archive path with a space and a single quote.
+- **Repo settings files** (`ubuntu-latest`, every run): `.github/scripts/repo-settings-test.sh` checks that `.github/rulesets/main.json` and `ios-tags.json` parse and hold the agreed settings, and that `main.json` requires exactly the gate job's name from `ci.yml`, so renaming **CI passed** fails CI. It also runs `.github/scripts/repo-settings-check.sh` against a stand-in `gh` and fails if the check makes any call other than a plain GET.
 - **Edge functions (Deno)** (`ubuntu-latest`): runs `deno check` and `deno test` in each folder under `supabase/functions/`.
+- **Privacy manifest declarations** (`ubuntu-latest`, runs when the iOS job does): `.github/scripts/privacy-api-check.sh` greps the app's and the widget extension's non-test Swift sources (the widget's list comes from `project.yml`) for required-reason APIs (UserDefaults, file timestamps, system boot time, disk space, active keyboards) and fails unless each category found is declared with a reason in that target's `PrivacyInfo.xcprivacy` (`PokerStats/PrivacyInfo.xcprivacy`, `PokerStatsWidgets/PrivacyInfo.xcprivacy`). Files under a folder named `PokerStatsTests/` or `PokerStatsUITests/`, at any depth, are skipped as tests; no other folder counts as a test folder. For the widget it reads each source's `path` and ignores excludes, so it can scan more files than the target builds, never fewer. It covers first-party Swift sources only: third-party SPM packages ship their own privacy manifests, which it does not read. It does not check that a declared reason code fits the category. It is a grep, so an API it does not list is not caught. The iOS job also prints the built app's manifest with `plutil -p`.
+- **Fastlane never submits** (`ubuntu-latest`, every run): `.github/scripts/fastlane-no-submit.sh` fails if a file under `fastlane/`, `.github/workflows/` or `ci_scripts/` sets `submit_for_review` or `automatic_release` to a literal true value (`true`, `yes`, `on` or `1`, any case) in one of these forms: a Ruby key, hash rocket, call or assignment (`key: true`, `:key => true`, `key(true)`, `key true`, `key = true`), a positional symbol key (`store(:submit_for_review, true)`), a setter symbol (`send(:submit_for_review=, true)`), an env or YAML setting (`DELIVER_SUBMIT_FOR_REVIEW=yes`, `KEY: "true"`, also behind a YAML tag such as `!!bool` or an `&anchor`), or a bare CLI flag (`--submit_for_review` with no value). After a separator (`:`, `=>`, `=`, `(` or one of those commas) the value may be on the next line. It also catches an `ENV.fetch` default when the env var name contains the key (`ENV.fetch("DELIVER_AUTOMATIC_RELEASE", "true")`) or when the key is set to the `ENV.fetch` call (`submit_for_review: ENV.fetch("ANY_NAME", "true")`), with or without parentheses and with nested `ENV.fetch` defaults. It does not detect values set in variables or options hashes, expressions such as `false || true`, an `ENV.fetch` block default, a comment line between the key and its value, or env vars set in the Xcode Cloud UI. Known false positives: a quoted key or a symbol key followed by a comma and a true word fails the check, even in a comment (`"submit_for_review", on` or `# options like :submit_for_review, on demand only`). Only those three paths are scanned, so a release script added anywhere else (the repo root, a Makefile, `.github/scripts/`) must also be added to the path list in `ci.yml`. The owner submits to App Review by hand.
 
 Dependabot (`.github/dependabot.yml`) opens weekly PRs to update the GitHub Actions versions used in the workflow and the Swift packages in `Package.resolved`. A Swift package update PR must also update the `exactVersion` in `project.yml` and the Dependencies table.
+
+### Releases
+
+`.github/workflows/ios-release.yml` is the only workflow that uploads the iOS app. Pushes to `main` and changes to `web/` or `supabase/` never upload anything.
+
+| Trigger | What happens |
+| --- | --- |
+| Push an `ios-sprint-N` tag | Uploads a build to TestFlight with "What to Test" notes. |
+| Push an `ios-vX.Y` or `ios-vX.Y.Z` tag | Uploads the App Store build. The owner submits it for review by hand in App Store Connect, every time. CI never submits. |
+| Run the workflow by hand (Actions > iOS release > Run workflow, on `main`) | Dry run: builds and signs, no upload. |
+
+A tag must point at a commit on `main` whose "CI passed" check succeeded, or the run stops before building. Only one release runs at a time. Keep release scripts in `fastlane/`, `.github/workflows/` or `ci_scripts/`: the **Fastlane never submits** check scans only those paths. A script anywhere else must be added to its path list in `ci.yml`.
+
+`ios-sprint-*` runs the `testflight` job (`fastlane ios beta`, TestFlight). `ios-v*` runs the `appstore` job (`fastlane ios release`, App Store Connect build upload only; never `submit_for_review`, and metadata and screenshots are skipped until #53 lands). Manual dispatch runs the `testflight` job with `fastlane ios beta dry_run:true` (build and sign only). The two jobs are exclusive, and the `testflight` job never calls the release lane. The "What to Test" notes for TestFlight are the commit subjects since the previous valid `ios-*` release tag (`.github/scripts/release-notes.sh`). Signing is cloud-managed: xcodebuild gets the App Store Connect API key (`-authenticationKeyPath`, `-authenticationKeyID`, `-authenticationKeyIssuerID`) with `-allowProvisioningUpdates` for both archive and export, so no certificate or profile is stored in the repo or in secrets. That covers the widget extension (Live Activity) and the App Group `group.com.rohanthomas.PokerStats`. Only dSYMs are kept as run artifacts, for 30 days; the repo is public, so the `.ipa` is not.
+
+The `appstore` job runs in the `app-store` GitHub environment and fails at its first step unless the repository variable `APP_STORE_UPLOAD_ENABLED` is `true`. Once the owner setup below is done, every App Store upload waits for the owner's approval on that environment.
+
+#### Owner setup
+
+Do these steps in this order ([#31](https://github.com/rohanthomas1202/PokerStats/issues/31)). Uploads fail until the secrets are in place, and App Store uploads also fail until `APP_STORE_UPLOAD_ENABLED` is set.
+
+1. Sign the App Store Connect agreement ([#66](https://github.com/rohanthomas1202/PokerStats/issues/66)). The App Store Connect API returns 403 until then.
+2. Create the `testflight` and `app-store` environments (Settings > Environments).
+3. Limit each environment's deployment branches and tags: `testflight` to `main` and `ios-sprint-*` tags, `app-store` to `ios-v*` tags. Do this before adding any secret. This stops a run from a non-matching ref, such as an edited copy of the workflow pushed on another branch, from reading the App Store Connect key. It does not stop a matching tag: an `ios-sprint-*` or `ios-v*` tag can point at any commit, including one on a side branch with an edited `ios-release.yml`, and that run gets the environment's secrets. Step 4 closes that gap.
+4. Add a tag ruleset (Settings > Rules > Rulesets) that targets `ios-*` tags, turns on Restrict creations, Restrict updates and Restrict deletions, and adds the Repository admin role to the bypass list with the bypass mode set to Always (tags are not pushed through pull requests, so "For pull requests only" would block every tag push). On a personal-account repository the bypass list takes roles, apps and deploy keys, not individual users, so the owner gets the bypass through the admin role. Pushing a tag is what starts an upload. Together with step 3, only the people the ruleset allows can start a tag run. That includes anything signed in as the owner's account: the bots push with the same login, so they share the admin bypass and can create, move or delete `ios-*` tags (creating a tag, or moving one with a forced update, is a push and starts a new run; deleting a tag does not start one) until [#147](https://github.com/rohanthomas1202/PokerStats/issues/147) is settled. A manual run (`workflow_dispatch`) on `main` is not covered: any collaborator with write access can start one, it runs the `testflight` job in the `testflight` environment, which reads the App Store Connect key, and it uses the workflow on `main`, so it is only as safe as branch protection on `main` ([#25](https://github.com/rohanthomas1202/PokerStats/issues/25)). This ruleset is in `.github/rulesets/ios-tags.json`, ready to import; [docs/runbooks/repo-settings.md](docs/runbooks/repo-settings.md) has the import steps, the `main` ruleset and Dependabot settings for #25, and a read-only check.
+5. On `app-store`, add the owner as a required reviewer. GitHub creates a missing environment with no protection, and branch protection does not replace that reviewer.
+6. Add the secrets below to both environments as environment secrets, not as repository secrets. A job outside those environments then gets no keys.
+7. Set the repository variable `APP_STORE_UPLOAD_ENABLED=true` (Settings > Secrets and variables > Actions > Variables).
+8. Run the workflow by hand on `main` as a dry run to confirm signing.
+
+Both jobs need these secrets on `testflight` and `app-store`:
+
+- `ASC_KEY_ID`, `ASC_ISSUER_ID`, `ASC_PRIVATE_KEY`: the App Store Connect API key. Cloud-managed signing needs the Admin role, or App Manager with access to certificates.
+- `SUPABASE_URL`, `SUPABASE_ANON_KEY`: written to `.env` so the build gets the real `Secrets.plist`. The run fails rather than ship the placeholder values.
+
+To close a sprint, Trevor - Release & Compliance tags the sprint-closing commit on `main` and records the build number, commit and notes for that sprint:
+
+```bash
+git tag ios-sprint-3 <commit-on-main>
+git push origin ios-sprint-3
+```
 
 ---
 

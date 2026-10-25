@@ -34,8 +34,9 @@ jobs:
       - name: Pick jobs
         id: areas
         run: |
+          set -o pipefail
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            areas=$(git diff --name-only HEAD^1 HEAD | .github/scripts/ci-areas.sh)
+            areas=$(.github/scripts/ci-changed-files.sh | .github/scripts/ci-areas.sh)
           else
             areas=$'ios=true\ndeno=true'
           fi
@@ -126,6 +127,19 @@ jobs:
             DerivedData/Build/Products/Debug-iphonesimulator/PokerStats.app \
             "${{ steps.build_number.outputs.number }}"
 
+      # The privacy manifests as built, for the record (#115). Fails if the
+      # app has none; the widget extension may not have one yet.
+      - name: Show privacy manifests
+        run: |
+          app=DerivedData/Build/Products/Debug-iphonesimulator/PokerStats.app
+          plutil -p "$app/PrivacyInfo.xcprivacy"
+          widget="$app/PlugIns/PokerStatsWidgets.appex/PrivacyInfo.xcprivacy"
+          if [[ -f "$widget" ]]; then
+            plutil -p "$widget"
+          else
+            echo "PokerStatsWidgets.appex has no PrivacyInfo.xcprivacy."
+          fi
+
       # Unit tests only. PokerStatsUITests is the fastlane screenshot suite.
       - name: Test
         run: >
@@ -168,11 +182,86 @@ jobs:
             echo "::endgroup::"
           done
 
+  # The owner submits to App Review by hand. Always runs; it takes seconds.
+  fastlane-guard:
+    name: Fastlane never submits
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Test the guard
+        run: .github/scripts/fastlane-no-submit-test.sh
+
+      # Only these paths are scanned. A new release script anywhere else (the
+      # repo root, a Makefile, .github/scripts/) must be added here and to
+      # dirs in fastlane-no-submit-test.sh. .github/scripts/ stays out because
+      # the guard's test file holds true values.
+      - name: Check fastlane, workflows and ci_scripts
+        run: .github/scripts/fastlane-no-submit.sh fastlane .github/workflows ci_scripts
+
+  # Tag parsing and TestFlight notes for ios-release.yml, and the build
+  # number scripts in ci_scripts/. Always runs.
+  release-scripts:
+    name: Release scripts
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Test release scripts
+        run: .github/scripts/ios-release-test.sh
+
+      - name: Test build number scripts
+        run: .github/scripts/build-numbers-test.sh
+
+  # The ruleset files in .github/rulesets/ and repo-settings-check.sh (#200).
+  # Fails if main.json stops requiring the gate job's name. Always runs.
+  repo-settings:
+    name: Repo settings files
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Test rulesets and settings check
+        run: .github/scripts/repo-settings-test.sh
+
+  # Every required-reason API category the app or widget extension uses must
+  # be declared in that target's PrivacyInfo.xcprivacy (#115). Runs when the
+  # iOS job does.
+  privacy-manifest:
+    name: Privacy manifest declarations
+    needs: changes
+    if: needs.changes.outputs.ios == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Test the check
+        run: .github/scripts/privacy-api-check-test.sh
+
+      - name: Check the app
+        run: .github/scripts/privacy-api-check.sh PokerStats/PrivacyInfo.xcprivacy PokerStats
+
+      # The extension builds PokerStatsWidgets/ plus the shared PokerStats/
+      # files listed in project.yml, and needs its own manifest for them.
+      # Only each entry's path is read. Excludes and includes are ignored, so
+      # this scans more files than the target builds, never fewer. The yq on
+      # ubuntu-latest must be mikefarah yq v4 for this expression.
+      - name: Check the widget extension
+        run: |
+          version=$(yq --version)
+          [[ "$version" == *mikefarah/yq*" version v4."* ]] || { echo "Need mikefarah yq v4, found: $version" >&2; exit 1; }
+          mapfile -t sources < <(yq '.targets.PokerStatsWidgets.sources[] | (.path // .)' project.yml)
+          .github/scripts/privacy-api-check.sh PokerStatsWidgets/PrivacyInfo.xcprivacy "${sources[@]}"
+
   # The one check branch protection requires. Always runs; passes when every
   # job passed or was skipped, fails if any failed or was cancelled.
   gate:
     name: CI passed
-    needs: [changes, ios, deno]
+    needs: [changes, ios, deno, fastlane-guard, release-scripts, repo-settings, privacy-manifest]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5

@@ -1,7 +1,7 @@
 # Auth & Cloud Backup — Setup Progress
 
 ## Step 1: Create Supabase Project — DONE
-- Project created at https://xukhlkjjrrwmorxtlizh.supabase.co
+- Project created at https://xukhlkjjrrwmorxtlizh.supabase.co (unconfirmed: this may not be the project the app's `.env` uses; see [Which Supabase project](docs/runbooks/delete-account-deploy.md#2-which-supabase-project) in the delete-account runbook)
 - Project URL and anon key added to `.env`
 
 ## Step 2: Run SQL Migrations — DONE
@@ -36,6 +36,7 @@
 - [x] `supabase functions new delete-account`
 - [x] Add function code: validates JWT, deletes storage files, backup_metadata, profile, then auth user
 - [x] `supabase functions deploy delete-account --no-verify-jwt`
+- [ ] Redeploy the hardened function with Apple token revocation (#6, #20): follow [docs/runbooks/delete-account-deploy.md](docs/runbooks/delete-account-deploy.md)
 
 ## Step 7: End-to-End Testing — TODO
 - [ ] Sign in with Apple → verify Keychain + Supabase dashboard user
