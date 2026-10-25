@@ -49,6 +49,8 @@ expect "main: active" '.enforcement == "active"' "$main"
 expect "main: rules" '[.rules[].type] | sort == ["deletion", "non_fast_forward", "pull_request", "required_status_checks"]' "$main"
 expect "main: 0 approvals, no code owner review" \
   '.rules[] | select(.type == "pull_request") | .parameters | .required_approving_review_count == 0 and .require_code_owner_review == false' "$main"
+expect "main: stale approvals dismissed, most recent push approved" \
+  '.rules[] | select(.type == "pull_request") | .parameters | .dismiss_stale_reviews_on_push == true and .require_last_push_approval == true' "$main"
 expect "main: check comes from GitHub Actions" \
   '[.rules[] | select(.type == "required_status_checks") | .parameters.required_status_checks[].integration_id] == [15368]' "$main"
 expect "main: admin role bypass, Always" "$admin" "$main"
@@ -89,15 +91,20 @@ run_check() { # name set admin filter want-exit want-pass want-fail want-cant-re
   got="$code $(grep -c '^pass ' <<<"$out" || true) $(grep -c '^FAIL ' <<<"$out" || true) $(grep -c "^can't read" <<<"$out" || true)"
   if [[ "$got" == "$5 $6 $7 $8" ]]; then ok "check: $1"; else fail "check: $1: want '$5 $6 $7 $8' (exit pass fail can't-read), got '$got'"; echo "$out"; fi
 }
-run_check "both rulesets and Dependabot on" 1 true  '.'                   0 11 0 0
-run_check "nothing set (today)"             0 true  '.'                   1 0 11 0
-run_check "no admin, no bypass_actors"      1 false 'del(.bypass_actors)' 1 7 0 4
+run_check "both rulesets and Dependabot on" 1 true  '.'                   0 13 0 0
+run_check "nothing set (today)"             0 true  '.'                   1 0 13 0
+run_check "no admin, no bypass_actors"      1 false 'del(.bypass_actors)' 1 9 0 4
 checks='(.rules[] | select(.type == "required_status_checks") | .parameters.required_status_checks[0])'
 extra='.bypass_actors += [{"actor_id": 1, "actor_type": "DeployKey", "bypass_mode": "always"}]'
-run_check "status check with no integration_id"       1 true "$checks |= del(.integration_id)" 1 10 1 0
-run_check "status check from another integration_id"  1 true "$checks.integration_id = 1"       1 10 1 0
-run_check "extra bypass actor on main"                1 true "if .name == \"main\" then $extra else . end"       1 10 1 0
-run_check "extra bypass actor on ios-* tags"          1 true "if .name == \"ios-* tags\" then $extra else . end" 1 10 1 0
+run_check "status check with no integration_id"       1 true "$checks |= del(.integration_id)" 1 12 1 0
+run_check "status check from another integration_id"  1 true "$checks.integration_id = 1"       1 12 1 0
+run_check "extra bypass actor on main"                1 true "if .name == \"main\" then $extra else . end"       1 12 1 0
+run_check "extra bypass actor on ios-* tags"          1 true "if .name == \"ios-* tags\" then $extra else . end" 1 12 1 0
+pr='(.rules[] | select(.type == "pull_request") | .parameters)'
+run_check "stale approvals not dismissed"             1 true "$pr.dismiss_stale_reviews_on_push = false" 1 12 1 0
+run_check "stale approvals setting missing"           1 true "$pr |= del(.dismiss_stale_reviews_on_push)" 1 12 1 0
+run_check "most recent push approval off"             1 true "$pr.require_last_push_approval = false"   1 12 1 0
+run_check "most recent push approval missing"         1 true "$pr |= del(.require_last_push_approval)"  1 12 1 0
 if grep -q REJECTED "$tmp/log"; then fail "check makes only GET calls: $(grep REJECTED "$tmp/log")"; else ok "check makes only GET calls"; fi
 
 if (( failures > 0 )); then
