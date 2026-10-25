@@ -355,6 +355,7 @@ Changed files:
   - `undo_handIDNotMatchingRecord_isNoOp`: an `UndoQuickFoldIntent` whose `handID` differs from the stored undo record deletes nothing and leaves the button where it is.
   - `undo_handNotLatest_isNoOp`: `handID` matches the record but a later hand exists in the session (for example one that arrived by sync). Nothing is deleted, the button doesn't move, and the record is cleared.
   - `undo_sessionIDNotMatchingRecord_isNoOp` and `undo_malformedHandID_isNoOp`: no change.
+  - `undo_malformedSessionID_isNoOp`: a `sessionID` that isn't a valid UUID deletes no hand, leaves the button where it is, and keeps the undo record (Undo step 1).
   - `undo_afterSeatsChanged_restoresExactSeat`
   - `deleteLatestHand_restoresButton`
   - `deleteOlderHand_doesNotMoveButton`
