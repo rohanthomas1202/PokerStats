@@ -22,4 +22,7 @@ git push origin ios-sprint-N
 4. Watch Actions > iOS release. Record the build number, commit and "What to Test"
    notes in the table above after the run finishes.
 5. App Store path (`ios-vX.Y`): same steps with an `ios-v*` tag. CI uploads only;
-   the owner submits for review in App Store Connect.
+   the owner submits for review in App Store Connect. The `release` lane builds
+   with `APP_STORE_SUBMISSION`, so the build fails to compile while
+   `AppLinks.supportEmail` is still `[CONTACT_EMAIL]`. Fill in the address
+   (#76) first; the gate then stops firing. TestFlight builds are unaffected.

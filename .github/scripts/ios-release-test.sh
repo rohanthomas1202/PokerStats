@@ -140,7 +140,8 @@ check "release lane has no force" no "$(has 'force:' "$release_lane")"
 check "release lane skips metadata (#53)" yes "$(has 'skip_metadata: true' "$release_lane")"
 check "release lane never submits" yes "$(has 'submit_for_review: false' "$release_lane")"
 check "build_app export method" yes "$(has 'export_method: "app-store-connect"' "$build_app")"
-check "build_app xcargs get signing flags" yes "$(has '^    xcargs: ".*#\{signing\}"' "$build_app")"
+check "build_app xcargs get signing flags" yes "$(has '^  xcargs = "CURRENT_PROJECT_VERSION=#\{build_number\} #\{signing\}"$' "$(cat "$ff")")"
+check "build_app uses those xcargs" yes "$(has '^    xcargs: xcargs,$' "$build_app")"
 check "build_app export_xcargs get signing flags" yes "$(has '^    export_xcargs: signing' "$build_app")"
 check "signing flags come from AscKey" yes "$(has 'signing = AscKey.xcodebuild_flags\(key\)' "$(cat "$ff")")"
 
@@ -155,6 +156,55 @@ for lane in beta release; do
   check "$lane lane has no bare xcodegen" no "$(has 'xcodegen generate' "$body")"
 done
 check "ci_post_clone.sh uses generate_project.sh" yes "$(has 'ci_scripts/generate_project\.sh' "$(cat "$root/ci_scripts/ci_post_clone.sh")")"
+
+# App Store placeholder gate (#225): only the release lane's archive gets
+# APP_STORE_SUBMISSION. Runs the real lanes with stand-ins for fastlane's
+# actions and reads the xcargs each one hands build_app, split the way the
+# shell that runs xcodebuild splits them.
+cat > "$tmp/lanes.rb" <<'RB'
+require "shellwords"
+module SharedValues; XCODEBUILD_ARCHIVE = :archive; end
+module UI
+  def self.message(*); end
+  def self.success(*); end
+  def self.user_error!(m); raise(m); end
+end
+LANES = {}
+CALLS = []
+def default_platform(*); end
+def platform(*); yield; end
+def desc(*); end
+def lane(name, &block); LANES[name] = block; end
+def sh(cmd); cmd.include?("build_number.sh") ? "20260101000000\n" : ""; end
+def build_app(**opts); CALLS << opts; end
+def lane_context; { SharedValues::XCODEBUILD_ARCHIVE => "/tmp/x.xcarchive" }; end
+ff = ARGV.fetch(0)
+eval(File.read(ff), binding, ff)
+def ensure_asc_api_key!; { id: "KID", issuer: "ISS", path: "/k/key.p8" }; end
+%i[beta release].each do |name|
+  CALLS.clear
+  LANES.fetch(name).call(dry_run: true)
+  conds = CALLS.flat_map { |c| Shellwords.split(c[:xcargs]) }
+               .select { |a| a.start_with?("SWIFT_ACTIVE_COMPILATION_CONDITIONS=") }
+  puts "#{name}=#{conds.empty? ? "none" : conds.join("|")}"
+end
+RB
+lane_conditions() {
+  local copy="$tmp/fl-$RANDOM/fastlane"
+  mkdir -p "$copy"
+  cp "$root/fastlane/asc_key.rb" "$copy/"
+  cp "$1" "$copy/Fastfile"
+  ruby "$tmp/lanes.rb" "$copy/Fastfile" 2>&1 || echo "error"
+}
+want_conditions=$'beta=none\nrelease=SWIFT_ACTIVE_COMPILATION_CONDITIONS=$(inherited) APP_STORE_SUBMISSION'
+check "gate: release sets APP_STORE_SUBMISSION with \$(inherited), beta does not" "$want_conditions" "$(lane_conditions "$ff")"
+sed 's/build_with_new_build_number(key, app_store_submission: true)/build_with_new_build_number(key)/' "$ff" > "$tmp/no-release.rb"
+check "gate mutation: release without it is caught" no "$( [[ "$(lane_conditions "$tmp/no-release.rb")" == "$want_conditions" ]] && echo yes || echo no)"
+awk '/^  lane :beta/ {b=1} b && /build_with_new_build_number\(key\)/ {sub(/\(key\)/, "(key, app_store_submission: true)"); b=0} {print}' "$ff" > "$tmp/beta-too.rb"
+check "gate mutation: beta with it is caught" no "$( [[ "$(lane_conditions "$tmp/beta-too.rb")" == "$want_conditions" ]] && echo yes || echo no)"
+for f in "$root/project.yml" "$root"/.github/workflows/*.yml "$root"/ci_scripts/*; do
+  check "gate: ${f#"$root"/} does not set APP_STORE_SUBMISSION" no "$(has 'APP_STORE_SUBMISSION' "$(cat "$f")")"
+done
 
 # generate_project.sh in a throwaway repo, with a stand-in xcodegen that
 # deletes Package.resolved the way the real one can.

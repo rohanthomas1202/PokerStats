@@ -10,6 +10,14 @@ SCREENSHOT_DEVICES = [
 
 BUNDLE_ID = "com.rohanthomas.PokerStats"
 
+# App Store builds only (the release lane, #225). With this condition set,
+# PokerStats/Utilities/AppLinks.swift fails to compile while supportEmail is
+# still the [CONTACT_EMAIL] placeholder; it stops firing once #76 fills in the
+# address. $(inherited) keeps the project's own conditions. The single quotes
+# keep it one argument when fastlane passes xcargs to xcodebuild through a
+# shell. TestFlight (beta), CI and Debug builds never set it.
+APP_STORE_SUBMISSION_XCARG = "SWIFT_ACTIVE_COMPILATION_CONDITIONS='$(inherited) APP_STORE_SUBMISSION'"
+
 # Build number: ci_scripts/build_number.sh (UTC YYYYMMDDHHMMSS), passed as the
 # CURRENT_PROJECT_VERSION build setting so the app and its extensions get the
 # same value. project.yml's CURRENT_PROJECT_VERSION is only the local
@@ -18,7 +26,7 @@ BUNDLE_ID = "com.rohanthomas.PokerStats"
 # build of a version must be higher than its last upload, so any other upload
 # path (Xcode Cloud, #66) must use the same script or start above the latest
 # timestamp build.
-def build_with_new_build_number(key)
+def build_with_new_build_number(key, app_store_submission: false)
   build_number = sh("cd .. && ci_scripts/build_number.sh").strip
   UI.message("Build number: #{build_number}")
   # Cloud-managed signing: xcodebuild gets the App Store Connect API key for
@@ -33,13 +41,15 @@ def build_with_new_build_number(key)
   # Package.resolved and fail if it is missing or out of date. The lanes check
   # that file against the commit before this runs (generate_project.sh).
   signing = AscKey.xcodebuild_flags(key)
+  xcargs = "CURRENT_PROJECT_VERSION=#{build_number} #{signing}"
+  xcargs += " #{APP_STORE_SUBMISSION_XCARG}" if app_store_submission
   FileUtils.mkdir_p(File.expand_path("../build", __dir__))
   build_app(
     scheme: "PokerStats",
     export_method: "app-store-connect",
     export_options: { manageAppVersionAndBuildNumber: false },
     output_directory: File.expand_path("../build", __dir__),
-    xcargs: "CURRENT_PROJECT_VERSION=#{build_number} #{signing}",
+    xcargs: xcargs,
     export_xcargs: signing,
     disable_package_automatic_updates: true
   )
@@ -183,7 +193,7 @@ platform :ios do
   lane :release do |options|
     key = ensure_asc_api_key!
     sh("cd .. && ci_scripts/generate_project.sh")
-    build_with_new_build_number(key)
+    build_with_new_build_number(key, app_store_submission: true)
     if dry_run?(options)
       UI.success("dry_run: built and signed; skipped upload_to_app_store")
     else
