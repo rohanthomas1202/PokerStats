@@ -48,7 +48,7 @@ struct SettingsView: View {
                         Spacer()
                         Text("Sign in to enable")
                             .font(.caption)
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(.secondary)
                     }
                 }
             }

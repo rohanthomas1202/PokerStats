@@ -24,6 +24,11 @@ struct SignInView: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
+
+                    Text("Optional. Your stats stay on this iPhone either way.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
                 }
 
                 Spacer()
@@ -51,9 +56,9 @@ struct SignInView: View {
 
                 // Loading overlay
                 if authViewModel.isProcessing {
-                    ProgressView()
+                    ProgressView("Signing in…")
                         .tint(.white)
-                        .accessibilityLabel("Signing in…")
+                        .foregroundStyle(.white)
                 }
 
                 Spacer()
