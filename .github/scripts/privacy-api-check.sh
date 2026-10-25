@@ -65,11 +65,13 @@ done
 # The block comment pattern recurses, because Swift block comments nest. A
 # one-line string's \(...) interpolation is matched as balanced parentheses,
 # so a string literal inside it, as in "\(f("/*"))", does not end the outer
-# string early.
+# string early. A one-line string that does not close, or has an unbalanced
+# \(, is kept as code to the end of its line. With the possessive repeats this
+# keeps the scan linear in the line length (#189).
 scan() {
   local pattern="$1" file
   for file in "${files[@]}"; do
-    perl -0777 -pe 's{("""(?:\\.|.)*?"""|(?&str))|//[^\n]*|(?&block)(?(DEFINE)(?<str>"(?:\\\((?&interp)\)|\\.|[^"\\\n])*")(?<interp>(?:(?&str)|\((?&interp)\)|[^()"\n])*)(?<block>/\*(?:[^/*]|/(?!\*)|\*(?!/)|(?&block))*\*/))}{ defined $1 ? $1 : ($& =~ tr/\n//cdr) }gse' "$file" \
+    perl -0777 -pe 's{("""(?:\\.|.)*?"""|(?&str)|"[^\n]*)|//[^\n]*|(?&block)(?(DEFINE)(?<str>"(?:\\\((?&interp)\)|\\[^(]|[^"\\\n])*+")(?<interp>(?:(?&str)|\((?&interp)\)|[^()"\n])*+)(?<block>/\*(?:[^/*]|/(?!\*)|\*(?!/)|(?&block))*\*/))}{ defined $1 ? $1 : ($& =~ tr/\n//cdr) }gse' "$file" \
       | { grep -nE "$pattern" || true; } \
       | while IFS= read -r line; do printf '%s:%s\n' "$file" "$line"; done
   done
