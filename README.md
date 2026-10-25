@@ -141,7 +141,7 @@ The table must match `Package.resolved` exactly. The rest of `PokerStats.xcodepr
 
 - **XcodeGen**: generates the Xcode project from `project.yml`. Installed with Homebrew, unpinned.
 - **fastlane**: screenshots and App Store uploads (`fastlane/`). There is no `Gemfile`, so the version is not pinned. The `release` lane only uploads the build and metadata (`submit_for_review: false`, `automatic_release: false`). Submitting for App Review is manual and owner-only, done in App Store Connect. `ios-release.yml` runs `fastlane ios beta` for `ios-sprint-*` tags and `fastlane ios release` for `ios-v*` tags (see Releases). Ordinary CI never calls either upload lane. The `beta` and `release` lanes set the build number (`CFBundleVersion`) to the UTC time as `YYYYMMDDHHMMSS` from `ci_scripts/build_number.sh`, passed as `CURRENT_PROJECT_VERSION` so the app and its extensions match, then check the archive with `ci_scripts/check_build_numbers.sh` before uploading. The export sets `manageAppVersionAndBuildNumber` to false, so the uploaded IPA keeps the checked build number. See Continuous Integration for why build numbers can't go back to a smaller counter. The `CURRENT_PROJECT_VERSION` in `project.yml` is only the local default.
-- **Supabase edge function** (`supabase/functions/delete-account`): imports `@supabase/supabase-js@2.118.0` from esm.sh and `@supabase/functions-js@2.118.0` from JSR (`deno.json`), both pinned to exact versions. Apple token revocation uses WebCrypto and `fetch` only, with no extra package. It needs the Edge Function secrets `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_CLIENT_ID` and `APPLE_PRIVATE_KEY`.
+- **Supabase edge function** (`supabase/functions/delete-account`): imports `@supabase/supabase-js@2.118.0` from esm.sh and `@supabase/functions-js@2.118.0` from JSR (`deno.json`), both pinned to exact versions. Apple token revocation uses WebCrypto and `fetch` only, with no extra package. It needs the Edge Function secrets `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_CLIENT_ID` and `APPLE_PRIVATE_KEY`. The owner steps to create the Apple key, set those secrets, deploy the function and check it are in [docs/runbooks/delete-account-deploy.md](docs/runbooks/delete-account-deploy.md).
 
 ---
 
@@ -204,7 +204,7 @@ Or in Xcode: **Cmd + U**
 One repo holds the iOS app, the backend, and the web app.
 
 - **iOS app:** `PokerStats/`, `PokerStatsWidgets/`, `PokerStatsTests/`, and `PokerStatsUITests/`. The [Project Structure](#project-structure) section below lists their files.
-- **Backend:** `supabase/` holds the database migrations, row-level security policies, and edge functions.
+- **Backend:** `supabase/` holds the database migrations, row-level security policies, and edge functions. Deploying `delete-account`: [docs/runbooks/delete-account-deploy.md](docs/runbooks/delete-account-deploy.md).
 - **Web app:** goes in `web/` when the 1.2 milestone starts. It doesn't exist yet.
 - **Shared test data:** goes in `shared/fixtures/`. The iOS and web test suites will both read it, so the two compute the same stats. It doesn't exist yet.
 - **Specs:** product specs are in `docs/specs/`.

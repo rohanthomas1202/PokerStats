@@ -36,6 +36,7 @@
 - [x] `supabase functions new delete-account`
 - [x] Add function code: validates JWT, deletes storage files, backup_metadata, profile, then auth user
 - [x] `supabase functions deploy delete-account --no-verify-jwt`
+- [ ] Redeploy the hardened function with Apple token revocation (#6, #20): follow [docs/runbooks/delete-account-deploy.md](docs/runbooks/delete-account-deploy.md)
 
 ## Step 7: End-to-End Testing — TODO
 - [ ] Sign in with Apple → verify Keychain + Supabase dashboard user
