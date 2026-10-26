@@ -12,7 +12,7 @@ The push and pull messages from `docs/design/1.1-sync.md` (sections 2, 4.1, 4.3,
 | `examples/<schema>/valid/`, `examples/<schema>/invalid/` | Synthetic payloads. Each invalid file is named for the rule it breaks, and `examples/expected-errors.json` gives the error it must fail with. |
 | `contract.test.ts` | Validates every example, and checks `columns.json` against the schema and against sections 2 and 9.4 of the design doc. |
 
-Run: `cd shared/fixtures/sync && deno test --frozen --allow-read=.,../../../docs`. CI runs it in the "Sync contract" job when `shared/`, `supabase/` or `.github/` changes. The validator is Ajv 8.20.0, pinned in `deno.json` and `deno.lock`.
+Run: `cd shared/fixtures/sync && deno test --frozen --allow-read=.,../../../docs`. The test reads `docs/design/1.1-sync.md` and locates its sections by exact headings and markers (`### 2.1` to `### 2.7`, `Primary key \`user_id\`. Columns`, `| Swift | Column |`, `- Dates:`), so those headings are part of the contract: renaming one fails the test with "design doc section not found" until the test is updated in the same PR. CI runs it in the "Sync contract" job when `shared/`, `supabase/` or `.github/` changes. The validator is Ajv 8.20.0, pinned in `deno.json` and `deno.lock`.
 
 ## Unknown properties
 
@@ -24,7 +24,12 @@ Adding a field to every change (for example a device edit time, if the owner pic
 
 ## Limits
 
-In the schema: at most 500 changes per push; `notes` 10,000 characters; `location`, `stakes`, `default_stakes` 200; `currency` 8; mental levels 1 to 5; money within `numeric(14,2)`; `seq` at least 1.
+In the schema: at most 500 changes per push; `notes` 10,000 characters; `location`, `stakes`, `default_stakes` 200; `currency` 8; mental levels 1 to 5; money within the `numeric(14,2)` range; `seq` at least 1; timestamps with a valid month, day of month, hour, minute, second and offset.
+
+Not in the schema:
+
+- **Cents precision.** Money is `numeric(14,2)` (2.4), but JSON carries it as a binary double, and `multipleOf: 0.01` is unreliable on doubles (0.07 or values near the range limit fail the division check). The client rounds to cents before enqueueing (9.4), and Postgres rounds anything finer silently, so a client bug sending 1.005 is stored as 1.01 rather than failing here.
+- **February 29 in a non-leap year.** The timestamp pattern allows 29 days in February for every year; Postgres rejects the impossible ones (`rejected` with a SQLSTATE).
 
 Server-enforced only (the schema can't express them):
 

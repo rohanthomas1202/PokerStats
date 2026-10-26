@@ -79,6 +79,10 @@
     "instancePath": "/changes/0/fields",
     "keyword": "unevaluatedProperties"
   },
+  "push-request/invalid/fields-user-id.json": {
+    "instancePath": "/changes/0/fields",
+    "keyword": "unevaluatedProperties"
+  },
   "push-request/invalid/hand-notes-over-10000.json": {
     "instancePath": "/changes/0/fields/notes",
     "keyword": "maxLength"
@@ -102,6 +106,18 @@
   "push-request/invalid/op-unknown.json": {
     "instancePath": "/changes/0/op",
     "keyword": "enum"
+  },
+  "push-request/invalid/played-at-april-31.json": {
+    "instancePath": "/changes/0/fields/played_at",
+    "keyword": "pattern"
+  },
+  "push-request/invalid/played-at-hour-25.json": {
+    "instancePath": "/changes/0/fields/played_at",
+    "keyword": "pattern"
+  },
+  "push-request/invalid/played-at-month-13.json": {
+    "instancePath": "/changes/0/fields/played_at",
+    "keyword": "pattern"
   },
   "push-request/invalid/played-at-no-offset.json": {
     "instancePath": "/changes/0/fields/played_at",
