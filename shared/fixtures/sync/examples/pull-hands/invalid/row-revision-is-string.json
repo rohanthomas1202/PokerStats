@@ -1,0 +1,21 @@
+[
+  {
+    "id": "1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f",
+    "session_id": "A3E1F7C2-5B84-4D6A-9C1E-2F7B0D9E8A41",
+    "hand_number": 17,
+    "played_at": "2026-10-18T02:11:09.250Z",
+    "preflop_action": "raise",
+    "faced_3bet": false,
+    "three_bet_response": null,
+    "postflop_result": "wonBeforeShowdown",
+    "did_cbet": true,
+    "notes": "",
+    "position": "BTN",
+    "user_id": "5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a",
+    "revision": "1043",
+    "server_updated_at": "2026-10-18T02:11:10.481223+00:00",
+    "deleted_at": null,
+    "purged_at": null,
+    "updated_by_device": "6f1c2a9e-3b7d-4c51-9e2a-0d4b8f7a1c3e"
+  }
+]

@@ -1,0 +1,10 @@
+[
+  {
+    "user_id": "5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a",
+    "revision": 1043,
+    "wipe_epoch": 0,
+    "wiped_at": null,
+    "first_sync_completed_at": "2026-10-18T02:20:00+00:00",
+    "backups_retire_at": "2027-01-16T02:20:00+00:00"
+  }
+]

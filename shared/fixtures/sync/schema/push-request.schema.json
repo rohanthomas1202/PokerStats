@@ -1,0 +1,197 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/rohanthomas1202/PokerStats/shared/fixtures/sync/schema/push-request.schema.json",
+  "title": "sync_push request",
+  "description": "Body of rpc/sync_push (docs/design/1.1-sync.md 4.1). Closed: unknown keys are invalid.",
+  "type": "object",
+  "required": [
+    "protocol",
+    "device_id",
+    "app_version",
+    "epoch",
+    "changes",
+    "first_sync_done"
+  ],
+  "properties": {
+    "protocol": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "device_id": {
+      "$ref": "common.schema.json#/$defs/uuid"
+    },
+    "app_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "epoch": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "changes": {
+      "type": "array",
+      "maxItems": 500,
+      "items": {
+        "$ref": "#/$defs/change"
+      }
+    },
+    "first_sync_done": {
+      "type": "boolean"
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "change": {
+      "description": "One queued change. Defined once; a new per-change field is one line under properties.",
+      "type": "object",
+      "required": [
+        "seq",
+        "op",
+        "table",
+        "id"
+      ],
+      "properties": {
+        "seq": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "op": {
+          "enum": [
+            "upsert",
+            "delete",
+            "restore"
+          ]
+        },
+        "table": {
+          "enum": [
+            "poker_sessions",
+            "hands",
+            "user_settings"
+          ]
+        },
+        "id": {
+          "$ref": "common.schema.json#/$defs/uuid"
+        },
+        "fields": {
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "description": "upsert carries fields; delete and restore never do.",
+          "if": {
+            "required": [
+              "op"
+            ],
+            "properties": {
+              "op": {
+                "const": "upsert"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "fields"
+            ]
+          },
+          "else": {
+            "not": {
+              "required": [
+                "fields"
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "table"
+            ],
+            "properties": {
+              "table": {
+                "const": "poker_sessions"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "fields": {
+                "$ref": "#/$defs/poker_sessions_fields"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "table"
+            ],
+            "properties": {
+              "table": {
+                "const": "hands"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "fields": {
+                "$ref": "#/$defs/hands_fields"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "table"
+            ],
+            "properties": {
+              "table": {
+                "const": "user_settings"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "fields": {
+                "$ref": "#/$defs/user_settings_fields"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "poker_sessions_fields": {
+      "type": "object",
+      "$ref": "common.schema.json#/$defs/poker_sessions_columns",
+      "unevaluatedProperties": false
+    },
+    "hands_fields": {
+      "type": "object",
+      "$ref": "common.schema.json#/$defs/hands_columns",
+      "unevaluatedProperties": false,
+      "description": "hand_number is sent only on create (9.4), and a create carries every not-null column without a default. So fields with hand_number must be a full insert.",
+      "if": {
+        "required": [
+          "hand_number"
+        ]
+      },
+      "then": {
+        "required": [
+          "session_id",
+          "hand_number",
+          "played_at",
+          "preflop_action",
+          "faced_3bet",
+          "position"
+        ]
+      }
+    },
+    "user_settings_fields": {
+      "type": "object",
+      "$ref": "common.schema.json#/$defs/user_settings_columns",
+      "unevaluatedProperties": false
+    }
+  }
+}

@@ -1,0 +1,78 @@
+{
+  "description": "Column map for sync (docs/design/1.1-sync.md 2 and 9.4). client_columns are the only keys allowed in a push's fields. create_only columns are sent only when the row is created. swift maps each synced model property to its column; key and sync columns in it are carried by the change's id or set by ops, never by fields.",
+  "sync_columns": ["user_id", "revision", "server_updated_at", "deleted_at", "purged_at", "updated_by_device"],
+  "tables": {
+    "poker_sessions": {
+      "key": ["user_id", "id"],
+      "client_columns": [
+        "start_time", "end_time", "location", "stakes", "notes", "game_type", "status",
+        "buy_in", "rebuys", "add_ons", "cash_out", "tip_rake",
+        "tilt_level", "energy_level", "focus_level", "table_config", "logging_device_id"
+      ],
+      "create_only": [],
+      "swift": {
+        "model": "Session",
+        "map": {
+          "id": "id",
+          "startTime": "start_time",
+          "endTime": "end_time",
+          "location": "location",
+          "stakes": "stakes",
+          "notes": "notes",
+          "gameType": "game_type",
+          "statusRaw": "status",
+          "buyIn": "buy_in",
+          "rebuys": "rebuys",
+          "addOns": "add_ons",
+          "cashOut": "cash_out",
+          "tipRake": "tip_rake",
+          "tiltLevel": "tilt_level",
+          "energyLevel": "energy_level",
+          "focusLevel": "focus_level",
+          "tableConfigData": "table_config",
+          "loggingDeviceId": "logging_device_id",
+          "deletedAt": "deleted_at"
+        }
+      }
+    },
+    "hands": {
+      "key": ["user_id", "id"],
+      "client_columns": [
+        "session_id", "hand_number", "played_at", "preflop_action", "faced_3bet",
+        "three_bet_response", "postflop_result", "did_cbet", "notes", "position"
+      ],
+      "create_only": ["hand_number"],
+      "swift": {
+        "model": "Hand",
+        "map": {
+          "id": "id",
+          "session?.id": "session_id",
+          "handNumber": "hand_number",
+          "timestamp": "played_at",
+          "deletedAt": "deleted_at",
+          "preflopAction": "preflop_action",
+          "faced3Bet": "faced_3bet",
+          "threeBetResponse": "three_bet_response",
+          "postflopResult": "postflop_result",
+          "didCBet": "did_cbet",
+          "notes": "notes",
+          "position": "position"
+        }
+      }
+    },
+    "user_settings": {
+      "key": ["user_id"],
+      "client_columns": ["default_game_type", "default_stakes", "default_buy_in", "currency"],
+      "create_only": [],
+      "swift": {
+        "model": "Settings",
+        "map": {
+          "defaultGameType": "default_game_type",
+          "defaultStakes": "default_stakes",
+          "defaultBuyIn": "default_buy_in",
+          "currency": "currency"
+        }
+      }
+    }
+  }
+}
