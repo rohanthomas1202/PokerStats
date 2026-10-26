@@ -1,0 +1,302 @@
+{
+  "description": "One completed session at +100 with three preflop-only hands. Its P/L histogram is one bucket labelled $0 with lower bound 0 (app behavior; see README), and the postflop ratios are null.",
+  "now": "2026-10-20T12:00:00Z",
+  "time_zone": "America/Chicago",
+  "sessions": [
+    {
+      "id": "00000000-0000-4000-8000-000000000041",
+      "start_time": "2026-10-03T18:00:00Z",
+      "end_time": "2026-10-03T18:30:00Z",
+      "location": "Synthetic Card Room",
+      "stakes": "1/2",
+      "notes": "",
+      "game_type": "cash",
+      "status": "completed",
+      "buy_in": 200,
+      "rebuys": 0,
+      "add_ons": 0,
+      "cash_out": 300,
+      "tip_rake": 0,
+      "tilt_level": null,
+      "energy_level": 5,
+      "focus_level": null,
+      "table_config": null,
+      "logging_device_id": "6f1c2a9e-3b7d-4c51-9e2a-0d4b8f7a1c3e",
+      "user_id": "5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a",
+      "revision": 141,
+      "server_updated_at": "2026-10-20T12:00:00+00:00",
+      "deleted_at": null,
+      "purged_at": null,
+      "updated_by_device": "6f1c2a9e-3b7d-4c51-9e2a-0d4b8f7a1c3e"
+    }
+  ],
+  "hands": [
+    {
+      "id": "11111111-0000-4000-8000-000000000041",
+      "session_id": "00000000-0000-4000-8000-000000000041",
+      "hand_number": 1,
+      "played_at": "2026-10-03T18:05:00.000Z",
+      "preflop_action": "fold",
+      "faced_3bet": false,
+      "three_bet_response": null,
+      "postflop_result": null,
+      "did_cbet": null,
+      "notes": "",
+      "position": "BTN",
+      "user_id": "5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a",
+      "revision": 142,
+      "server_updated_at": "2026-10-20T12:00:00+00:00",
+      "deleted_at": null,
+      "purged_at": null,
+      "updated_by_device": "6f1c2a9e-3b7d-4c51-9e2a-0d4b8f7a1c3e"
+    },
+    {
+      "id": "11111111-0000-4000-8000-000000000042",
+      "session_id": "00000000-0000-4000-8000-000000000041",
+      "hand_number": 2,
+      "played_at": "2026-10-03T18:09:00.000Z",
+      "preflop_action": "raise",
+      "faced_3bet": false,
+      "three_bet_response": null,
+      "postflop_result": "wonPreflop",
+      "did_cbet": null,
+      "notes": "",
+      "position": "CO",
+      "user_id": "5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a",
+      "revision": 143,
+      "server_updated_at": "2026-10-20T12:00:00+00:00",
+      "deleted_at": null,
+      "purged_at": null,
+      "updated_by_device": "6f1c2a9e-3b7d-4c51-9e2a-0d4b8f7a1c3e"
+    },
+    {
+      "id": "11111111-0000-4000-8000-000000000043",
+      "session_id": "00000000-0000-4000-8000-000000000041",
+      "hand_number": 3,
+      "played_at": "2026-10-03T18:13:00.000Z",
+      "preflop_action": "call",
+      "faced_3bet": false,
+      "three_bet_response": null,
+      "postflop_result": null,
+      "did_cbet": null,
+      "notes": "",
+      "position": "BB",
+      "user_id": "5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a",
+      "revision": 144,
+      "server_updated_at": "2026-10-20T12:00:00+00:00",
+      "deleted_at": null,
+      "purged_at": null,
+      "updated_by_device": "6f1c2a9e-3b7d-4c51-9e2a-0d4b8f7a1c3e"
+    }
+  ],
+  "expected": {
+    "lifetime": {
+      "total_hands": 3,
+      "hands_folded": 1,
+      "vpip": 0.6666666666666666,
+      "pfr": 0.3333333333333333,
+      "fold_to_3bet": null,
+      "cbet": null,
+      "wtsd": null,
+      "wsd": null,
+      "total_profit": 100,
+      "sessions_played": 1,
+      "average_profit_per_session": 100,
+      "hourly_rate": 200,
+      "total_hours_played": 0.5,
+      "fold_percent": 0.3333333333333333,
+      "play_style": "Maniac"
+    },
+    "sessions": [
+      {
+        "id": "00000000-0000-4000-8000-000000000041",
+        "counts_toward_money_stats": true,
+        "net_profit": 100,
+        "duration_hours": 0.5,
+        "hourly_rate": 200,
+        "roi": 0.5,
+        "total_hands": 3,
+        "hands_folded": 1,
+        "vpip": 0.6666666666666666,
+        "pfr": 0.3333333333333333,
+        "fold_to_3bet": null,
+        "cbet": null,
+        "wtsd": null,
+        "wsd": null,
+        "leak_finder": null
+      }
+    ],
+    "positions": [
+      {
+        "position": "BB",
+        "hand_count": 1,
+        "vpip": 1,
+        "pfr": 0
+      },
+      {
+        "position": "CO",
+        "hand_count": 1,
+        "vpip": 1,
+        "pfr": 1
+      },
+      {
+        "position": "BTN",
+        "hand_count": 1,
+        "vpip": 0,
+        "pfr": 0
+      }
+    ],
+    "trends": {
+      "all_time": {
+        "session_count": 1,
+        "cumulative_bankroll": [
+          {
+            "date": "2026-10-03T18:00:00Z",
+            "cumulative_profit": 0,
+            "session_index": 0
+          },
+          {
+            "date": "2026-10-03T18:30:00Z",
+            "cumulative_profit": 100,
+            "session_index": 1
+          }
+        ],
+        "rolling_vpip_pfr": [],
+        "profit_by_day_of_week": [
+          {
+            "day_name": "Sun",
+            "day_number": 1,
+            "total_profit": 0,
+            "session_count": 0
+          },
+          {
+            "day_name": "Mon",
+            "day_number": 2,
+            "total_profit": 0,
+            "session_count": 0
+          },
+          {
+            "day_name": "Tue",
+            "day_number": 3,
+            "total_profit": 0,
+            "session_count": 0
+          },
+          {
+            "day_name": "Wed",
+            "day_number": 4,
+            "total_profit": 0,
+            "session_count": 0
+          },
+          {
+            "day_name": "Thu",
+            "day_number": 5,
+            "total_profit": 0,
+            "session_count": 0
+          },
+          {
+            "day_name": "Fri",
+            "day_number": 6,
+            "total_profit": 0,
+            "session_count": 0
+          },
+          {
+            "day_name": "Sat",
+            "day_number": 7,
+            "total_profit": 100,
+            "session_count": 1
+          }
+        ],
+        "pl_distribution": [
+          {
+            "range_label": "$0",
+            "lower_bound": 0,
+            "count": 1
+          }
+        ]
+      },
+      "last_30_days": {
+        "session_count": 1,
+        "cumulative_bankroll": [
+          {
+            "date": "2026-10-03T18:00:00Z",
+            "cumulative_profit": 0,
+            "session_index": 0
+          },
+          {
+            "date": "2026-10-03T18:30:00Z",
+            "cumulative_profit": 100,
+            "session_index": 1
+          }
+        ],
+        "rolling_vpip_pfr": [],
+        "profit_by_day_of_week": [
+          {
+            "day_name": "Sun",
+            "day_number": 1,
+            "total_profit": 0,
+            "session_count": 0
+          },
+          {
+            "day_name": "Mon",
+            "day_number": 2,
+            "total_profit": 0,
+            "session_count": 0
+          },
+          {
+            "day_name": "Tue",
+            "day_number": 3,
+            "total_profit": 0,
+            "session_count": 0
+          },
+          {
+            "day_name": "Wed",
+            "day_number": 4,
+            "total_profit": 0,
+            "session_count": 0
+          },
+          {
+            "day_name": "Thu",
+            "day_number": 5,
+            "total_profit": 0,
+            "session_count": 0
+          },
+          {
+            "day_name": "Fri",
+            "day_number": 6,
+            "total_profit": 0,
+            "session_count": 0
+          },
+          {
+            "day_name": "Sat",
+            "day_number": 7,
+            "total_profit": 100,
+            "session_count": 1
+          }
+        ],
+        "pl_distribution": [
+          {
+            "range_label": "$0",
+            "lower_bound": 0,
+            "count": 1
+          }
+        ]
+      }
+    },
+    "mental_correlation": [
+      {
+        "metric": "energy",
+        "level": 5,
+        "average_hourly_rate": 200,
+        "session_count": 1
+      }
+    ],
+    "mental_insight": null,
+    "leak_finder": null,
+    "widget": {
+      "total_profit": 100,
+      "sessions_played": 1,
+      "hourly_rate": 200,
+      "current_streak": 1
+    }
+  }
+}

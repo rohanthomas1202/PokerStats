@@ -183,11 +183,12 @@ jobs:
             echo "::endgroup::"
           done
 
-  # The sync API contract in shared/fixtures/sync (#233): every example
-  # against the JSON Schema, and columns.json against the schema and the
-  # design doc. Runs when the Deno job does (supabase/ or shared/ changed).
-  sync-contract:
-    name: Sync contract
+  # Fixtures in shared/: the sync API contract (#233), checked against its
+  # JSON Schema and the design doc, and the stat fixtures (#235), checked
+  # against their reference and definitions. Runs when the Deno job does
+  # (supabase/ or shared/ changed).
+  shared-fixtures:
+    name: Shared fixtures
     needs: changes
     if: needs.changes.outputs.deno == 'true'
     runs-on: ubuntu-latest
@@ -199,11 +200,17 @@ jobs:
         with:
           deno-version: v2.9.7
 
-      - name: Check and test
+      - name: Sync contract
         working-directory: shared/fixtures/sync
         run: |
           deno check contract.test.ts
           deno test --frozen --allow-read=.,../../../docs
+
+      - name: Stat fixtures
+        working-directory: shared/fixtures/stats
+        run: |
+          deno check stats.test.ts update.ts
+          deno test --frozen --allow-read=.,../sync
 
   # pgTAP tests in supabase/tests/ against a local database built from
   # supabase/migrations/ (#234). Only the Postgres container starts; nothing
@@ -244,13 +251,19 @@ jobs:
 
       - name: Check the Postgres image
         run: |
+          : "${POSTGRES_IMAGE:?POSTGRES_IMAGE is not set}"
           images=$(docker ps --format '{{.Image}}')
           echo "$images"
-          # Drop the registry from each running image and compare the rest.
+          # Docker may report the image bare or with a registry prefix
+          # (public.ecr.aws/, ghcr.io/). Accept an exact match or one that
+          # ends in /POSTGRES_IMAGE; anything else fails.
           while read -r image; do
-            [ "${image#*/}" = "$POSTGRES_IMAGE" ] && exit 0
+            [ -n "$image" ] || continue
+            case "$image" in
+              "$POSTGRES_IMAGE"|*/"$POSTGRES_IMAGE") exit 0 ;;
+            esac
           done <<< "$images"
-          echo "Expected <registry>/$POSTGRES_IMAGE" >&2
+          echo "Expected $POSTGRES_IMAGE or <registry>/$POSTGRES_IMAGE" >&2
           exit 1
 
       - name: Run pgTAP tests
@@ -355,7 +368,7 @@ jobs:
   # job passed or was skipped, fails if any failed or was cancelled.
   gate:
     name: CI passed
-    needs: [changes, ios, deno, sync-contract, db, fastlane-guard, release-scripts, repo-settings, privacy-manifest]
+    needs: [changes, ios, deno, shared-fixtures, db, fastlane-guard, release-scripts, repo-settings, privacy-manifest]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5

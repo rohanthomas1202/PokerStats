@@ -12,7 +12,7 @@ The push and pull messages from `docs/design/1.1-sync.md` (sections 2, 4.1, 4.3,
 | `examples/<schema>/valid/`, `examples/<schema>/invalid/` | Synthetic payloads. Each invalid file is named for the rule it breaks, and `examples/expected-errors.json` gives the error it must fail with. |
 | `contract.test.ts` | Validates every example, and checks `columns.json` against the schema and against sections 2 and 9.4 of the design doc. |
 
-Run: `cd shared/fixtures/sync && deno test --frozen --allow-read=.,../../../docs`. The test reads `docs/design/1.1-sync.md` and locates its sections by exact headings and markers (`### 2.1` to `### 2.7`, `Primary key \`user_id\`. Columns`, `| Swift | Column |`, `- Dates:`), so those headings are part of the contract: renaming one fails the test with "design doc section not found" until the test is updated in the same PR. CI runs it in the "Sync contract" job when `shared/`, `supabase/` or `.github/` changes. The validator is Ajv 8.20.0, pinned in `deno.json` and `deno.lock`.
+Run: `cd shared/fixtures/sync && deno test --frozen --allow-read=.,../../../docs`. The test reads `docs/design/1.1-sync.md` and locates its sections by exact headings and markers (`### 2.1` to `### 2.7`, `Primary key \`user_id\`. Columns`, `| Swift | Column |`, `- Dates:`), so those headings are part of the contract: renaming one fails the test with "design doc section not found" until the test is updated in the same PR. CI runs it in the "Shared fixtures" job when `shared/`, `supabase/` or `.github/` changes. The validator is Ajv 8.20.0, pinned in `deno.json` and `deno.lock`.
 
 ## Unknown properties
 
