@@ -204,6 +204,7 @@ jobs:
         run: |
           deno check contract.test.ts
           deno test --frozen --allow-read=.,../../../docs
+
   # pgTAP tests in supabase/tests/ against a local database built from
   # supabase/migrations/ (#234). Only the Postgres container starts; nothing
   # here reaches the live project, and the local stack uses the CLI's default
