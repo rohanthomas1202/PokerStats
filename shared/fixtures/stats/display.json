@@ -1,0 +1,174 @@
+{
+  "description": "Displayed strings for en_US. Each case is format, value (a stat value as in the datasets), expected string.",
+  "locale": "en_US",
+  "cases": [
+    {
+      "format": "percent",
+      "value": null,
+      "expected": "--",
+      "note": "No value"
+    },
+    {
+      "format": "percent",
+      "value": 0.25,
+      "expected": "25.0%",
+      "note": "Exact"
+    },
+    {
+      "format": "percent",
+      "value": 0.0625,
+      "expected": "6.2%",
+      "note": "Exact tie: half even gives 6.2, toFixed gives 6.3"
+    },
+    {
+      "format": "percent",
+      "value": 0.6153846153846154,
+      "expected": "61.5%",
+      "note": "core VPIP"
+    },
+    {
+      "format": "percent",
+      "value": 1,
+      "expected": "100.0%",
+      "note": "All hands"
+    },
+    {
+      "format": "currency",
+      "value": 1234,
+      "expected": "$1,234",
+      "note": "Thousands separator"
+    },
+    {
+      "format": "currency",
+      "value": -567,
+      "expected": "-$567",
+      "note": "Negative"
+    },
+    {
+      "format": "currency",
+      "value": 2.5,
+      "expected": "$2",
+      "note": "Tie: half even rounds down"
+    },
+    {
+      "format": "currency",
+      "value": 3.5,
+      "expected": "$4",
+      "note": "Tie: half even rounds up"
+    },
+    {
+      "format": "currency",
+      "value": -2.5,
+      "expected": "-$2",
+      "note": "Negative tie"
+    },
+    {
+      "format": "currency",
+      "value": 1234.5,
+      "expected": "$1,234",
+      "note": "Tie with separator"
+    },
+    {
+      "format": "currency_signed",
+      "value": 250,
+      "expected": "+$250",
+      "note": "Positive"
+    },
+    {
+      "format": "currency_signed",
+      "value": -100,
+      "expected": "-$100",
+      "note": "Negative"
+    },
+    {
+      "format": "currency_signed",
+      "value": 0,
+      "expected": "+$0",
+      "note": "Zero shows +"
+    },
+    {
+      "format": "hourly_rate",
+      "value": null,
+      "expected": "--",
+      "note": "No rate"
+    },
+    {
+      "format": "hourly_rate",
+      "value": 34.5,
+      "expected": "$34.50/hr",
+      "note": "Two decimals"
+    },
+    {
+      "format": "hourly_rate",
+      "value": 34.125,
+      "expected": "$34.12/hr",
+      "note": "Tie: half even"
+    },
+    {
+      "format": "hourly_rate",
+      "value": 34.375,
+      "expected": "$34.38/hr",
+      "note": "Tie: half even rounds up"
+    },
+    {
+      "format": "hourly_rate",
+      "value": -35,
+      "expected": "-$35.00/hr",
+      "note": "core lifetime hourly"
+    },
+    {
+      "format": "roi",
+      "value": 0.0625,
+      "expected": "+6.2%",
+      "note": "Tie"
+    },
+    {
+      "format": "roi",
+      "value": -0.5,
+      "expected": "-50.0%",
+      "note": "Negative"
+    },
+    {
+      "format": "roi",
+      "value": 0,
+      "expected": "+0.0%",
+      "note": "Zero shows +"
+    },
+    {
+      "format": "roi",
+      "value": 0.5,
+      "expected": "+50.0%",
+      "note": "core session 1 ROI"
+    },
+    {
+      "format": "widget_currency",
+      "value": 1999.99,
+      "expected": "+$1,999",
+      "note": "Truncates, never rounds"
+    },
+    {
+      "format": "widget_currency",
+      "value": -0.5,
+      "expected": "-$0",
+      "note": "Truncates to 0 but keeps -"
+    },
+    {
+      "format": "widget_currency",
+      "value": 0,
+      "expected": "+$0",
+      "note": "Zero shows +"
+    },
+    {
+      "format": "widget_currency",
+      "value": 999.9,
+      "expected": "+$999",
+      "note": "No separator under 1000"
+    },
+    {
+      "format": "widget_currency",
+      "value": -280,
+      "expected": "-$280",
+      "note": "core widget total"
+    }
+  ]
+}
