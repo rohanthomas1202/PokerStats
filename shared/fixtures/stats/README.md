@@ -45,7 +45,7 @@ Edge cases present (the test fails if one disappears): no rows, a tombstoned ses
 
 ## App and doc disagreements
 
-The fixtures encode the app. Each point below is for the iOS owner and Sam to decide; a change lands in the app and here together.
+The fixtures encode the app as of #246. The decisions on these points are in Intended behavior below. A change lands in the app and here together.
 
 1. **Unknown status.** The app treats it as active, so it is left out of money stats. Design 9.5 says an unknown status decodes as completed, which would count it.
 2. **Abandoned sessions** are stored as completed, so under spec section 12 ("only completed sessions count toward money stats") they count as a full loss of the buy-in, with their hours. Confirm that is intended.
@@ -61,3 +61,27 @@ The fixtures encode the app. Each point below is for the iOS owner and Sam to de
 12. **Completed with no end_time** gets a duration up to now. Pulled rows could carry this; the app never writes it.
 13. **Display locale.** NumberFormatter follows the device locale; `display.json` assumes en_US.
 14. **Percent display** rounds the binary value half to even; a web port has to match on ties (see Display above).
+
+## Intended behavior
+
+The team's decisions on the points raised in #246 (point numbers from the #246 PR body), from the iOS triage on #246 and Sam's decisions on #84 and #247. The iOS app (#85) and the 1.2 web port follow these and shouldn't reopen them.
+
+- **Abandoned sessions (2).** An abandoned session is a completed session with `cash_out` 0, counted as a loss with its hours. `abandonSession` has no callers today.
+- **tip_rake (3).** Not subtracted from net profit. The definition waits on the owner's answer on #27, section 3.4.
+- **Hand scope (4).** Hand stats use every live hand, including hands of active sessions. Hands with no session can't come from the UI; #85 may drop them from stat inputs. No fixture change.
+- **Time zone and the 30-day window (7).** The app uses the device zone and subtracts 30 calendar days; the web uses the browser zone and calendar-day subtraction. The fixtures stay pinned to America/Chicago with no DST crossing.
+- **Ties (11).** The datasets avoid equal timestamps. If a port needs a deterministic order, sort on (time, id) on both sides (#238).
+- **Locale (13).** `display.json` is en_US; the app follows the device locale.
+- **Rounding (14).** Percent and currency round half to even. The web must not use JavaScript's `toFixed`.
+- **Tombstones (15).** Excluding `deleted_at` rows is the 1.1 rule (design 9.1). The app hard-deletes today; #85 implements tombstones.
+
+### Pending changes
+
+These will move expected values. Each fix updates `reference.ts`, regenerates the expected values with `update.ts`, and #238 checks the Swift against them.
+
+- Unknown status counts as completed (1), and a completed session with no `end_time` ends at its start time (12): #236.
+- Fold to 3-bet counts only hands where hero raised preflop (5): #253.
+- The P/L histogram's last bucket includes the maximum, and the `$0` special case goes away (6): #248.
+- Widget money rounds half to even instead of truncating (8): #249.
+- Mental insight pools tilt levels 4 and 5 (10): #250.
+- Lifetime ROI is the owner's call (9): #252.
