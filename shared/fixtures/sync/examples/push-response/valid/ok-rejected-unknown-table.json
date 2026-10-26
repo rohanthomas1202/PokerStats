@@ -1,0 +1,11 @@
+{
+  "status": "ok",
+  "revision": 1045,
+  "results": [
+    {
+      "seq": 47,
+      "result": "rejected",
+      "reason": "unknown_table"
+    }
+  ]
+}

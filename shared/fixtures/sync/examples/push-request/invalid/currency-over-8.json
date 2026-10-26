@@ -1,0 +1,18 @@
+{
+  "protocol": 1,
+  "device_id": "6f1c2a9e-3b7d-4c51-9e2a-0d4b8f7a1c3e",
+  "app_version": "1.1 (2026102601)",
+  "epoch": 0,
+  "changes": [
+    {
+      "seq": 1,
+      "op": "upsert",
+      "table": "user_settings",
+      "id": "9e8d7c6b-5a49-4382-a716-f5e4d3c2b1a0",
+      "fields": {
+        "currency": "USDOLLARS"
+      }
+    }
+  ],
+  "first_sync_done": false
+}

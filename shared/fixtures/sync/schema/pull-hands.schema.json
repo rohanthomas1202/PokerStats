@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/rohanthomas1202/PokerStats/shared/fixtures/sync/schema/pull-hands.schema.json",
+  "title": "Pulled page of hands",
+  "description": "PostgREST select * on hands, one page (docs/design/1.1-sync.md 2.5, 4.3). Open: clients ignore unknown columns.",
+  "type": "array",
+  "maxItems": 1000,
+  "items": {
+    "$ref": "#/$defs/row"
+  },
+  "$defs": {
+    "row": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "common.schema.json#/$defs/hands_columns"
+        },
+        {
+          "$ref": "common.schema.json#/$defs/sync_columns"
+        }
+      ],
+      "required": [
+        "id",
+        "session_id",
+        "hand_number",
+        "played_at",
+        "preflop_action",
+        "faced_3bet",
+        "three_bet_response",
+        "postflop_result",
+        "did_cbet",
+        "notes",
+        "position",
+        "user_id",
+        "revision",
+        "server_updated_at",
+        "deleted_at",
+        "purged_at",
+        "updated_by_device"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "common.schema.json#/$defs/uuid"
+        }
+      }
+    }
+  }
+}

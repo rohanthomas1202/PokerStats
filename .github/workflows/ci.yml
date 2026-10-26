@@ -182,6 +182,28 @@ jobs:
             echo "::endgroup::"
           done
 
+  # The sync API contract in shared/fixtures/sync (#233): every example
+  # against the JSON Schema, and columns.json against the schema and the
+  # design doc. Runs when the Deno job does (supabase/ or shared/ changed).
+  sync-contract:
+    name: Sync contract
+    needs: changes
+    if: needs.changes.outputs.deno == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.9.7
+
+      - name: Check and test
+        working-directory: shared/fixtures/sync
+        run: |
+          deno check contract.test.ts
+          deno test --frozen --allow-read=.,../../../docs
+
   # The owner submits to App Review by hand. Always runs; it takes seconds.
   fastlane-guard:
     name: Fastlane never submits
@@ -261,7 +283,7 @@ jobs:
   # job passed or was skipped, fails if any failed or was cancelled.
   gate:
     name: CI passed
-    needs: [changes, ios, deno, fastlane-guard, release-scripts, repo-settings, privacy-manifest]
+    needs: [changes, ios, deno, sync-contract, fastlane-guard, release-scripts, repo-settings, privacy-manifest]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5

@@ -1,0 +1,31 @@
+[
+  {
+    "id": "a3e1f7c2-5b84-4d6a-9c1e-2f7b0d9e8a41",
+    "start_time": "2026-10-18T01:00:00.000Z",
+    "end_time": null,
+    "location": "Synthetic Casino",
+    "stakes": "1/2",
+    "notes": "",
+    "game_type": "cash",
+    "status": "active",
+    "buy_in": 200,
+    "rebuys": 0,
+    "add_ons": 0,
+    "cash_out": 0,
+    "tip_rake": 0,
+    "tilt_level": null,
+    "energy_level": 4,
+    "focus_level": null,
+    "table_config": {
+      "seats": 9,
+      "heroSeat": 3
+    },
+    "logging_device_id": "6f1c2a9e-3b7d-4c51-9e2a-0d4b8f7a1c3e",
+    "user_id": "5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a",
+    "revision": 1042,
+    "server_updated_at": "2026-10-18T02:11:10.481223+00:00",
+    "deleted_at": null,
+    "purged_at": null,
+    "updated_by_device": "6f1c2a9e-3b7d-4c51-9e2a-0d4b8f7a1c3e"
+  }
+]

@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/rohanthomas1202/PokerStats/shared/fixtures/sync/schema/pull-user-settings.schema.json",
+  "title": "Pulled page of user_settings",
+  "description": "PostgREST select * on user_settings, one page (docs/design/1.1-sync.md 2.6, 4.3). Open: clients ignore unknown columns.",
+  "type": "array",
+  "maxItems": 1000,
+  "items": {
+    "$ref": "#/$defs/row"
+  },
+  "$defs": {
+    "row": {
+      "type": "object",
+      "allOf": [
+        {
+          "$ref": "common.schema.json#/$defs/user_settings_columns"
+        },
+        {
+          "$ref": "common.schema.json#/$defs/sync_columns"
+        }
+      ],
+      "required": [
+        "default_game_type",
+        "default_stakes",
+        "default_buy_in",
+        "currency",
+        "user_id",
+        "revision",
+        "server_updated_at",
+        "deleted_at",
+        "purged_at",
+        "updated_by_device"
+      ]
+    }
+  }
+}

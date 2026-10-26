@@ -32,9 +32,10 @@ expect "ci_scripts"          "ios=true deno=false"  "ci_scripts/build_number.sh"
 expect "fastlane"            "ios=true deno=false"  "fastlane/Fastfile"
 expect "supabase"            "ios=false deno=true"  "supabase/functions/delete-account/index.ts"
 expect "migration"           "ios=false deno=true"  "supabase/migrations/0001_init.sql"
+expect "sync contract"       "ios=false deno=true"  "shared/fixtures/sync/schema/push-request.schema.json"
 expect "both areas"          "ios=true deno=true"   $'supabase/config.toml\nPokerStats/App.swift'
 expect "workflow change"     "ios=true deno=true"   ".github/workflows/ci.yml"
-expect "prefix lookalike"    "ios=false deno=false" $'PokerStatsDocs/x.md\nproject.yml.bak\nsupabase.md'
+expect "prefix lookalike"    "ios=false deno=false" $'PokerStatsDocs/x.md\nproject.yml.bak\nsupabase.md\nshared.md'
 expect "no trailing newline" "ios=false deno=true"  "supabase/x.ts"
 
 expect "spaces, two areas"   "ios=true deno=true"   $'PokerStats/My View.swift\nsupabase/my fn/index.ts'

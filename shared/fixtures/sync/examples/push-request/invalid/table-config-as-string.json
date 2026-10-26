@@ -1,0 +1,18 @@
+{
+  "protocol": 1,
+  "device_id": "6f1c2a9e-3b7d-4c51-9e2a-0d4b8f7a1c3e",
+  "app_version": "1.1 (2026102601)",
+  "epoch": 0,
+  "changes": [
+    {
+      "seq": 1,
+      "op": "upsert",
+      "table": "poker_sessions",
+      "id": "A3E1F7C2-5B84-4D6A-9C1E-2F7B0D9E8A41",
+      "fields": {
+        "table_config": "{\"seats\":9}"
+      }
+    }
+  ],
+  "first_sync_done": false
+}

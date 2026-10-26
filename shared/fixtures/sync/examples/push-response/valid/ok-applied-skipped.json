@@ -1,0 +1,18 @@
+{
+  "status": "ok",
+  "revision": 1043,
+  "results": [
+    {
+      "seq": 41,
+      "result": "skipped"
+    },
+    {
+      "seq": 42,
+      "result": "applied"
+    },
+    {
+      "seq": 43,
+      "result": "applied"
+    }
+  ]
+}
