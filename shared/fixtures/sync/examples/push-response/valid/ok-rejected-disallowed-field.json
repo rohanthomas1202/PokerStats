@@ -1,0 +1,11 @@
+{
+  "status": "ok",
+  "revision": 1046,
+  "results": [
+    {
+      "seq": 48,
+      "result": "rejected",
+      "reason": "disallowed_field"
+    }
+  ]
+}

@@ -142,6 +142,7 @@
           }
         },
         {
+          "description": "user_settings is upsert only: the client never deletes or restores it, and the 6.1 wipe removes it server-side.",
           "if": {
             "required": [
               "table"
@@ -154,6 +155,9 @@
           },
           "then": {
             "properties": {
+              "op": {
+                "const": "upsert"
+              },
               "fields": {
                 "$ref": "#/$defs/user_settings_fields"
               }

@@ -25,7 +25,7 @@
         "seq": { "type": "integer", "minimum": 1 },
         "result": { "enum": ["applied", "skipped", "purged", "rejected"] },
         "reason": {
-          "description": "A Postgres SQLSTATE (for example 23503) or a server code such as unknown_table or row_cap.",
+          "description": "A Postgres SQLSTATE (for example 23503) or a server code such as unknown_table, row_cap or disallowed_field.",
           "type": "string",
           "pattern": "^([0-9A-Z]{5}|[a-z][a-z0-9_]*)$"
         }

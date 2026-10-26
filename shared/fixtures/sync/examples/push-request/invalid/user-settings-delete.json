@@ -1,0 +1,15 @@
+{
+  "protocol": 1,
+  "device_id": "6f1c2a9e-3b7d-4c51-9e2a-0d4b8f7a1c3e",
+  "app_version": "1.1 (2026102601)",
+  "epoch": 0,
+  "changes": [
+    {
+      "seq": 1,
+      "op": "delete",
+      "table": "user_settings",
+      "id": "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d"
+    }
+  ],
+  "first_sync_done": false
+}

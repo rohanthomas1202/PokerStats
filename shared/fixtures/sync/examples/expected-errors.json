@@ -135,6 +135,10 @@
     "instancePath": "/changes/0",
     "keyword": "required"
   },
+  "push-request/invalid/user-settings-delete.json": {
+    "instancePath": "/changes/0/op",
+    "keyword": "const"
+  },
   "push-response/invalid/missing-status.json": {
     "instancePath": "",
     "keyword": "required"

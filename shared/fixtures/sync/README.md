@@ -37,16 +37,25 @@ Server-enforced only (the schema can't express them):
 | `seq` strictly increasing per device (4.4); a `seq` at or below `last_applied_seq` | `skipped` |
 | Foreign keys, not-null on insert, other column checks | `rejected` with the SQLSTATE |
 
-The schema describes what a conforming client sends. The server is more lenient in one place: an unknown `table` or a disallowed key in `fields` rejects that change only (`rejected`), not the batch.
+The schema describes what a conforming client sends. The server is more lenient in one place: an unknown `table` or a disallowed key in `fields` rejects that change only (`rejected`, reason `unknown_table` or `disallowed_field`), not the batch.
 
 ## Decisions where the design doc is not explicit
 
 1. **`seq` starts at 1.** `devices.last_applied_seq` defaults to 0 and `seq <= last_applied_seq` is skipped, so a change with `seq` 0 would never apply. With `nextSeq` 0 on a new `deviceId`, the first change gets 1.
 2. **`id` is not a key in `fields`.** The change's `id` carries it. `deleted_at` is set only by the `delete` and `restore` ops, so it is not in `fields` either.
 3. **`hand_number` in `fields` means a create.** It is sent only on create (9.4), and a create carries every not-null hand column without a default, so `fields` with `hand_number` must also have `session_id`, `played_at`, `preflop_action`, `faced_3bet` and `position`. A full-row resend with the same number stays valid (7.1).
-4. **`user_settings` changes carry the account's user ID as `id`.** The table is keyed on `user_id` and the local `Settings.id` is not synced (2.6), but every change has an `id`. The server ignores it and uses `auth.uid()`. To confirm with #85.
-5. **`user_settings` columns are not null in pulled rows.** 2.6 doesn't say; the Swift `Settings` properties are all non-optional. #84's migration must match, or this changes.
+4. **`user_settings` changes carry the account's user ID as `id`.** The table is keyed on `user_id` and the local `Settings.id` is not synced (2.6), but every change has an `id`. The server ignores it and uses `auth.uid()`. Confirmed for #85: the client sends the signed-in user's ID, never `Settings.id`, so coalescing on (table, id) keeps one queued settings change per account. `user_settings` is upsert only: the client never sends `delete` or `restore` for it (the 6.1 wipe removes the row server-side), and the schema rejects either op on that table (`user-settings-delete.json`).
+5. **`user_settings` columns are not null in pulled rows, and #84 gives them defaults.** 2.6 doesn't say; the Swift `Settings` properties are all non-optional, so pulls are non-null. A settings upsert carries only the changed fields (9.3), so #84's migration must also give the columns defaults that match `Settings.init` in `PokerStats/Models/Settings.swift`:
+
+   | Column | Default |
+   |---|---|
+   | `default_game_type` | `'cash'` |
+   | `default_stakes` | `'1/2'` |
+   | `default_buy_in` | `200` |
+   | `currency` | `'USD'` |
+
+   Without them, a partial change against a missing row (a new account, or after the 6.1 wipe) inserts nulls, fails with 23502, and the setting is dropped (9.6). Requiring all four in `fields` would also avoid the error, but then one device's currency edit overwrites another's stakes edit; defaults keep per-field last-write-wins. Tracked on #84.
 6. **`first_sync_done` is required**, as in the 4.1 example. Send `false` when not finishing the first sync.
-7. **Timestamps** need an explicit offset. 9.4 asks clients for UTC with fractional seconds; the 4.1 example has none, so fractional seconds are optional. Pulled rows come back as `+00:00`.
+7. **Timestamps** need an explicit offset. 9.4 asks clients for UTC with fractional seconds; the 4.1 example has none, so fractional seconds are optional. Pulled rows come back as `+00:00`. #85 encodes and decodes with the supabase-swift `PostgrestClient.Configuration` strategies, which accept fractions; the plain `.iso8601` strategy rejects them.
 8. **Non-ok push responses carry only `status`.** On `wiped`, the client reads the new epoch from `sync_state` in the pull (4.3, 6.1).
-9. **`rejected` needs a `reason`**: a SQLSTATE (`23503`) or a lowercase server code. The design names `unknown_table` and `row_cap`; it doesn't name the code for a disallowed key in `fields`, which #84 picks.
+9. **`rejected` needs a `reason`**: a SQLSTATE (`23503`) or a lowercase server code. The design names `unknown_table` and `row_cap`; a disallowed key in `fields` uses `disallowed_field`. The client only logs the reason and drops the change.
