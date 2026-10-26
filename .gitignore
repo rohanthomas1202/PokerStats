@@ -63,6 +63,7 @@ Secrets.plist
 
 # Supabase CLI state
 supabase/.temp/
+supabase/.branches/
 
 # Claude Code
 .claude/
