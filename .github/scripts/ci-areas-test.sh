@@ -34,6 +34,7 @@ expect "supabase"            "ios=false deno=true db=true"  "supabase/functions/
 expect "migration"           "ios=false deno=true db=true"  "supabase/migrations/0001_init.sql"
 expect "db test"             "ios=false deno=true db=true"  "supabase/tests/database/profiles_rls.test.sql"
 expect "sync contract"       "ios=false deno=true db=false"  "shared/fixtures/sync/schema/push-request.schema.json"
+expect "stat fixtures"       "ios=false deno=true db=false"  "shared/fixtures/stats/datasets/core.json"
 expect "both areas"          "ios=true deno=true db=true"   $'supabase/config.toml\nPokerStats/App.swift'
 expect "workflow change"     "ios=true deno=true db=true"   ".github/workflows/ci.yml"
 expect "prefix lookalike"    "ios=false deno=false db=false" $'PokerStatsDocs/x.md\nproject.yml.bak\nsupabase.md\nshared.md'

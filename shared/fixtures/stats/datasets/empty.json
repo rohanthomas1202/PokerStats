@@ -1,0 +1,139 @@
+{
+  "description": "No sessions and no hands: every ratio is null, totals are 0, every series is empty.",
+  "now": "2026-10-20T12:00:00Z",
+  "time_zone": "America/Chicago",
+  "sessions": [],
+  "hands": [],
+  "expected": {
+    "lifetime": {
+      "total_hands": 0,
+      "hands_folded": 0,
+      "vpip": null,
+      "pfr": null,
+      "fold_to_3bet": null,
+      "cbet": null,
+      "wtsd": null,
+      "wsd": null,
+      "total_profit": 0,
+      "sessions_played": 0,
+      "average_profit_per_session": null,
+      "hourly_rate": null,
+      "total_hours_played": 0,
+      "fold_percent": null,
+      "play_style": null
+    },
+    "sessions": [],
+    "positions": [],
+    "trends": {
+      "all_time": {
+        "session_count": 0,
+        "cumulative_bankroll": [],
+        "rolling_vpip_pfr": [],
+        "profit_by_day_of_week": [
+          {
+            "day_name": "Sun",
+            "day_number": 1,
+            "total_profit": 0,
+            "session_count": 0
+          },
+          {
+            "day_name": "Mon",
+            "day_number": 2,
+            "total_profit": 0,
+            "session_count": 0
+          },
+          {
+            "day_name": "Tue",
+            "day_number": 3,
+            "total_profit": 0,
+            "session_count": 0
+          },
+          {
+            "day_name": "Wed",
+            "day_number": 4,
+            "total_profit": 0,
+            "session_count": 0
+          },
+          {
+            "day_name": "Thu",
+            "day_number": 5,
+            "total_profit": 0,
+            "session_count": 0
+          },
+          {
+            "day_name": "Fri",
+            "day_number": 6,
+            "total_profit": 0,
+            "session_count": 0
+          },
+          {
+            "day_name": "Sat",
+            "day_number": 7,
+            "total_profit": 0,
+            "session_count": 0
+          }
+        ],
+        "pl_distribution": []
+      },
+      "last_30_days": {
+        "session_count": 0,
+        "cumulative_bankroll": [],
+        "rolling_vpip_pfr": [],
+        "profit_by_day_of_week": [
+          {
+            "day_name": "Sun",
+            "day_number": 1,
+            "total_profit": 0,
+            "session_count": 0
+          },
+          {
+            "day_name": "Mon",
+            "day_number": 2,
+            "total_profit": 0,
+            "session_count": 0
+          },
+          {
+            "day_name": "Tue",
+            "day_number": 3,
+            "total_profit": 0,
+            "session_count": 0
+          },
+          {
+            "day_name": "Wed",
+            "day_number": 4,
+            "total_profit": 0,
+            "session_count": 0
+          },
+          {
+            "day_name": "Thu",
+            "day_number": 5,
+            "total_profit": 0,
+            "session_count": 0
+          },
+          {
+            "day_name": "Fri",
+            "day_number": 6,
+            "total_profit": 0,
+            "session_count": 0
+          },
+          {
+            "day_name": "Sat",
+            "day_number": 7,
+            "total_profit": 0,
+            "session_count": 0
+          }
+        ],
+        "pl_distribution": []
+      }
+    },
+    "mental_correlation": [],
+    "mental_insight": null,
+    "leak_finder": null,
+    "widget": {
+      "total_profit": 0,
+      "sessions_played": 0,
+      "hourly_rate": null,
+      "current_streak": 0
+    }
+  }
+}

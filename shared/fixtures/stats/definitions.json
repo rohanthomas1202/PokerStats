@@ -1,0 +1,473 @@
+{
+  "description": "Stat definitions as the iOS app computes them today. Rows use the column names of docs/design/1.1-sync.md section 2. See README.md for the rules behind each field.",
+  "conventions": {
+    "ratios": "Fractions 0..1, shown as percentages. null means the app shows '--' or hides the stat.",
+    "live_rows": "Rows with deleted_at set, and hands whose session has deleted_at set, are never inputs (design 9.1). purged rows are removed by then.",
+    "completed": "A session counts toward money stats only when status is exactly 'completed'. Abandoned sessions are completed with cash_out 0.",
+    "hand_scope": "Lifetime hand stats use every live hand, including hands of active and non-completed sessions.",
+    "time": "now and time_zone are inputs: an open session's duration uses now; the 30-day window keeps rows at or after now minus 30 days (the app subtracts 30 calendar days in the device calendar, the fixtures use 30 x 86400 s and do not cross a DST change); weekdays use time_zone.",
+    "numbers": "IEEE 754 doubles, summed in the order the rows appear. Compare to the expected values with a relative tolerance of 1e-9."
+  },
+  "stats": {
+    "total_hands": {
+      "paths": [
+        "lifetime.total_hands",
+        "sessions[].total_hands"
+      ],
+      "inputs": "live hands",
+      "formula": "count(hands)",
+      "null_when": null,
+      "display": "integer",
+      "source": "PokerStats/Services/StatCalculator.swift:113"
+    },
+    "hands_folded": {
+      "paths": [
+        "lifetime.hands_folded",
+        "sessions[].hands_folded"
+      ],
+      "inputs": "live hands",
+      "formula": "count(preflop_action = fold OR (faced_3bet AND three_bet_response = folded))",
+      "null_when": null,
+      "display": "integer",
+      "source": "PokerStats/Services/StatCalculator.swift:61-64, PokerStats/Models/Hand.swift foldedPreflop"
+    },
+    "fold_percent": {
+      "paths": [
+        "lifetime.fold_percent"
+      ],
+      "inputs": "live hands",
+      "formula": "hands_folded / total_hands",
+      "null_when": "total_hands = 0",
+      "display": "percent",
+      "source": "PokerStats/ViewModels/DashboardViewModel.swift:19-22"
+    },
+    "vpip": {
+      "paths": [
+        "lifetime.vpip",
+        "sessions[].vpip"
+      ],
+      "inputs": "live hands",
+      "formula": "count(preflop_action in [call, raise]) / count(hands)",
+      "null_when": "no hands",
+      "display": "percent",
+      "source": "PokerStats/Services/StatCalculator.swift:11-15"
+    },
+    "pfr": {
+      "paths": [
+        "lifetime.pfr",
+        "sessions[].pfr"
+      ],
+      "inputs": "live hands",
+      "formula": "count(preflop_action = raise) / count(hands)",
+      "null_when": "no hands",
+      "display": "percent",
+      "source": "PokerStats/Services/StatCalculator.swift:19-23"
+    },
+    "fold_to_3bet": {
+      "paths": [
+        "lifetime.fold_to_3bet",
+        "sessions[].fold_to_3bet"
+      ],
+      "inputs": "live hands",
+      "formula": "count(faced_3bet AND three_bet_response = folded) / count(faced_3bet)",
+      "null_when": "no hand has faced_3bet",
+      "display": "percent",
+      "source": "PokerStats/Services/StatCalculator.swift:25-32"
+    },
+    "cbet": {
+      "paths": [
+        "lifetime.cbet",
+        "sessions[].cbet"
+      ],
+      "inputs": "live hands",
+      "formula": "count(opportunity AND did_cbet = true) / count(opportunity), opportunity = preflop_action = raise AND saw_flop",
+      "null_when": "no opportunity",
+      "display": "percent",
+      "source": "PokerStats/Services/StatCalculator.swift:36-41, PokerStats/Models/Hand.swift hadCBetOpportunity"
+    },
+    "wtsd": {
+      "paths": [
+        "lifetime.wtsd",
+        "sessions[].wtsd"
+      ],
+      "inputs": "live hands",
+      "formula": "count(saw_flop AND showdown) / count(saw_flop); saw_flop = postflop_result not null and not wonPreflop; showdown = postflop_result in [wonAtShowdown, lostAtShowdown]",
+      "null_when": "no hand saw the flop",
+      "display": "percent",
+      "source": "PokerStats/Services/StatCalculator.swift:45-50, Enums.swift PostflopResult"
+    },
+    "wsd": {
+      "paths": [
+        "lifetime.wsd",
+        "sessions[].wsd"
+      ],
+      "inputs": "live hands",
+      "formula": "count(postflop_result = wonAtShowdown) / count(showdown)",
+      "null_when": "no showdown",
+      "display": "percent",
+      "source": "PokerStats/Services/StatCalculator.swift:54-59"
+    },
+    "play_style": {
+      "paths": [
+        "lifetime.play_style"
+      ],
+      "inputs": "live hands",
+      "formula": "VPIP/PFR bands: vpip < 0.12 Nit; < 0.18 Rock if pfr/vpip > 0.6 else Passive; <= 0.30 TAG if pfr/vpip > 0.6 else Passive; <= 0.45 LAG if pfr/vpip > 0.5 else Fish; else Maniac if pfr > 0.30 else Fish",
+      "null_when": "vpip or pfr null",
+      "display": "label",
+      "source": "PokerStats/Views/Components/PlayStyleLabel.swift:40-67; aggression = pfr/vpip, 0 when vpip is 0"
+    },
+    "total_profit": {
+      "paths": [
+        "lifetime.total_profit"
+      ],
+      "inputs": "live completed sessions",
+      "formula": "sum over completed sessions of net_profit",
+      "null_when": null,
+      "display": "currency",
+      "source": "PokerStats/Services/StatCalculator.swift:98-100"
+    },
+    "sessions_played": {
+      "paths": [
+        "lifetime.sessions_played"
+      ],
+      "inputs": "live completed sessions",
+      "formula": "count(completed sessions)",
+      "null_when": null,
+      "display": "integer",
+      "source": "PokerStats/Services/StatCalculator.swift:102"
+    },
+    "average_profit_per_session": {
+      "paths": [
+        "lifetime.average_profit_per_session"
+      ],
+      "inputs": "live completed sessions",
+      "formula": "total_profit / sessions_played",
+      "null_when": "sessions_played = 0",
+      "display": "currency",
+      "source": "PokerStats/Services/StatCalculator.swift:104-106"
+    },
+    "hours": {
+      "paths": [
+        "lifetime.total_hours_played"
+      ],
+      "inputs": "live completed sessions",
+      "formula": "sum over completed sessions of duration_hours",
+      "null_when": null,
+      "display": "number",
+      "source": "PokerStats/Services/StatCalculator.swift:101"
+    },
+    "hourly_rate": {
+      "paths": [
+        "lifetime.hourly_rate"
+      ],
+      "inputs": "live completed sessions",
+      "formula": "total_profit / total_hours_played",
+      "null_when": "total_hours_played <= 0.01",
+      "display": "hourly_rate",
+      "source": "PokerStats/Services/StatCalculator.swift:108-110"
+    },
+    "session_counts_toward_money_stats": {
+      "paths": [
+        "sessions[].counts_toward_money_stats"
+      ],
+      "inputs": "live sessions",
+      "formula": "status = completed (an unknown status decodes as active, Session.swift:17)",
+      "null_when": null,
+      "display": "boolean",
+      "source": "PokerStats/Services/StatCalculator.swift:98"
+    },
+    "session_net_profit": {
+      "paths": [
+        "sessions[].net_profit"
+      ],
+      "inputs": "live sessions",
+      "formula": "cash_out - (buy_in + rebuys + add_ons); tip_rake is not subtracted",
+      "null_when": null,
+      "display": "currency_signed",
+      "source": "PokerStats/Models/Session.swift:53-59"
+    },
+    "session_duration_hours": {
+      "paths": [
+        "sessions[].duration_hours"
+      ],
+      "inputs": "live sessions",
+      "formula": "((end_time ?? now) - start_time) in seconds / 3600",
+      "null_when": null,
+      "display": "number",
+      "source": "PokerStats/Models/Session.swift:61-67"
+    },
+    "session_hourly_rate": {
+      "paths": [
+        "sessions[].hourly_rate"
+      ],
+      "inputs": "live sessions",
+      "formula": "net_profit / duration_hours",
+      "null_when": "duration_hours <= 0.01",
+      "display": "hourly_rate",
+      "source": "PokerStats/Models/Session.swift:69-72"
+    },
+    "session_roi": {
+      "paths": [
+        "sessions[].roi"
+      ],
+      "inputs": "live sessions",
+      "formula": "net_profit / (buy_in + rebuys + add_ons)",
+      "null_when": "buy_in + rebuys + add_ons <= 0",
+      "display": "roi",
+      "source": "PokerStats/Models/Session.swift:74-77; shown only for completed sessions, SessionDetailView.swift:196"
+    },
+    "session_leak_finder": {
+      "paths": [
+        "sessions[].leak_finder"
+      ],
+      "inputs": "live hands of one session",
+      "formula": "leak_finder over the session's hands",
+      "null_when": "fewer than 10 hands",
+      "display": "ratings",
+      "source": "PokerStats/ViewModels/LeakFinderViewModel.swift:46-50"
+    },
+    "per_position": {
+      "paths": [
+        "positions"
+      ],
+      "inputs": "live hands",
+      "formula": "for each of SB, BB, UTG, UTG+1, LJ, MP, HJ, CO, BTN in that order with at least one hand: hand_count, vpip, pfr over that position's hands. '?' and unknown positions are left out",
+      "null_when": "a position with no hands is omitted",
+      "display": "percent",
+      "source": "PokerStats/Services/StatCalculator.swift:81-92"
+    },
+    "trends_session_count": {
+      "paths": [
+        "trends.*.session_count"
+      ],
+      "inputs": "live sessions in the window",
+      "formula": "count(completed sessions in the window)",
+      "null_when": null,
+      "display": "integer",
+      "source": "PokerStats/ViewModels/TrendsViewModel.swift:43-56"
+    },
+    "cumulative_bankroll": {
+      "paths": [
+        "trends.*.cumulative_bankroll"
+      ],
+      "inputs": "live sessions in the window",
+      "formula": "completed sessions sorted by start_time; a first point (start_time of the first, 0, index 0), then one point per session (end_time ?? start_time, running net_profit total, index i+1)",
+      "null_when": "no completed sessions: empty list",
+      "display": "currency",
+      "source": "PokerStats/Services/TrendCalculator.swift:48-70"
+    },
+    "rolling_vpip_pfr": {
+      "paths": [
+        "trends.*.rolling_vpip_pfr"
+      ],
+      "inputs": "live hands in the window",
+      "formula": "hands sorted by played_at; for each window of 20 consecutive hands ending at hand i (1-based): vpip and pfr over the window",
+      "null_when": "fewer than 20 hands: empty list",
+      "display": "percent",
+      "source": "PokerStats/Services/TrendCalculator.swift:75-89"
+    },
+    "profit_by_day_of_week": {
+      "paths": [
+        "trends.*.profit_by_day_of_week"
+      ],
+      "inputs": "live sessions in the window",
+      "formula": "always 7 entries Sun..Sat (day_number 1..7); completed sessions grouped by the weekday of start_time in the device time zone (dataset time_zone)",
+      "null_when": null,
+      "display": "currency",
+      "source": "PokerStats/Services/TrendCalculator.swift:94-117"
+    },
+    "pl_distribution": {
+      "paths": [
+        "trends.*.pl_distribution"
+      ],
+      "inputs": "live sessions in the window",
+      "formula": "completed net_profit values in buckets of 100 from floor(min/100)*100 up to ceil(max/100)*100, each [lower, lower+100); if upper <= lower, one bucket labelled $0 with lower_bound 0 holding every session. Labels +$N for N >= 0, -$N below",
+      "null_when": "no completed sessions: empty list",
+      "display": "label",
+      "source": "PokerStats/Services/TrendCalculator.swift:122-155"
+    },
+    "mental_correlation": {
+      "paths": [
+        "mental_correlation"
+      ],
+      "inputs": "live sessions",
+      "formula": "for each metric (energy, focus, tilt) and level: average of session hourly_rate over completed sessions with that level and a non-null hourly_rate; sorted by metric name, then level",
+      "null_when": "no qualifying sessions: empty list",
+      "display": "hourly_rate",
+      "source": "PokerStats/Services/TrendCalculator.swift:161-192"
+    },
+    "mental_insight": {
+      "paths": [
+        "mental_insight"
+      ],
+      "inputs": "mental_correlation",
+      "formula": "calm = tilt level 1 point; tilted = first tilt point with level >= 4 in level order; both need session_count >= 2",
+      "null_when": "either point missing or below 2 sessions",
+      "display": "hourly_rate",
+      "source": "PokerStats/ViewModels/DashboardViewModel.swift:73-79"
+    },
+    "leak_finder": {
+      "paths": [
+        "leak_finder"
+      ],
+      "inputs": "lifetime hand stats",
+      "formula": "for each profile (six_max is the dashboard default; full_ring is selectable) and each stat in vpip, pfr, cbet, fold_to_3bet, wtsd, wsd with a non-null value: healthy inside the closed ideal range, borderline inside the closed acceptable range, else leak. Overall: Leaking if 2+ leaks, Needs Work if 1 leak or 2+ borderline, else Solid. Ranges are in leak_profiles.",
+      "null_when": "fewer than 20 hands",
+      "display": "ratings",
+      "source": "PokerStats/Services/LeakFinder.swift:18-39, 118-168; PokerStats/ViewModels/LeakFinderViewModel.swift:28-43"
+    },
+    "widget": {
+      "paths": [
+        "widget"
+      ],
+      "inputs": "live completed sessions",
+      "formula": "total_profit, sessions_played and hourly_rate as the lifetime money stats; current_streak = number of completed sessions, newest start_time first, with net_profit > 0 before the first that is not",
+      "null_when": null,
+      "display": "widget_currency",
+      "source": "PokerStatsWidgets/PokerStatsLifetimeWidget.swift:59-85"
+    }
+  },
+  "leak_profiles": {
+    "source": "PokerStats/Services/LeakFinder.swift:18-39",
+    "ranges": {
+      "full_ring": {
+        "vpip": {
+          "ideal": [
+            0.15,
+            0.22
+          ],
+          "acceptable": [
+            0.12,
+            0.28
+          ]
+        },
+        "pfr": {
+          "ideal": [
+            0.12,
+            0.18
+          ],
+          "acceptable": [
+            0.1,
+            0.22
+          ]
+        },
+        "cbet": {
+          "ideal": [
+            0.6,
+            0.75
+          ],
+          "acceptable": [
+            0.5,
+            0.8
+          ]
+        },
+        "fold_to_3bet": {
+          "ideal": [
+            0.45,
+            0.55
+          ],
+          "acceptable": [
+            0.35,
+            0.65
+          ]
+        },
+        "wtsd": {
+          "ideal": [
+            0.25,
+            0.32
+          ],
+          "acceptable": [
+            0.2,
+            0.38
+          ]
+        },
+        "wsd": {
+          "ideal": [
+            0.5,
+            0.58
+          ],
+          "acceptable": [
+            0.45,
+            0.62
+          ]
+        }
+      },
+      "six_max": {
+        "vpip": {
+          "ideal": [
+            0.22,
+            0.3
+          ],
+          "acceptable": [
+            0.18,
+            0.35
+          ]
+        },
+        "pfr": {
+          "ideal": [
+            0.18,
+            0.25
+          ],
+          "acceptable": [
+            0.14,
+            0.28
+          ]
+        },
+        "cbet": {
+          "ideal": [
+            0.55,
+            0.7
+          ],
+          "acceptable": [
+            0.45,
+            0.78
+          ]
+        },
+        "fold_to_3bet": {
+          "ideal": [
+            0.4,
+            0.55
+          ],
+          "acceptable": [
+            0.3,
+            0.65
+          ]
+        },
+        "wtsd": {
+          "ideal": [
+            0.26,
+            0.34
+          ],
+          "acceptable": [
+            0.22,
+            0.4
+          ]
+        },
+        "wsd": {
+          "ideal": [
+            0.5,
+            0.6
+          ],
+          "acceptable": [
+            0.45,
+            0.65
+          ]
+        }
+      }
+    }
+  },
+  "displays": {
+    "integer": "Plain integer.",
+    "number": "Not shown directly.",
+    "label": "String as given.",
+    "boolean": "Not shown.",
+    "ratings": "Rating names healthy, borderline, leak; overall Solid, Needs Work, Leaking.",
+    "percent": "value * 100 rounded half even to 1 decimal, then '%'. null is '--'. PokerStats/Models/ComputedStats.swift:58-61",
+    "currency": "en_US currency, whole dollars, half even: $1,234 and -$567. PokerStats/Models/ComputedStats.swift:64-70, PokerStats/Utilities/CurrencyFormatter.swift:21-23",
+    "currency_signed": "'+' for >= 0, '-' below, then the whole-dollar currency of the absolute value. PokerStats/Utilities/CurrencyFormatter.swift:31-38",
+    "hourly_rate": "en_US currency with 2 decimals, half even, then '/hr'. null is '--'. PokerStats/Models/ComputedStats.swift:73-81",
+    "roi": "value * 100 with printf %+.1f, then '%'. PokerStats/Views/History/SessionDetailView.swift:196-203",
+    "widget_currency": "'-' below 0 else '+', '$', then the absolute value truncated to an integer, with thousands separators from 1000. PokerStatsWidgets/PokerStatsLifetimeWidget.swift:189-196"
+  }
+}
