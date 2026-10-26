@@ -1,7 +1,7 @@
 -- public.profiles: row-level security (20260420000000_init_schema.sql).
 -- User A owns a row, user B and anon try to read and change it.
 begin;
-select plan(13);
+select plan(14);
 
 -- Users A and B. The on_auth_user_created trigger gives each a profile.
 insert into auth.users (id, email) values
@@ -83,6 +83,17 @@ select results_eq(
   'select count(*)::int from public.profiles where id = ''cccccccc-cccc-4ccc-8ccc-cccccccccccc''',
   array[0],
   'no profile was inserted for the other id'
+);
+
+-- B deletes its own profile.
+set local role authenticated;
+set local request.jwt.claims = '{"sub": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "role": "authenticated"}';
+delete from public.profiles where id = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+reset role;
+
+select is_empty(
+  $$select 1 from public.profiles where id = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'$$,
+  'B can delete its own profile'
 );
 select policies_are(
   'public', 'profiles',

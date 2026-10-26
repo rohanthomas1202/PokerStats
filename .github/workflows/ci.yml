@@ -219,7 +219,9 @@ jobs:
     env:
       SUPABASE_CLI_VERSION: 2.122.0
       SUPABASE_CLI_SHA256: 59ed066847b98d7461c60e9109d40cab6b9756177ce06ebb05b51338519f5136
-      POSTGRES_IMAGE: public.ecr.aws/supabase/postgres:17.11.0.006
+      # Repository and tag only: the CLI pulls from ghcr.io or public.ecr.aws
+      # depending on where it runs.
+      POSTGRES_IMAGE: supabase/postgres:17.11.0.006
     steps:
       - uses: actions/checkout@v7
 
@@ -244,10 +246,31 @@ jobs:
         run: |
           images=$(docker ps --format '{{.Image}}')
           echo "$images"
-          grep -Fxq "$POSTGRES_IMAGE" <<< "$images" || { echo "Expected $POSTGRES_IMAGE" >&2; exit 1; }
+          # Drop the registry from each running image and compare the rest.
+          while read -r image; do
+            [ "${image#*/}" = "$POSTGRES_IMAGE" ] && exit 0
+          done <<< "$images"
+          echo "Expected <registry>/$POSTGRES_IMAGE" >&2
+          exit 1
 
       - name: Run pgTAP tests
         run: supabase test db
+
+      # The tests must fail when a policy breaks (#234). Loosen one policy in
+      # this throwaway local database (never in a migration) and expect named
+      # failures. Runs last; the database is discarded below.
+      - name: Tests fail when a policy is loosened
+        run: |
+          db=$(docker ps --filter name=supabase_db_ --format '{{.Names}}')
+          docker exec "$db" psql -U postgres -X -v ON_ERROR_STOP=1 -q \
+            -c "alter policy profiles_select_own on public.profiles using (true)"
+          if supabase test db > "$RUNNER_TEMP/mutation.log" 2>&1; then
+            cat "$RUNNER_TEMP/mutation.log"
+            echo "pgTAP passed with profiles_select_own using (true)." >&2
+            exit 1
+          fi
+          grep -E '^# Failed test|^Result' "$RUNNER_TEMP/mutation.log"
+          grep -q 'Failed test 3: "B sees its own profile and no other"' "$RUNNER_TEMP/mutation.log"
 
       - name: Stop the database
         if: always()

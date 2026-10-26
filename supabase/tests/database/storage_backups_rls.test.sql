@@ -1,7 +1,7 @@
 -- storage.objects in the backups bucket: the four backups_*_own policies
 -- (20260420000000_init_schema.sql). Files live under <user_id>/.
 begin;
-select plan(9);
+select plan(11);
 
 insert into auth.users (id, email) values
   ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', 'a@example.invalid'),
@@ -67,6 +67,28 @@ select results_eq(
   $$select count(*)::int from storage.objects where bucket_id = 'backups'$$,
   array[2],
   'no file was added or removed'
+);
+
+-- B updates, then deletes, its own file.
+set local role authenticated;
+set local request.jwt.claims = '{"sub": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "role": "authenticated"}';
+update storage.objects set metadata = '{"x": 2}' where name = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb/b.json';
+reset role;
+
+select results_eq(
+  $$select metadata from storage.objects where name = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb/b.json'$$,
+  array['{"x": 2}'::jsonb],
+  'B can update its own file'
+);
+
+set local role authenticated;
+set local request.jwt.claims = '{"sub": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "role": "authenticated"}';
+delete from storage.objects where name = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb/b.json';
+reset role;
+
+select is_empty(
+  $$select 1 from storage.objects where name = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb/b.json'$$,
+  'B can delete its own file'
 );
 select ok(
   (select array_agg(policyname::text order by policyname) from pg_policies where schemaname = 'storage' and tablename = 'objects' and policyname like 'backups\_%')

@@ -4,6 +4,9 @@
 -- tables. A migration that changes a grant must update this file in the same
 -- PR, so every grant change is visible in review. New tables follow
 -- docs/design/1.1-sync.md section 3.5 and get their own expected lists here.
+-- Known gap: TRUNCATE (which bypasses RLS), TRIGGER and REFERENCES are
+-- granted too. PostgREST can't issue them; a later migration revokes them
+-- and updates this file (PR #243 finding 1).
 begin;
 select plan(12);
 
