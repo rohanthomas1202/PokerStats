@@ -161,25 +161,30 @@ Deno.test("display strings follow the display rules", () => {
 });
 
 Deno.test("the datasets keep their edge cases", () => {
-  const sessions = Object.values(datasets).flatMap((d) => d.sessions);
-  const hands = Object.values(datasets).flatMap((d) => d.hands);
+  // The tombstone checks look at every row. Every other check looks only at
+  // live rows, so a tombstoned row can't stand in for an edge case the stats
+  // never see.
+  const allSessions = Object.values(datasets).flatMap((d) => d.sessions);
+  const allHands = Object.values(datasets).flatMap((d) => d.hands);
   const tombstoned = new Set(
-    sessions.filter((s) => s.deleted_at).map((s) => s.id),
+    allSessions.filter((s) => s.deleted_at).map((s) => s.id),
+  );
+  const sessions = allSessions.filter((s) => !s.deleted_at);
+  const hands = allHands.filter((h) =>
+    !h.deleted_at && !tombstoned.has(h.session_id)
   );
   const edges: Record<string, boolean> = {
     "a dataset with no rows": Object.values(datasets).some((d) =>
       !d.sessions.length && !d.hands.length
     ),
     "a tombstoned session": tombstoned.size > 0,
-    "a tombstoned hand in a live session": hands.some((h) =>
+    "a tombstoned hand in a live session": allHands.some((h) =>
       h.deleted_at && !tombstoned.has(h.session_id)
     ),
-    "hands of a tombstoned session": hands.some((h) =>
+    "hands of a tombstoned session": allHands.some((h) =>
       tombstoned.has(h.session_id)
     ),
-    "an active session": sessions.some((s) =>
-      s.status === "active" && !s.deleted_at
-    ),
+    "an active session": sessions.some((s) => s.status === "active"),
     "an unknown status": sessions.some((s) =>
       !["active", "completed"].includes(s.status)
     ),

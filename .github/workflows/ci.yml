@@ -209,7 +209,7 @@ jobs:
       - name: Stat fixtures
         working-directory: shared/fixtures/stats
         run: |
-          deno check stats.test.ts
+          deno check stats.test.ts update.ts
           deno test --frozen --allow-read=.,../sync
 
   # pgTAP tests in supabase/tests/ against a local database built from
