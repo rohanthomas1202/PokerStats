@@ -11,14 +11,28 @@ What the iOS app computes today for every stat it shows, as data that the web da
 | `stats.test.ts` | The check. |
 | `update.ts` | Rewrites the expected values from `reference.ts`. |
 
-Run: `cd shared/fixtures/stats && deno test --frozen --allow-read=.,../sync`. CI runs it in the "Shared fixtures" job when `shared/`, `supabase/` or `.github/` changes. The test checks that:
+Run, as CI does in the "Shared fixtures" job when `shared/`, `supabase/` or `.github/` changes:
+
+```sh
+cd shared/fixtures/stats
+deno check stats.test.ts update.ts
+deno test --frozen --allow-read=.,../sync
+```
+
+To regenerate the expected values after editing a dataset's inputs, from the repo root (`update.ts` resolves its paths from its own location, so any folder works):
+
+```sh
+deno run --allow-read=shared/fixtures/stats --allow-write=shared/fixtures/stats shared/fixtures/stats/update.ts
+```
+
+The test checks that:
 
 - every session and hand row passes the pull schemas in `../sync/schema`,
 - each dataset's `expected` equals `reference.ts` output, numbers within a relative 1e-9,
 - the fields of `expected` and the paths in `definitions.json` are the same set, and every stat has inputs, formula, display and source,
 - the Leak Finder ranges in `definitions.json` equal the ones in `reference.ts`,
 - every `display.json` string matches its display rule,
-- the edge cases below are still present.
+- the edge cases below are still present, on live rows.
 
 ## How the expected values were produced
 
@@ -41,11 +55,11 @@ Sources ported (read-only): `PokerStats/Services/StatCalculator.swift`, `TrendCa
 - **Time.** `now` and `time_zone` are dataset inputs. Weekdays use `time_zone` (the app uses the device's). The 30-day window keeps rows at or after `now` minus 30 days.
 - **Display.** Percent and currency round half to even, as printf and NumberFormatter do. JavaScript's `toFixed` rounds ties up (`(6.25).toFixed(1)` is `6.3`, the app shows `6.2%`), so the web must not use it for these.
 
-Edge cases present (the test fails if one disappears): no rows, a tombstoned session with hands, a tombstoned hand in a live session, an active session, an unknown status (`paused`), an abandoned session, a zero-length session, custom stakes, a nonzero `tip_rake`, a session shorter than the 0.01-hour hourly guard, hands at the unknown position `?`, a session with 10+ hands (session Leak Finder), 20+ hands (lifetime Leak Finder and rolling stats), a P/L on the top histogram edge, a session outside the 30-day window, and a session whose weekday differs between UTC and America/Chicago.
+Edge cases present (the test fails if one disappears). Apart from the three tombstone cases, each must be on a live row by the same rule the stats use (`liveRows` in `reference.ts`): no `deleted_at`, and a hand counts only if its session is live in the same dataset, so a tombstoned row or an orphan hand doesn't count. The cases: no rows, a tombstoned session with hands, a tombstoned hand in a live session, an active session, an unknown status (`paused`), an abandoned session, a zero-length session, custom stakes, a nonzero `tip_rake`, a session shorter than the 0.01-hour hourly guard, hands at the unknown position `?`, a session with 10+ hands (session Leak Finder), 20+ hands (lifetime Leak Finder and rolling stats), a P/L on the top histogram edge, a session outside the 30-day window, and a session whose weekday differs between UTC and America/Chicago.
 
 ## App and doc disagreements
 
-The fixtures encode the app as of #246. The decisions on these points are in Intended behavior below. A change lands in the app and here together.
+The fixtures encode the app as of #246. The team's positions on these points are in Intended behavior below. A change lands in the app and here together.
 
 1. **Unknown status.** The app treats it as active, so it is left out of money stats. Design 9.5 says an unknown status decodes as completed, which would count it.
 2. **Abandoned sessions** are stored as completed, so under spec section 12 ("only completed sessions count toward money stats") they count as a full loss of the buy-in, with their hours. Confirm that is intended.
@@ -64,7 +78,7 @@ The fixtures encode the app as of #246. The decisions on these points are in Int
 
 ## Intended behavior
 
-The team's decisions on the points raised in #246 (point numbers from the #246 PR body), from the iOS triage on #246 and Sam's decisions on #84 and #247. The iOS app (#85) and the 1.2 web port follow these and shouldn't reopen them.
+Team positions on the points raised in #246 (point numbers from the #246 PR body), from Sam's decisions on #84 and #247 and the iOS triage on #246. They are pending the owner's sign-off; until then the iOS app (#85) and the 1.2 web port work to them. tip_rake (#27) and lifetime ROI (#252) are left to the owner.
 
 - **Abandoned sessions (2).** An abandoned session is a completed session with `cash_out` 0, counted as a loss with its hours. `abandonSession` has no callers today.
 - **tip_rake (3).** Not subtracted from net profit. The definition waits on the owner's answer on #27, section 3.4.
@@ -72,7 +86,7 @@ The team's decisions on the points raised in #246 (point numbers from the #246 P
 - **Time zone and the 30-day window (7).** The app uses the device zone and subtracts 30 calendar days; the web uses the browser zone and calendar-day subtraction. The fixtures stay pinned to America/Chicago with no DST crossing.
 - **Ties (11).** The datasets avoid equal timestamps. If a port needs a deterministic order, sort on (time, id) on both sides (#238).
 - **Locale (13).** `display.json` is en_US; the app follows the device locale.
-- **Rounding (14).** Percent and currency round half to even. The web must not use JavaScript's `toFixed`.
+- **Rounding (14).** Percent and currency round half to even. The web must not use JavaScript's `toFixed`. The home-screen widget still truncates money toward zero until #249 lands (see Pending changes).
 - **Tombstones (15).** Excluding `deleted_at` rows is the 1.1 rule (design 9.1). The app hard-deletes today; #85 implements tombstones.
 
 ### Pending changes

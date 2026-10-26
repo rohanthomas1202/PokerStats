@@ -4,9 +4,9 @@
 // - definitions.json names every expected field, and the leak ranges match,
 // - display.json strings match the display rules,
 // - the datasets keep their edge cases.
-// Run from this folder: deno test --frozen --allow-read=.,../sync
+// Run from this folder: deno check stats.test.ts update.ts && deno test --frozen --allow-read=.,../sync
 import { Ajv2020 } from "ajv/2020";
-import { display, expectedFor, LEAK_PROFILES } from "./reference.ts";
+import { display, expectedFor, LEAK_PROFILES, liveRows } from "./reference.ts";
 
 // deno-lint-ignore no-explicit-any
 type Json = any;
@@ -161,29 +161,34 @@ Deno.test("display strings follow the display rules", () => {
 });
 
 Deno.test("the datasets keep their edge cases", () => {
-  // The tombstone checks look at every row. Every other check looks only at
-  // live rows, so a tombstoned row can't stand in for an edge case the stats
-  // never see.
-  const allSessions = Object.values(datasets).flatMap((d) => d.sessions);
-  const allHands = Object.values(datasets).flatMap((d) => d.hands);
-  const tombstoned = new Set(
-    allSessions.filter((s) => s.deleted_at).map((s) => s.id),
-  );
-  const sessions = allSessions.filter((s) => !s.deleted_at);
-  const hands = allHands.filter((h) =>
-    !h.deleted_at && !tombstoned.has(h.session_id)
-  );
+  // The tombstone checks look at every row of each dataset. Every other check
+  // looks only at live rows, by the rule the stats use (reference.ts
+  // liveRows): no deleted_at, and a hand counts only if its session is live in
+  // the same dataset. So neither a tombstoned row nor an orphan hand can stand
+  // in for an edge case the stats never see.
+  const all = Object.values(datasets);
+  const tombstonedIds = (d: Json) =>
+    new Set(
+      d.sessions.filter((s: Json) => s.deleted_at).map((s: Json) => s.id),
+    );
+  const live = all.map((d) => liveRows(d));
+  const sessions: Json[] = live.flatMap((l) => l.sessions);
+  const hands: Json[] = live.flatMap((l) => l.hands);
   const edges: Record<string, boolean> = {
     "a dataset with no rows": Object.values(datasets).some((d) =>
       !d.sessions.length && !d.hands.length
     ),
-    "a tombstoned session": tombstoned.size > 0,
-    "a tombstoned hand in a live session": allHands.some((h) =>
-      h.deleted_at && !tombstoned.has(h.session_id)
-    ),
-    "hands of a tombstoned session": allHands.some((h) =>
-      tombstoned.has(h.session_id)
-    ),
+    "a tombstoned session": all.some((d) => tombstonedIds(d).size > 0),
+    "a tombstoned hand in a live session": all.some((d) => {
+      const liveIds = new Set(liveRows(d).sessions.map((s) => s.id));
+      return d.hands.some((h: Json) =>
+        h.deleted_at && liveIds.has(h.session_id)
+      );
+    }),
+    "hands of a tombstoned session": all.some((d) => {
+      const tombstoned = tombstonedIds(d);
+      return d.hands.some((h: Json) => tombstoned.has(h.session_id));
+    }),
     "an active session": sessions.some((s) => s.status === "active"),
     "an unknown status": sessions.some((s) =>
       !["active", "completed"].includes(s.status)

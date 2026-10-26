@@ -14,6 +14,7 @@ const write = (path: string, value: unknown) =>
     JSON.stringify(value, null, 2) + "\n",
   );
 for (const e of Deno.readDirSync(new URL("datasets/", here))) {
+  if (!e.isFile || !e.name.endsWith(".json")) continue;
   const d = read(`datasets/${e.name}`);
   write(`datasets/${e.name}`, { ...d, expected: expectedFor(d) });
 }
