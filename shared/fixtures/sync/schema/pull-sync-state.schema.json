@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/rohanthomas1202/PokerStats/shared/fixtures/sync/schema/pull-sync-state.schema.json",
+  "title": "Pulled sync_state",
+  "description": "PostgREST select on sync_state, pull step 1 (docs/design/1.1-sync.md 2.1, 4.3). An empty array means account_missing, never an empty server. Open: clients ignore unknown columns.",
+  "type": "array",
+  "maxItems": 1,
+  "items": {
+    "type": "object",
+    "required": [
+      "user_id",
+      "revision",
+      "wipe_epoch",
+      "wiped_at",
+      "first_sync_completed_at",
+      "backups_retire_at"
+    ],
+    "properties": {
+      "user_id": {
+        "$ref": "common.schema.json#/$defs/uuid"
+      },
+      "revision": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "wipe_epoch": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "wiped_at": {
+        "$ref": "common.schema.json#/$defs/nullable_timestamp"
+      },
+      "first_sync_completed_at": {
+        "$ref": "common.schema.json#/$defs/nullable_timestamp"
+      },
+      "backups_retire_at": {
+        "$ref": "common.schema.json#/$defs/nullable_timestamp"
+      }
+    }
+  }
+}

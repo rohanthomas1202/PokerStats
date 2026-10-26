@@ -1,0 +1,18 @@
+[
+  {
+    "user_id": "5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a",
+    "revision": 1,
+    "wipe_epoch": 0,
+    "wiped_at": null,
+    "first_sync_completed_at": null,
+    "backups_retire_at": null
+  },
+  {
+    "user_id": "5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a",
+    "revision": 1,
+    "wipe_epoch": 0,
+    "wiped_at": null,
+    "first_sync_completed_at": null,
+    "backups_retire_at": null
+  }
+]

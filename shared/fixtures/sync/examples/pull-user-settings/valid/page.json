@@ -1,0 +1,14 @@
+[
+  {
+    "default_game_type": "cash",
+    "default_stakes": "1/2",
+    "default_buy_in": 200,
+    "currency": "USD",
+    "user_id": "5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a",
+    "revision": 1040,
+    "server_updated_at": "2026-10-18T02:11:10.481223+00:00",
+    "deleted_at": null,
+    "purged_at": null,
+    "updated_by_device": "6f1c2a9e-3b7d-4c51-9e2a-0d4b8f7a1c3e"
+  }
+]

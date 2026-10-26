@@ -1,0 +1,15 @@
+{
+  "status": "ok",
+  "revision": 1045,
+  "results": [
+    {
+      "seq": 45,
+      "result": "rejected",
+      "reason": "23503"
+    },
+    {
+      "seq": 46,
+      "result": "applied"
+    }
+  ]
+}

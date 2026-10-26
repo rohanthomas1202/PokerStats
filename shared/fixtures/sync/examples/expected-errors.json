@@ -1,0 +1,186 @@
+{
+  "pull-hands/invalid/row-missing-revision.json": {
+    "instancePath": "/0",
+    "keyword": "required"
+  },
+  "pull-hands/invalid/row-revision-is-string.json": {
+    "instancePath": "/0/revision",
+    "keyword": "type"
+  },
+  "pull-poker-sessions/invalid/row-missing-logging-device-id.json": {
+    "instancePath": "/0",
+    "keyword": "required"
+  },
+  "pull-poker-sessions/invalid/row-table-config-as-string.json": {
+    "instancePath": "/0/table_config",
+    "keyword": "type"
+  },
+  "pull-sync-state/invalid/missing-wipe-epoch.json": {
+    "instancePath": "/0",
+    "keyword": "required"
+  },
+  "pull-sync-state/invalid/two-rows.json": {
+    "instancePath": "",
+    "keyword": "maxItems"
+  },
+  "pull-user-settings/invalid/row-default-buy-in-null.json": {
+    "instancePath": "/0/default_buy_in",
+    "keyword": "type"
+  },
+  "push-request/invalid/buy-in-over-numeric-14-2.json": {
+    "instancePath": "/changes/0/fields/buy_in",
+    "keyword": "maximum"
+  },
+  "push-request/invalid/change-unknown-key.json": {
+    "instancePath": "/changes/0",
+    "keyword": "additionalProperties"
+  },
+  "push-request/invalid/changes-over-500.json": {
+    "instancePath": "/changes",
+    "keyword": "maxItems"
+  },
+  "push-request/invalid/currency-over-8.json": {
+    "instancePath": "/changes/0/fields/currency",
+    "keyword": "maxLength"
+  },
+  "push-request/invalid/delete-with-fields.json": {
+    "instancePath": "/changes/0",
+    "keyword": "not"
+  },
+  "push-request/invalid/device-id-not-uuid.json": {
+    "instancePath": "/device_id",
+    "keyword": "pattern"
+  },
+  "push-request/invalid/epoch-is-string.json": {
+    "instancePath": "/epoch",
+    "keyword": "type"
+  },
+  "push-request/invalid/faced-3bet-not-boolean.json": {
+    "instancePath": "/changes/0/fields/faced_3bet",
+    "keyword": "type"
+  },
+  "push-request/invalid/fields-column-of-other-table.json": {
+    "instancePath": "/changes/0/fields",
+    "keyword": "unevaluatedProperties"
+  },
+  "push-request/invalid/fields-deleted-at.json": {
+    "instancePath": "/changes/0/fields",
+    "keyword": "unevaluatedProperties"
+  },
+  "push-request/invalid/fields-id.json": {
+    "instancePath": "/changes/0/fields",
+    "keyword": "unevaluatedProperties"
+  },
+  "push-request/invalid/fields-swift-name.json": {
+    "instancePath": "/changes/0/fields",
+    "keyword": "unevaluatedProperties"
+  },
+  "push-request/invalid/fields-sync-column.json": {
+    "instancePath": "/changes/0/fields",
+    "keyword": "unevaluatedProperties"
+  },
+  "push-request/invalid/fields-user-id.json": {
+    "instancePath": "/changes/0/fields",
+    "keyword": "unevaluatedProperties"
+  },
+  "push-request/invalid/hand-notes-over-10000.json": {
+    "instancePath": "/changes/0/fields/notes",
+    "keyword": "maxLength"
+  },
+  "push-request/invalid/hand-number-on-patch.json": {
+    "instancePath": "/changes/0/fields",
+    "keyword": "required"
+  },
+  "push-request/invalid/location-over-200.json": {
+    "instancePath": "/changes/0/fields/location",
+    "keyword": "maxLength"
+  },
+  "push-request/invalid/missing-device-id.json": {
+    "instancePath": "",
+    "keyword": "required"
+  },
+  "push-request/invalid/missing-first-sync-done.json": {
+    "instancePath": "",
+    "keyword": "required"
+  },
+  "push-request/invalid/op-unknown.json": {
+    "instancePath": "/changes/0/op",
+    "keyword": "enum"
+  },
+  "push-request/invalid/played-at-april-31.json": {
+    "instancePath": "/changes/0/fields/played_at",
+    "keyword": "pattern"
+  },
+  "push-request/invalid/played-at-hour-25.json": {
+    "instancePath": "/changes/0/fields/played_at",
+    "keyword": "pattern"
+  },
+  "push-request/invalid/played-at-month-13.json": {
+    "instancePath": "/changes/0/fields/played_at",
+    "keyword": "pattern"
+  },
+  "push-request/invalid/played-at-no-offset.json": {
+    "instancePath": "/changes/0/fields/played_at",
+    "keyword": "pattern"
+  },
+  "push-request/invalid/protocol-zero.json": {
+    "instancePath": "/protocol",
+    "keyword": "minimum"
+  },
+  "push-request/invalid/seq-zero.json": {
+    "instancePath": "/changes/0/seq",
+    "keyword": "minimum"
+  },
+  "push-request/invalid/table-config-as-string.json": {
+    "instancePath": "/changes/0/fields/table_config",
+    "keyword": "type"
+  },
+  "push-request/invalid/table-unknown.json": {
+    "instancePath": "/changes/0/table",
+    "keyword": "enum"
+  },
+  "push-request/invalid/tilt-level-6.json": {
+    "instancePath": "/changes/0/fields/tilt_level",
+    "keyword": "maximum"
+  },
+  "push-request/invalid/unknown-envelope-key.json": {
+    "instancePath": "",
+    "keyword": "additionalProperties"
+  },
+  "push-request/invalid/upsert-without-fields.json": {
+    "instancePath": "/changes/0",
+    "keyword": "required"
+  },
+  "push-request/invalid/user-settings-delete.json": {
+    "instancePath": "/changes/0/op",
+    "keyword": "const"
+  },
+  "push-response/invalid/missing-status.json": {
+    "instancePath": "",
+    "keyword": "required"
+  },
+  "push-response/invalid/ok-missing-revision.json": {
+    "instancePath": "",
+    "keyword": "required"
+  },
+  "push-response/invalid/ok-results-not-array.json": {
+    "instancePath": "/results",
+    "keyword": "type"
+  },
+  "push-response/invalid/reason-free-text.json": {
+    "instancePath": "/results/0/reason",
+    "keyword": "pattern"
+  },
+  "push-response/invalid/rejected-without-reason.json": {
+    "instancePath": "/results/0",
+    "keyword": "required"
+  },
+  "push-response/invalid/result-unknown.json": {
+    "instancePath": "/results/0/result",
+    "keyword": "enum"
+  },
+  "push-response/invalid/status-unknown.json": {
+    "instancePath": "/status",
+    "keyword": "enum"
+  }
+}

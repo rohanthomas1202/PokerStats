@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/rohanthomas1202/PokerStats/shared/fixtures/sync/schema/push-response.schema.json",
+  "title": "sync_push response",
+  "description": "Return value of rpc/sync_push (docs/design/1.1-sync.md 4.1, 9.6). Open: clients ignore unknown keys. status and result are closed; a new value is a protocol change.",
+  "type": "object",
+  "required": ["status"],
+  "properties": {
+    "status": { "enum": ["ok", "upgrade_required", "wiped", "account_missing", "invalid"] }
+  },
+  "if": { "required": ["status"], "properties": { "status": { "const": "ok" } } },
+  "then": {
+    "required": ["revision", "results"],
+    "properties": {
+      "revision": { "type": "integer", "minimum": 0 },
+      "results": { "type": "array", "items": { "$ref": "#/$defs/result" } }
+    }
+  },
+
+  "$defs": {
+    "result": {
+      "type": "object",
+      "required": ["seq", "result"],
+      "properties": {
+        "seq": { "type": "integer", "minimum": 1 },
+        "result": { "enum": ["applied", "skipped", "purged", "rejected"] },
+        "reason": {
+          "description": "A Postgres SQLSTATE (for example 23503) or a server code such as unknown_table, row_cap or disallowed_field.",
+          "type": "string",
+          "pattern": "^([0-9A-Z]{5}|[a-z][a-z0-9_]*)$"
+        }
+      },
+      "if": { "required": ["result"], "properties": { "result": { "const": "rejected" } } },
+      "then": { "required": ["reason"] }
+    }
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "protocol": 1,
+  "device_id": "6f1c2a9e-3b7d-4c51-9e2a-0d4b8f7a1c3e",
+  "app_version": "1.1 (2026102601)",
+  "epoch": 0,
+  "changes": [
+    {
+      "seq": 41,
+      "op": "upsert",
+      "table": "hands",
+      "id": "0b9d4e6f-7a21-4c3b-8e5d-1f2a3b4c5d6e",
+      "fields": {
+        "session_id": "A3E1F7C2-5B84-4D6A-9C1E-2F7B0D9E8A41",
+        "preflop_action": "fold",
+        "position": "BTN",
+        "played_at": "2026-10-18T02:11:09Z",
+        "hand_number": 17,
+        "faced_3bet": false
+      }
+    },
+    {
+      "seq": 42,
+      "op": "upsert",
+      "table": "poker_sessions",
+      "id": "A3E1F7C2-5B84-4D6A-9C1E-2F7B0D9E8A41",
+      "fields": {
+        "notes": "tight table"
+      }
+    },
+    {
+      "seq": 43,
+      "op": "delete",
+      "table": "hands",
+      "id": "0b9d4e6f-7a21-4c3b-8e5d-1f2a3b4c5d6e"
+    }
+  ],
+  "first_sync_done": false
+}

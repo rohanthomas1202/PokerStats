@@ -1,0 +1,19 @@
+{
+  "protocol": 1,
+  "device_id": "6f1c2a9e-3b7d-4c51-9e2a-0d4b8f7a1c3e",
+  "app_version": "1.1 (2026102601)",
+  "epoch": 0,
+  "changes": [
+    {
+      "seq": 1,
+      "op": "upsert",
+      "table": "hands",
+      "id": "0b9d4e6f-7a21-4c3b-8e5d-1f2a3b4c5d6e",
+      "fields": {
+        "notes": "x",
+        "faced3_bet": true
+      }
+    }
+  ],
+  "first_sync_done": false
+}
