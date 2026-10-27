@@ -17,10 +17,19 @@ final class AuthViewModel {
     /// Performs the Supabase sign-in with Apple's credential; tests replace it.
     private let performAppleSignIn: @MainActor (AppleSignInCredential) async throws -> Void
 
+    /// Shows Sign in with Apple for Try Again, with the given hashed nonce;
+    /// tests replace it.
+    private let performAppleAuthorization: @MainActor (String) async throws -> AppleAuthorization
+
+    /// Signs out; tests replace it.
+    private let performSignOut: @MainActor () async -> Void
+
     init(
         authService: AuthService,
         performDeleteAccount: (@MainActor () async throws -> Void)? = nil,
-        performAppleSignIn: (@MainActor (AppleSignInCredential) async throws -> Void)? = nil
+        performAppleSignIn: (@MainActor (AppleSignInCredential) async throws -> Void)? = nil,
+        performAppleAuthorization: (@MainActor (String) async throws -> AppleAuthorization)? = nil,
+        performSignOut: (@MainActor () async -> Void)? = nil
     ) {
         self.authService = authService
         self.performDeleteAccount = performDeleteAccount ?? { try await authService.deleteAccount() }
@@ -30,6 +39,12 @@ final class AuthViewModel {
                 rawNonce: credential.rawNonce
             )
         }
+        self.performAppleAuthorization = performAppleAuthorization ?? { hashedNonce in
+            try await AppleReauthenticator().authorize { request in
+                AuthViewModel.configure(request, hashedNonce: hashedNonce)
+            }
+        }
+        self.performSignOut = performSignOut ?? { await authService.signOut() }
     }
 
     // MARK: - Apple Sign In
@@ -55,8 +70,12 @@ final class AuthViewModel {
 
     /// SignInWithAppleButton's request closure; runs once per attempt.
     func configureAppleRequest(_ request: ASAuthorizationAppleIDRequest) {
+        Self.configure(request, hashedNonce: startAppleSignInAttempt())
+    }
+
+    private static func configure(_ request: ASAuthorizationAppleIDRequest, hashedNonce: String) {
         request.requestedScopes = [.email, .fullName]
-        request.nonce = startAppleSignInAttempt()
+        request.nonce = hashedNonce
     }
 
     /// Makes a fresh nonce for this attempt and returns the hash Apple gets.
@@ -70,27 +89,57 @@ final class AuthViewModel {
     func handleAppleSignIn(result: Result<ASAuthorization, Error>) {
         switch result {
         case .success(let authorization):
-            guard let credential = authorization.credential as? ASAuthorizationAppleIDCredential,
-                  let identityToken = credential.identityToken,
-                  let authorizationCode = credential.authorizationCode else {
-                pendingNonce = nil
-                Self.logger.error("Apple sign-in returned no identity token or authorization code")
-                errorMessage = Self.signInIncompleteMessage
-                return
-            }
-            completeAppleSignIn(
-                identityToken: identityToken,
-                authorizationCode: authorizationCode,
-                fullName: credential.fullName,
-                appleUserId: credential.user
-            )
-
+            let credential = authorization.credential as? ASAuthorizationAppleIDCredential
+            handleAppleAuthorization(credential.map { AppleAuthorization($0) })
         case .failure(let error):
+            handleAppleFailure(error)
+        }
+    }
+
+    @discardableResult
+    private func handleAppleAuthorization(_ authorization: AppleAuthorization?) -> Task<Void, Never>? {
+        guard let authorization,
+              let identityToken = authorization.identityToken,
+              let authorizationCode = authorization.authorizationCode else {
             pendingNonce = nil
-            // User cancelled is not an error
-            if (error as? ASAuthorizationError)?.code == .canceled { return }
-            Self.logSignInFailure(error, step: "apple")
-            errorMessage = Self.signInFailedMessage
+            Self.logger.error("Apple sign-in returned no identity token or authorization code")
+            errorMessage = Self.signInIncompleteMessage
+            return nil
+        }
+        return completeAppleSignIn(
+            identityToken: identityToken,
+            authorizationCode: authorizationCode,
+            fullName: authorization.fullName,
+            appleUserId: authorization.appleUserId
+        )
+    }
+
+    private func handleAppleFailure(_ error: Error) {
+        pendingNonce = nil
+        // User cancelled is not an error
+        if (error as? ASAuthorizationError)?.code == .canceled { return }
+        Self.logSignInFailure(error, step: "apple")
+        errorMessage = Self.signInFailedMessage
+    }
+
+    /// Try Again after a failed sign-in: a new attempt with a fresh nonce,
+    /// through Sign in with Apple and then Supabase.
+    @discardableResult
+    func retrySignIn() -> Task<Void, Never> {
+        let hashedNonce = startAppleSignInAttempt()
+        isProcessing = true
+        return Task {
+            let completion: Task<Void, Never>?
+            do {
+                let authorization = try await performAppleAuthorization(hashedNonce)
+                isProcessing = false
+                completion = handleAppleAuthorization(authorization)
+            } catch {
+                isProcessing = false
+                handleAppleFailure(error)
+                completion = nil
+            }
+            await completion?.value
         }
     }
 
@@ -125,7 +174,7 @@ final class AuthViewModel {
                 isShowingSignIn = false
             } catch {
                 Self.logSignInFailure(error, step: "supabase")
-                errorMessage = Self.signInFailedMessage
+                errorMessage = UserFacingError(error).message(for: .signIn)
             }
             isProcessing = false
         }
@@ -146,9 +195,31 @@ final class AuthViewModel {
 
     // MARK: - Sign Out
 
-    func signOut() {
-        Task {
-            await authService.signOut()
+    var isShowingSignOutConfirmation = false
+    /// Shown in Settings for a few seconds after signing out.
+    private(set) var signOutFeedback: String?
+    @ObservationIgnored private var signOutFeedbackTask: Task<Void, Never>?
+
+    static let signOutFeedbackMessage = "Signed out. Your stats stay on this iPhone."
+
+    /// The Sign Out button: asks first.
+    func requestSignOut() {
+        isShowingSignOutConfirmation = true
+    }
+
+    /// "Sign Out" in the confirmation dialog.
+    @discardableResult
+    func confirmSignOut(feedbackDuration: Duration = .seconds(3)) -> Task<Void, Never> {
+        isShowingSignOutConfirmation = false
+        signOutFeedbackTask?.cancel()
+        return Task {
+            await performSignOut()
+            signOutFeedback = Self.signOutFeedbackMessage
+            signOutFeedbackTask = Task {
+                try? await Task.sleep(for: feedbackDuration)
+                if Task.isCancelled { return }
+                signOutFeedback = nil
+            }
         }
     }
 

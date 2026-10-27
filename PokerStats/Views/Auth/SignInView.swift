@@ -52,6 +52,13 @@ struct SignInView: View {
                         .foregroundStyle(.red)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal)
+
+                    Button("Try Again") {
+                        authViewModel.retrySignIn()
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .disabled(authViewModel.isProcessing)
                 }
 
                 // Loading overlay

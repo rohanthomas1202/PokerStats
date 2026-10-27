@@ -5,7 +5,7 @@ import SwiftData
 struct PokerStatsApp: App {
     let container: ModelContainer
     @State private var authService = AuthService()
-    @State private var cloudStatusMessage: String?
+    @State private var autoRestore = AutoRestoreViewModel()
 
     init() {
         do {
@@ -30,18 +30,13 @@ struct PokerStatsApp: App {
                     }
                 }
                 .overlay(alignment: .top) {
-                    if let message = cloudStatusMessage ?? authService.backupStatus {
-                        Text(message)
-                            .font(.caption.weight(.medium))
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 8)
-                            .background(.ultraThinMaterial)
-                            .cornerRadius(8)
-                            .padding(.top, 8)
-                            .transition(.move(edge: .top).combined(with: .opacity))
+                    if let message = autoRestore.message {
+                        CloudStatusBanner(message: message, autoRestore: autoRestore)
+                    } else if let message = authService.backupStatus {
+                        CloudStatusBanner(message: message)
                     }
                 }
-                .animation(.easeInOut, value: cloudStatusMessage)
+                .animation(.easeInOut, value: autoRestore.status)
                 .animation(.easeInOut, value: authService.backupStatus)
                 .onAppear {
                     if !ProcessInfo.processInfo.arguments.contains("--seed-screenshot-data") {
@@ -51,6 +46,8 @@ struct PokerStatsApp: App {
                 .onChange(of: authService.isAuthenticated) { _, isAuthenticated in
                     if isAuthenticated {
                         autoRestoreIfEmpty()
+                    } else {
+                        autoRestore.dismiss()
                     }
                 }
         }
@@ -60,7 +57,7 @@ struct PokerStatsApp: App {
     private func autoRestoreIfEmpty() {
         let context = container.mainContext
         let backupService = BackupService(authService: authService, modelContext: context)
-        let autoRestore = AutoRestore(
+        let restore = AutoRestore(
             modelContext: context,
             listBackups: { try await backupService.listBackups() },
             downloadBackup: { try await backupService.downloadBackup(metadata: $0) },
@@ -69,27 +66,45 @@ struct PokerStatsApp: App {
         guard !AutoRestoreFlag.standard.isSet,
               (try? LocalDataRestorer(modelContext: context).isStoreEmpty()) == true else { return }
 
-        Task { @MainActor in
-            cloudStatusMessage = "Restoring from cloud..."
-            do {
-                switch try await autoRestore.run() {
-                case .restored(let sessionCount):
-                    cloudStatusMessage = "Restored \(sessionCount) sessions"
-                case .noBackups:
-                    cloudStatusMessage = "No backups found"
-                    try? await Task.sleep(for: .seconds(2))
-                    cloudStatusMessage = nil
-                    return
-                case .skippedLocalDataExists, .skippedDataAppearedDuringDownload, .skippedAlreadyRan:
-                    // Local data wins; nothing was restored or deleted.
-                    cloudStatusMessage = nil
-                    return
+        autoRestore.start(isSignedIn: { authService.isAuthenticated }) { try await restore.run() }
+    }
+}
+
+/// The app-wide cloud status banner. A failed auto-restore gets Try Again
+/// and a close button.
+private struct CloudStatusBanner: View {
+    let message: String
+    var autoRestore: AutoRestoreViewModel?
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text(message)
+                .font(.caption.weight(.medium))
+                .multilineTextAlignment(.leading)
+
+            if let autoRestore, autoRestore.isFailed {
+                if autoRestore.canRetry {
+                    Button("Try Again") {
+                        _ = autoRestore.retry()
+                    }
+                    .font(.caption.weight(.semibold))
                 }
-            } catch {
-                cloudStatusMessage = "Restore failed: \(error.localizedDescription)"
+
+                Button {
+                    autoRestore.dismiss()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.caption.weight(.semibold))
+                }
+                .accessibilityLabel("Dismiss")
             }
-            try? await Task.sleep(for: .seconds(3))
-            cloudStatusMessage = nil
         }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(.ultraThinMaterial)
+        .cornerRadius(8)
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+        .transition(.move(edge: .top).combined(with: .opacity))
     }
 }
