@@ -175,25 +175,7 @@ struct SettingsView: View {
                 SignInView(authViewModel: authViewModel)
             }
         }
-        .confirmationDialog(
-            "Sign out?",
-            isPresented: Binding(
-                get: { authViewModel?.isShowingSignOutConfirmation ?? false },
-                set: { authViewModel?.isShowingSignOutConfirmation = $0 }
-            ),
-            titleVisibility: .visible
-        ) {
-            Button("Sign Out", role: .destructive) {
-                authViewModel?.confirmSignOut()
-            }
-            Button("Cancel", role: .cancel) { }
-        } message: {
-            Text("Your stats stay on this iPhone.")
-        }
-        .onChange(of: authViewModel?.signOutFeedback) { _, feedback in
-            guard let feedback else { return }
-            AccessibilityNotification.Announcement(feedback).post()
-        }
+        .modifier(SignOutConfirmation(authViewModel: authViewModel))
         .alert("Delete All Data?", isPresented: $viewModel.showDeleteAllConfirmation) {
             Button("Cancel", role: .cancel) { }
             Button("Delete Everything", role: .destructive) {
@@ -258,5 +240,37 @@ struct SettingsView: View {
         } message: {
             Text("Your account, all cloud backups, and all local data will be permanently deleted.")
         }
+    }
+}
+
+/// Sign Out asks first, then announces the feedback for VoiceOver.
+private struct SignOutConfirmation: ViewModifier {
+    let authViewModel: AuthViewModel?
+
+    private var isPresented: Binding<Bool> {
+        Binding(
+            get: { authViewModel?.isShowingSignOutConfirmation ?? false },
+            set: { authViewModel?.isShowingSignOutConfirmation = $0 }
+        )
+    }
+
+    private var feedback: String? {
+        authViewModel?.signOutFeedback
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .confirmationDialog("Sign out?", isPresented: isPresented, titleVisibility: .visible) {
+                Button("Sign Out", role: .destructive) {
+                    _ = authViewModel?.confirmSignOut()
+                }
+                Button("Cancel", role: .cancel) { }
+            } message: {
+                Text("Your stats stay on this iPhone.")
+            }
+            .onChange(of: feedback) { _, feedback in
+                guard let feedback else { return }
+                AccessibilityNotification.Announcement(feedback).post()
+            }
     }
 }
