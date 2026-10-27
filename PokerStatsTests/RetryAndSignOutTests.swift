@@ -8,6 +8,24 @@ private final class Calls {
     var count = 0
 }
 
+/// Holds a fake restore "in flight" until the test finishes it. It ignores
+/// cancellation, like a download that has already returned.
+@MainActor
+private final class RestoreGate {
+    private var continuation: CheckedContinuation<Void, Error>?
+    private(set) var started = false
+
+    func wait() async throws {
+        started = true
+        try await withCheckedThrowingContinuation { continuation = $0 }
+    }
+
+    func finish(throwing error: Error? = nil) {
+        if let error { continuation?.resume(throwing: error) } else { continuation?.resume() }
+        continuation = nil
+    }
+}
+
 @MainActor
 private final class Nonces {
     var sentToSupabase: [String] = []
@@ -178,6 +196,31 @@ struct RetryAndSignOutTests {
         #expect(vm.retry() == nil)
     }
 
+    /// Signing out dismisses the banner; a restore still in flight must not bring it back.
+    @Test func autoRestoreDismissedMidRun_reportsNothingLater() async {
+        let gate = RestoreGate()
+        let vm = AutoRestoreViewModel()
+        let task = vm.start(isSignedIn: { false }) {
+            try await gate.wait()
+            return .restored(sessionCount: 1)
+        }
+        while !gate.started { await Task.yield() }
+        #expect(vm.message == "Restoring from cloud...")
+
+        vm.dismiss()
+        gate.finish(throwing: SupabaseError.sessionChanged)
+        await task.value
+        #expect(vm.status == nil)
+        #expect(!vm.canRetry)
+        #expect(vm.retry() == nil)
+    }
+
+    @Test func autoRestoreSessionChangedWhileSignedOut_saysToSignIn() async {
+        let vm = AutoRestoreViewModel()
+        await vm.start(isSignedIn: { false }) { throw SupabaseError.sessionChanged }.value
+        #expect(vm.message == "Restore didn't finish. \(UserFacingError.sessionChangedSignedOutMessage)")
+    }
+
     @Test func autoRestoreSkipped_showsNothing() async {
         let vm = AutoRestoreViewModel()
         await vm.start { .skippedLocalDataExists }.value
@@ -285,7 +328,10 @@ struct RetryAndSignOutTests {
         let vm = AuthViewModel(authService: AuthService(), performSignOut: {})
         await vm.confirmSignOut(feedbackDuration: .milliseconds(10)).value
         #expect(vm.signOutFeedback != nil)
-        while vm.signOutFeedback != nil { await Task.yield() }
+        let deadline = ContinuousClock.now + .seconds(5)
+        while vm.signOutFeedback != nil, ContinuousClock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(10))
+        }
         #expect(vm.signOutFeedback == nil)
     }
 }

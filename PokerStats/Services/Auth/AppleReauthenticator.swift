@@ -51,6 +51,11 @@ final class AppleReauthenticator: NSObject {
     /// Runs one Sign in with Apple request; `configure` sets its scopes and
     /// nonce. Cancelling throws `ASAuthorizationError.canceled`.
     func authorize(configure: (ASAuthorizationAppleIDRequest) -> Void) async throws -> AppleAuthorization {
+        // One request at a time; a second caller must not replace (and leak)
+        // the pending continuation.
+        guard continuation == nil else {
+            throw AuthServiceError.appleSignInFailed("Sign in with Apple is already in progress")
+        }
         let request = ASAuthorizationAppleIDProvider().createRequest()
         configure(request)
         let controller = ASAuthorizationController(authorizationRequests: [request])

@@ -66,7 +66,7 @@ struct PokerStatsApp: App {
         guard !AutoRestoreFlag.standard.isSet,
               (try? LocalDataRestorer(modelContext: context).isStoreEmpty()) == true else { return }
 
-        autoRestore.start { try await restore.run() }
+        autoRestore.start(isSignedIn: { authService.isAuthenticated }) { try await restore.run() }
     }
 }
 

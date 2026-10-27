@@ -112,8 +112,8 @@ final class AuthService {
         } catch {
             isLoading = false
             // The caller maps the original error to plain copy (offline, 5xx, ...)
-            // and logs it; only the error's type is kept here.
-            self.error = .appleSignInFailed(String(describing: type(of: error)))
+            // and logs it. `error` keeps the raw detail for debugging; no view shows it.
+            self.error = .appleSignInFailed(String(describing: error))
             throw error
         }
     }
