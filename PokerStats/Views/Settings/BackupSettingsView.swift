@@ -51,6 +51,12 @@ struct BackupSettingsView: View {
                 Section {
                     Label(error, systemImage: "exclamationmark.triangle.fill")
                         .foregroundStyle(.red)
+                    if viewModel.retryableAction != nil {
+                        Button("Try Again") {
+                            Task { await viewModel.retry() }
+                        }
+                        .disabled(!viewModel.canRetry)
+                    }
                 }
             }
 

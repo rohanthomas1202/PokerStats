@@ -28,11 +28,16 @@ struct SettingsView: View {
                     }
 
                     Button {
-                        authViewModel?.signOut()
+                        authViewModel?.requestSignOut()
                     } label: {
                         Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
                     }
                 } else {
+                    if let feedback = authViewModel?.signOutFeedback {
+                        Label(feedback, systemImage: "checkmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                    }
+
                     Button {
                         if authViewModel == nil {
                             authViewModel = AuthViewModel(authService: authService)
@@ -169,6 +174,25 @@ struct SettingsView: View {
             if let authViewModel {
                 SignInView(authViewModel: authViewModel)
             }
+        }
+        .confirmationDialog(
+            "Sign out?",
+            isPresented: Binding(
+                get: { authViewModel?.isShowingSignOutConfirmation ?? false },
+                set: { authViewModel?.isShowingSignOutConfirmation = $0 }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Sign Out", role: .destructive) {
+                authViewModel?.confirmSignOut()
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("Your stats stay on this iPhone.")
+        }
+        .onChange(of: authViewModel?.signOutFeedback) { _, feedback in
+            guard let feedback else { return }
+            AccessibilityNotification.Announcement(feedback).post()
         }
         .alert("Delete All Data?", isPresented: $viewModel.showDeleteAllConfirmation) {
             Button("Cancel", role: .cancel) { }

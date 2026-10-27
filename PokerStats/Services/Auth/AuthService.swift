@@ -111,9 +111,10 @@ final class AuthService {
             isLoading = false
         } catch {
             isLoading = false
-            let authError = AuthServiceError.appleSignInFailed(error.localizedDescription)
-            self.error = authError
-            throw authError
+            // The caller maps the original error to plain copy (offline, 5xx, ...)
+            // and logs it; only the error's type is kept here.
+            self.error = .appleSignInFailed(String(describing: type(of: error)))
+            throw error
         }
     }
 
@@ -167,7 +168,8 @@ final class AuthService {
             } catch {
                 // A cancelled backup was replaced or stopped; it reports nothing.
                 if Task.isCancelled { return }
-                backupStatus = "Backup failed: \(error.localizedDescription)"
+                UserFacingError.log(error, action: .backup, to: Self.logger)
+                backupStatus = UserFacingError(error).bannerMessage(for: .backup, isSignedIn: isAuthenticated)
             }
             try? await Task.sleep(for: .seconds(3))
             if Task.isCancelled { return }
