@@ -70,7 +70,7 @@ struct PokerStatsApp: App {
             downloadBackup: { try await backupService.downloadBackup(metadata: $0) },
             flag: .standard
         )
-        guard !AutoRestoreFlag.standard.isSet,
+        guard !restore.flag.isSet,
               (try? LocalDataRestorer(modelContext: context).isStoreEmpty()) == true else { return }
 
         autoRestore.start(isSignedIn: { authService.isAuthenticated }) { try await restore.run() }
