@@ -317,10 +317,7 @@ struct LocalDataOwnerTests {
 
     @Test func deleteAllData_clearsTheOwner_butKeepsTheAutoRestoreFlag() throws {
         owner.adopt(accountA)
-        // A session without hands, as in AutoRestoreAfterWipeTests: the batch
-        // delete in deleteAllData fails on the in-memory store when hands exist.
-        context.insert(Session(location: "A's session"))
-        try context.save()
+        try addSession("A's session") // has a hand (#263)
         let settings = SettingsViewModel()
         settings.localDataOwner = owner
         settings.autoRestoreFlag = freshFlag()
@@ -328,8 +325,10 @@ struct LocalDataOwnerTests {
         settings.deleteAllData(from: context)
 
         #expect(try storedLocations().isEmpty)
+        #expect(try ModelContext(container).fetchCount(FetchDescriptor<Hand>()) == 0)
         #expect(owner.ownerId == nil)
         #expect(settings.autoRestoreFlag.isSet)
+        #expect(settings.deleteAllDataFailure == nil)
     }
 
     @Test func accountDeletionWipe_clearsTheOwner_andTheAutoRestoreFlag() throws {
