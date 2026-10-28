@@ -127,11 +127,17 @@ final class AuthService {
     }
 
     /// Resets the signed-in UI state. Callers clear the stored session.
+    /// Also drops the scheduled backup, so a later failed deletion under
+    /// another sign-in can't run it again (#275).
     private func clearSignedInState() {
         isAuthenticated = false
         userEmail = nil
         userId = nil
         error = nil
+        backupTask?.cancel()
+        backupTask = nil
+        unfinishedBackup = nil
+        backupStatus = nil
     }
 
     private func apply(_ user: User) {
