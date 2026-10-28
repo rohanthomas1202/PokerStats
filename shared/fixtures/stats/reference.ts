@@ -227,10 +227,8 @@ export function plDistribution(sessions: SessionRow[], bucketWidth = 100) {
   const profits = sessions.filter(isCompleted).map(netProfit);
   if (profits.length === 0) return [];
   const lower = Math.floor(Math.min(...profits) / bucketWidth) * bucketWidth;
-  const upper = Math.ceil(Math.max(...profits) / bucketWidth) * bucketWidth;
-  if (!(upper > lower)) {
-    return [{ range_label: "$0", lower_bound: 0, count: profits.length }];
-  }
+  const upper = Math.floor(Math.max(...profits) / bucketWidth) * bucketWidth +
+    bucketWidth;
   const buckets = [];
   for (let current = lower; current < upper; current += bucketWidth) {
     const next = current + bucketWidth;

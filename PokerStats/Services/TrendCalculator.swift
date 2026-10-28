@@ -127,13 +127,11 @@ enum TrendCalculator {
         let minProfit = (profits.min() ?? 0)
         let maxProfit = (profits.max() ?? 0)
 
-        // Determine bucket boundaries
+        // Buckets are [lower, lower + width). The last one starts at
+        // floor(max / width) * width, so the maximum always lands in a bucket
+        // and a single value or narrow range still gets its real bucket.
         let lowerBound = floor(minProfit / bucketWidth) * bucketWidth
-        let upperBound = ceil(maxProfit / bucketWidth) * bucketWidth
-
-        guard upperBound > lowerBound else {
-            return [PLBucket(rangeLabel: "$0", lowerBound: 0, count: completed.count)]
-        }
+        let upperBound = floor(maxProfit / bucketWidth) * bucketWidth + bucketWidth
 
         var buckets: [PLBucket] = []
         var current = lowerBound
