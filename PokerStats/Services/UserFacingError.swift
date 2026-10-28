@@ -7,6 +7,7 @@ import os
 
 /// What the user is told when a cloud or sign-in request fails, by category.
 /// The copy is short and fixed; the raw error goes to the log only (`log`).
+/// Delete All Data's local wipe uses it too (#263).
 ///
 /// Account deletion keeps its own copy (`AuthViewModel.DeleteAccountFailure`).
 enum UserFacingError: Equatable, Sendable {
@@ -33,6 +34,7 @@ enum UserFacingError: Equatable, Sendable {
         case backup
         case restore
         case autoRestore
+        case deleteAllData
     }
 
     init(_ error: any Error) {
@@ -75,7 +77,7 @@ enum UserFacingError: Equatable, Sendable {
         switch action {
         case .backup: return "Backup didn't finish. \(message)"
         case .restore, .autoRestore: return "Restore didn't finish. \(message)"
-        case .signIn, .loadBackups: return message
+        case .signIn, .loadBackups, .deleteAllData: return message
         }
     }
 
@@ -86,6 +88,7 @@ enum UserFacingError: Equatable, Sendable {
         case .backup: "Couldn't back up right now. Your data on this phone is safe. Try again."
         case .restore: "Couldn't restore this backup. Your data on this phone wasn't changed. Try again."
         case .autoRestore: "Couldn't restore your backup. Try again."
+        case .deleteAllData: "Couldn't delete your data. Nothing on this iPhone was changed. Try again."
         }
     }
 

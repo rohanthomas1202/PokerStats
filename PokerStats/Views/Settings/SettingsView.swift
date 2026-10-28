@@ -169,6 +169,7 @@ struct SettingsView: View {
         }
         .modifier(SignInSheet(authViewModel: authViewModel))
         .modifier(SignOutConfirmation(authViewModel: authViewModel))
+        .modifier(DeleteAllDataFailureAlert(viewModel: viewModel))
         .alert("Delete All Data?", isPresented: $viewModel.showDeleteAllConfirmation) {
             Button("Cancel", role: .cancel) { }
             Button("Delete Everything", role: .destructive) {
@@ -256,6 +257,31 @@ private struct SignInSheet: ViewModifier {
                     SignInView(authViewModel: authViewModel)
                         .onAppear { ownership.deferPrompt() }
                 }
+            }
+    }
+}
+
+/// Delete All Data failed: say so instead of failing silently (#263).
+private struct DeleteAllDataFailureAlert: ViewModifier {
+    let viewModel: SettingsViewModel
+
+    private var isPresented: Binding<Bool> {
+        Binding(
+            get: { viewModel.deleteAllDataFailure != nil },
+            set: { if !$0 { viewModel.deleteAllDataFailure = nil } }
+        )
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .alert(
+                SettingsViewModel.deleteAllDataFailedTitle,
+                isPresented: isPresented,
+                presenting: viewModel.deleteAllDataFailure
+            ) { _ in
+                Button("OK", role: .cancel) { }
+            } message: { message in
+                Text(message)
             }
     }
 }
