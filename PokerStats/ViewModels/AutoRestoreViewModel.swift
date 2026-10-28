@@ -93,6 +93,10 @@ final class AutoRestoreViewModel {
                     // Local data wins; nothing was restored or deleted.
                     dismiss()
                 }
+            } catch is CancellationError {
+                // Stopped by account deletion: nothing to report.
+                guard thisRun == generation else { return }
+                dismiss()
             } catch {
                 UserFacingError.log(error, action: .autoRestore, to: Self.logger)
                 guard thisRun == generation else { return }

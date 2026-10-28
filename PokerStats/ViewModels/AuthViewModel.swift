@@ -280,16 +280,20 @@ final class AuthViewModel {
     var deleteAccountFailure: DeleteAccountFailure?
     /// Kept so "Try Again" re-runs the same success handler.
     private var pendingOnDeleted: (@MainActor () -> Void)?
+    /// The deletion in progress. A second request while it runs gets this one.
+    @ObservationIgnored private var deleteTask: Task<Void, Never>?
 
     /// `onDeleted` (wiping local data) runs only after the server confirms the
-    /// deletion. On cancel or failure, local data is kept.
+    /// deletion. On cancel or failure, local data is kept. While a deletion
+    /// runs, a second call starts nothing and returns the running one.
     @discardableResult
     func deleteAccount(onDeleted: @escaping @MainActor () -> Void = {}) -> Task<Void, Never> {
+        if isDeletingAccount, let deleteTask { return deleteTask }
         pendingOnDeleted = onDeleted
         isDeletingAccount = true
         deleteAccountFailure = nil
 
-        return Task {
+        let task = Task {
             do {
                 try await performDeleteAccount()
                 pendingOnDeleted = nil
@@ -308,7 +312,10 @@ final class AuthViewModel {
                 deleteAccountFailure = .retryable
             }
             isDeletingAccount = false
+            deleteTask = nil
         }
+        deleteTask = task
+        return task
     }
 
     /// "Try Again" from the failure alert.
