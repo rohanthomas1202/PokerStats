@@ -6,6 +6,7 @@ struct PokerStatsApp: App {
     let container: ModelContainer
     @State private var authService = AuthService()
     @State private var autoRestore = AutoRestoreViewModel()
+    @State private var localDataOwnership = LocalDataOwnershipViewModel()
 
     init() {
         do {
@@ -20,6 +21,7 @@ struct PokerStatsApp: App {
             ContentView()
                 .preferredColorScheme(.dark)
                 .environment(authService)
+                .environment(localDataOwnership)
                 .task {
                     if ProcessInfo.processInfo.arguments.contains("--seed-screenshot-data") {
                         let context = container.mainContext
@@ -43,6 +45,11 @@ struct PokerStatsApp: App {
                         authService.initialize()
                     }
                 }
+                .modifier(LocalDataOwnershipPrompt(
+                    ownership: localDataOwnership,
+                    authService: authService,
+                    modelContext: container.mainContext
+                ))
                 .onChange(of: authService.isAuthenticated) { _, isAuthenticated in
                     if isAuthenticated {
                         autoRestoreIfEmpty()

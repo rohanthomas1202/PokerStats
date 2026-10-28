@@ -22,6 +22,8 @@ enum UserFacingError: Equatable, Sendable {
     case sessionChanged
     /// Cloud backup needs an account and none is signed in.
     case notSignedIn
+    /// The local data belongs to a different account and the user hasn't chosen to back it up (#69).
+    case dataFromAnotherAccount
     case unknown
 
     /// The request that failed; picks the copy for `.unknown`.
@@ -47,6 +49,7 @@ enum UserFacingError: Equatable, Sendable {
     static let sessionChangedMessage = "You signed out or switched accounts before this finished. Try again."
     static let sessionChangedSignedOutMessage = "You signed out before this finished. Sign in and try again."
     static let notSignedInMessage = "Sign in to use cloud backup."
+    static let dataFromAnotherAccountMessage = "The stats on this iPhone were saved with a different account, so they aren't backed up."
 
     /// Copy for the screen where `action` was started. `isSignedIn` picks the
     /// next step after `.sessionChanged`.
@@ -60,6 +63,7 @@ enum UserFacingError: Equatable, Sendable {
         case .backupTooNew: Self.backupTooNewMessage
         case .sessionChanged: isSignedIn ? Self.sessionChangedMessage : Self.sessionChangedSignedOutMessage
         case .notSignedIn: Self.notSignedInMessage
+        case .dataFromAnotherAccount: Self.dataFromAnotherAccountMessage
         case .unknown: Self.unknownMessage(for: action)
         }
     }
@@ -67,7 +71,7 @@ enum UserFacingError: Equatable, Sendable {
     /// Copy for the app-wide banner, which has no screen to say what failed.
     func bannerMessage(for action: Action, isSignedIn: Bool = true) -> String {
         let message = message(for: action, isSignedIn: isSignedIn)
-        guard self != .unknown, self != .notSignedIn else { return message }
+        guard self != .unknown, self != .notSignedIn, self != .dataFromAnotherAccount else { return message }
         switch action {
         case .backup: return "Backup didn't finish. \(message)"
         case .restore, .autoRestore: return "Restore didn't finish. \(message)"
@@ -88,7 +92,7 @@ enum UserFacingError: Equatable, Sendable {
     /// False when trying again right away can't help.
     var isRetryable: Bool {
         switch self {
-        case .backupTooNew, .notSignedIn, .authExpired: false
+        case .backupTooNew, .notSignedIn, .authExpired, .dataFromAnotherAccount: false
         case .offline, .timeout, .serverError, .sessionChanged, .unknown: true
         }
     }
@@ -112,6 +116,8 @@ enum UserFacingError: Equatable, Sendable {
             return .backupTooNew
         case BackupError.notAuthenticated:
             return .notSignedIn
+        case BackupError.dataFromAnotherAccount:
+            return .dataFromAnotherAccount
         case SupabaseError.sessionExpired:
             return .authExpired
         case SupabaseError.refreshUnavailable:

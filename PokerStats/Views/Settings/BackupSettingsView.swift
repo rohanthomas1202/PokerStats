@@ -2,6 +2,7 @@ import SwiftUI
 
 struct BackupSettingsView: View {
     @Environment(AuthService.self) private var authService
+    @Environment(LocalDataOwnershipViewModel.self) private var ownership
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel = BackupViewModel()
 
@@ -32,7 +33,16 @@ struct BackupSettingsView: View {
                         }
                     }
                 }
-                .disabled(!viewModel.canBackup)
+                .disabled(!viewModel.canBackup || ownership.backupsBlocked)
+
+                if ownership.backupsBlocked {
+                    // Another account's stats are on this iPhone (#69).
+                    Text(LocalDataOwnershipViewModel.blockedMessage)
+                        .foregroundStyle(.secondary)
+                    Button(LocalDataOwnershipViewModel.chooseButton) {
+                        ownership.showChoice()
+                    }
+                }
             } header: {
                 Text("Backup")
             } footer: {

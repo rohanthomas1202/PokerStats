@@ -147,10 +147,16 @@ final class AuthService {
     /// True while account deletion runs; no new backup starts.
     private var backupsSuspended = false
 
+    /// Which account the local data belongs to (#69). Tests use an isolated store.
+    @ObservationIgnored var localDataOwner = LocalDataOwner.standard
+
+    /// The automatic backup after a session ends. Skipped while the local
+    /// data belongs to another account and the user hasn't chosen (#69).
     func scheduleBackup(modelContext: ModelContext) {
-        guard isAuthenticated else { return }
+        guard isAuthenticated, let userId, localDataOwner.allowsUpload(for: userId) else { return }
+        let owner = localDataOwner
         scheduleBackup {
-            try await BackupService(authService: self, modelContext: modelContext).createAndUploadBackup()
+            try await BackupService(authService: self, modelContext: modelContext, owner: owner).createAndUploadBackup()
         }
     }
 
