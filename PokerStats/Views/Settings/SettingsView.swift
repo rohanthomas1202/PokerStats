@@ -128,7 +128,7 @@ struct SettingsView: View {
                     Label("Privacy Policy", systemImage: "hand.raised")
                 }
 
-                Link(destination: URL(string: "https://github.com")!) {
+                Link(destination: AppLinks.feedback) {
                     Label("Send Feedback", systemImage: "envelope")
                 }
             }
