@@ -5,6 +5,10 @@ enum AppLinks {
     /// Hosted privacy policy (PR #72). Must match fastlane/metadata/en-US/privacy_url.txt.
     static let privacyPolicy = URL(string: "https://rohanthomas1202.github.io/PokerStats/privacy/")!
 
+    /// Where Send Feedback goes (#282). Must match fastlane/metadata/en-US/support_url.txt.
+    /// GitHub Issues until the owner picks a contact email in #76.
+    static let feedback = URL(string: "https://github.com/rohanthomas1202/PokerStats/issues")!
+
     /// Support address shown in the delete-account needs-support alert.
     /// Placeholder until the owner picks the address in #76. When it is filled
     /// in, delete the placeholder checks below and in AppLinksTests.
