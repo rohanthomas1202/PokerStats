@@ -191,7 +191,8 @@ final class AuthService {
         guard isAuthenticated, let userId, localDataOwner.allowsUpload(for: userId) else { return }
         let owner = localDataOwner
         scheduleBackup {
-            try await BackupService(authService: self, modelContext: modelContext, owner: owner).createAndUploadBackup()
+            // Same client as the session, so the upload uses this sign-in (and tests can intercept it).
+            try await BackupService(authService: self, modelContext: modelContext, client: client, owner: owner).createAndUploadBackup()
         }
     }
 
