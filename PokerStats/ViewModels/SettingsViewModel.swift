@@ -13,11 +13,24 @@ final class SettingsViewModel {
     var defaultGameType: GameType = .cash
     var showDeleteAllConfirmation = false
     var showDeleteAllSecondConfirmation = false
+    /// Shown when Delete All Data failed; nil otherwise (#263).
+    var deleteAllDataFailure: String?
+
+    static let deleteAllDataFailedTitle = "Couldn't Delete Data"
+
+    /// The account was deleted but the local wipe threw; the alert offers a
+    /// retry so the next person on this iPhone doesn't see the data (#60).
+    var localWipeFailed = false
+
+    static let localWipeFailedTitle = "Data Still on This iPhone"
+    static let localWipeFailedMessage = "Your account was deleted, but the data on this iPhone couldn't be removed. Delete it now so no one else using this iPhone can see it."
 
     /// Tests use an isolated store.
     @ObservationIgnored var autoRestoreFlag = AutoRestoreFlag.standard
     /// Tests use an isolated store.
     @ObservationIgnored var localDataOwner = LocalDataOwner.standard
+    /// Tests inject a failing save.
+    @ObservationIgnored var makeWiper: @MainActor (ModelContext) -> LocalDataWiper = { LocalDataWiper(modelContext: $0) }
 
     func loadSettings(from context: ModelContext) {
         let descriptor = FetchDescriptor<Settings>()
@@ -48,16 +61,20 @@ final class SettingsViewModel {
         // Set first: a deliberate wipe must never be undone by auto-restore,
         // even if the app is killed mid-delete.
         autoRestoreFlag.set()
-        do {
-            try context.delete(model: Hand.self)
-            try context.delete(model: Session.self)
-            try context.save()
-            // No stats left, so they belong to no account (#69).
-            localDataOwner.clear()
-        } catch {
-            // Silently fail for MVP — could add error reporting later
-        }
         showDeleteAllSecondConfirmation = false
+        do {
+            // Deletes hands before sessions in one save; a batch delete fails
+            // when sessions have hands (#263). On error nothing is deleted.
+            try makeWiper(context).wipe()
+        } catch {
+            UserFacingError.log(error, action: .deleteAllData, to: Self.logger)
+            deleteAllDataFailure = UserFacingError(error).message(for: .deleteAllData)
+            return
+        }
+        deleteAllDataFailure = nil
+        // No stats left, so they belong to no account (#69).
+        localDataOwner.clear()
+        resetToDefaults()
         WidgetCenter.shared.reloadAllTimelines()
     }
 
@@ -65,25 +82,33 @@ final class SettingsViewModel {
     /// (settings too), end any Live Activity, and refresh widgets. Also clears
     /// the auto-restore flag: the account and its backups are gone, so the
     /// next sign-in is treated like a fresh install. Once the wipe succeeds
-    /// the empty store has no owner (#69).
+    /// the empty store has no owner (#69). If it fails, `localWipeFailed`
+    /// shows an alert whose retry calls this again (#60).
     func wipeAfterAccountDeletion(from context: ModelContext) {
         autoRestoreFlag.clear()
         do {
-            try LocalDataWiper(modelContext: context).wipe()
+            try makeWiper(context).wipe()
             localDataOwner.clear()
+            localWipeFailed = false
         } catch {
             Self.logger.error("Local wipe after account deletion failed: \(error.localizedDescription, privacy: .private)")
+            localWipeFailed = true
         }
-        let defaults = Settings()
-        defaultBuyIn = String(Int(defaults.defaultBuyIn))
-        defaultStakes = defaults.defaultStakes
-        defaultGameType = defaults.defaultGameType
+        resetToDefaults()
         Task {
             for activity in Activity<SessionActivityAttributes>.activities {
                 await activity.end(nil, dismissalPolicy: .immediate)
             }
         }
         WidgetCenter.shared.reloadAllTimelines()
+    }
+
+    /// The wiper also deletes the saved Settings, so show the defaults.
+    private func resetToDefaults() {
+        let defaults = Settings()
+        defaultBuyIn = String(Int(defaults.defaultBuyIn))
+        defaultStakes = defaults.defaultStakes
+        defaultGameType = defaults.defaultGameType
     }
 
     private static let logger = Logger(subsystem: "com.rohanthomas.PokerStats", category: "SettingsViewModel")
