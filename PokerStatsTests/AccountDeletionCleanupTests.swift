@@ -482,4 +482,58 @@ struct AccountDeletionCleanupTests {
         #expect(log.events == ["backup started", "backup stopped", "server delete"])
         #expect(auth.backupStatus == nil)
     }
+
+    // MARK: - With #60's wipe-failure alert
+
+    @Test func failedWipeAfterDeletion_cloudWorkStaysStopped_untilTheRetryWipes() async throws {
+        let container = try seededContainer()
+        let context = container.mainContext
+        let auth = signedInAuth()
+        let log = EventLog()
+        let owner = LocalDataOwner(defaults: UserDefaults(suiteName: "AccountDeletionCleanupTests.\(UUID().uuidString)")!)
+        let service = BackupService(authService: auth, modelContext: context, owner: owner)
+
+        // A backup and a manual restore download are in flight.
+        await startEndlessBackup(auth, log: log)
+        let restore = Task {
+            try await auth.performCloudWork { await ignoresCancellation(log, "download") }
+        }
+        await waitUntil("download started") { log.events.contains("download started") }
+
+        let settings = SettingsViewModel()
+        settings.localDataOwner = owner
+        settings.autoRestoreFlag = freshFlag()
+        settings.makeWiper = { context in
+            var wiper = LocalDataWiper(modelContext: context)
+            wiper.save = { _ in throw InjectedSaveFailure() }
+            return wiper
+        }
+        let vm = AuthViewModel(authService: auth, performDeleteAccount: {
+            try await auth.deleteAccount(serverDelete: { log.events.append("server delete") })
+        })
+
+        await vm.deleteAccount { settings.wipeAfterAccountDeletion(from: context) }.value
+        await #expect(throws: CancellationError.self) { _ = try await restore.value }
+
+        // Deleted and signed out, but the wipe failed: #60's alert is up and
+        // the data is still here. Nothing cloud-side may run or write meanwhile.
+        #expect(settings.localWipeFailed)
+        #expect(!auth.isAuthenticated)
+        #expect(try counts(context) == [2, 3, 1])
+        #expect(Set(log.events) == ["backup started", "backup stopped", "download started", "download stopped", "server delete"])
+        #expect(log.events.last == "server delete")
+        #expect(throws: SupabaseError.self) { try service.restoreBackup(payload()) }
+        await #expect(throws: BackupError.self) { _ = try await auth.performCloudWork { metadata() } }
+        for _ in 0..<20 { await Task.yield() }
+        #expect(log.events.filter { $0 == "backup started" }.count == 1) // the stopped backup didn't run again
+        #expect(try locations(context) == ["A", "B"])
+
+        // "Delete Local Data" in the alert retries the wipe.
+        settings.makeWiper = { LocalDataWiper(modelContext: $0) }
+        settings.wipeAfterAccountDeletion(from: context)
+
+        #expect(!settings.localWipeFailed)
+        #expect(try counts(context) == [0, 0, 0])
+        #expect(owner.ownerId == nil)
+    }
 }
