@@ -58,9 +58,18 @@ struct DeletionFollowupTests {
                 }
             },
             restoreBackup: { _ in log.events.append("restored") },
-            isCloudWorkSuspended: { auth.isCloudWorkSuspended }
+            isCloudWorkSuspended: { auth.isCloudWorkSuspended },
+            stoppedWork: { auth.stoppedCloudWork },
+            setStoppedWork: { auth.setStoppedCloudWork($0) }
         ))
         return vm
+    }
+
+    /// The Cloud Backup screen opened again: a new view model wired to the
+    /// same `auth`, like the app's `configure(authService:modelContext:)`.
+    /// The user has to leave the screen to delete the account.
+    private func reopenedScreen(_ auth: AuthService, log: Log) -> BackupViewModel {
+        backupViewModel(auth, log: log)
     }
 
     // MARK: - #268: say when a deletion that didn't complete stopped a manual backup or restore
@@ -80,19 +89,23 @@ struct DeletionFollowupTests {
             })
             await backup.value
 
-            #expect(vm.stoppedNote == BackupViewModel.backupStoppedMessage, "\(failure)")
-            #expect(vm.errorMessage == nil) // not an error
-            #expect(vm.successMessage == nil)
+            // The user left Cloud Backup to delete; the reopened screen says so.
+            let reopened = reopenedScreen(auth, log: log)
+            #expect(reopened.stoppedNote == BackupViewModel.backupStoppedMessage, "\(failure)")
+            #expect(reopened.errorMessage == nil) // not an error
+            #expect(reopened.successMessage == nil)
 
             // Back Up Now again: the note goes away and the backup runs.
-            await vm.createBackup()
-            #expect(vm.stoppedNote == nil)
-            #expect(vm.successMessage?.hasPrefix("Backed up") == true)
+            await reopened.createBackup()
+            #expect(reopened.stoppedNote == nil)
+            #expect(reopenedScreen(auth, log: log).stoppedNote == nil)
+            #expect(reopened.successMessage?.hasPrefix("Backed up") == true)
         }
     }
 
     @Test func backUpNow_stoppedByADeletionThatCompleted_showsNothing() async throws {
-        let auth = signedInAuth()
+        let storage = InMemoryAuthStorage()
+        let auth = signedInAuth(storage)
         let log = Log()
         let vm = backupViewModel(auth, log: log)
         let backup = Task { await vm.createBackup() }
@@ -104,6 +117,33 @@ struct DeletionFollowupTests {
         #expect(!auth.isAuthenticated)
         #expect(vm.stoppedNote == nil)
         #expect(vm.errorMessage == nil)
+        #expect(auth.stoppedCloudWork == nil)
+
+        // A Cloud Backup screen opened after the deletion shows nothing either,
+        // including once someone signs in again.
+        #expect(reopenedScreen(auth, log: log).stoppedNote == nil)
+        storage.seed(testSession(accessToken: "fresh-access", expired: false))
+        auth.restoreSession()
+        #expect(reopenedScreen(auth, log: log).stoppedNote == nil)
+    }
+
+    @Test func stoppedNote_isClearedBySignOut() async {
+        let storage = InMemoryAuthStorage()
+        let auth = signedInAuth(storage)
+        let log = Log()
+        let vm = backupViewModel(auth, log: log)
+        let backup = Task { await vm.createBackup() }
+        await waitUntil("backup started") { log.events.contains("backup started") }
+        _ = try? await auth.deleteAccount(serverDelete: { throw ServerDown() })
+        await backup.value
+        #expect(reopenedScreen(auth, log: log).stoppedNote == BackupViewModel.backupStoppedMessage)
+
+        await auth.signOut()
+        #expect(auth.stoppedCloudWork == nil)
+
+        storage.seed(testSession(accessToken: "fresh-access", expired: false))
+        auth.restoreSession()
+        #expect(reopenedScreen(auth, log: log).stoppedNote == nil)
     }
 
     @Test func manualRestore_stoppedByAFailedDeletion_showsTheRestoreNote() async {
@@ -118,14 +158,15 @@ struct DeletionFollowupTests {
         await restore.value
 
         #expect(!log.events.contains("restored"))
-        #expect(vm.stoppedNote == BackupViewModel.restoreStoppedMessage)
-        #expect(vm.errorMessage == nil)
+        let reopened = reopenedScreen(auth, log: log)
+        #expect(reopened.stoppedNote == BackupViewModel.restoreStoppedMessage)
+        #expect(reopened.errorMessage == nil)
 
         // Choosing the backup again restores it and clears the note.
-        vm.initiateRestore(backup: metadata())
-        await vm.confirmRestore()
+        reopened.initiateRestore(backup: metadata())
+        await reopened.confirmRestore()
         #expect(log.events.contains("restored"))
-        #expect(vm.stoppedNote == nil)
+        #expect(reopened.stoppedNote == nil)
     }
 
     @Test func backUpFirstThenRestore_stoppedDuringTheBackup_showsTheRestoreNote() async {
@@ -140,9 +181,10 @@ struct DeletionFollowupTests {
         await run.value
 
         #expect(log.events == ["backup started"]) // no download, no restore
-        #expect(vm.stoppedNote == BackupViewModel.restoreStoppedMessage)
-        #expect(vm.errorMessage == nil)
         #expect(vm.selectedBackup == nil)
+        let reopened = reopenedScreen(auth, log: log)
+        #expect(reopened.stoppedNote == BackupViewModel.restoreStoppedMessage)
+        #expect(reopened.errorMessage == nil)
     }
 
     // MARK: - #275 item 1: sign-out drops the scheduled backup
@@ -343,7 +385,7 @@ struct DeletionFollowupTests {
         #expect(vm.errorMessage == nil)
     }
 
-    @Test func backupThenRestore_reloadAndRestoreFail_showsTheRestoreError_andTryAgainOnlyRestores() async {
+    @Test func backupThenRestore_reloadAndRestoreFail_showsTheRestoreError_andTryAgainRestoresThenReloads() async {
         let list = Log(), create = Log(), restore = Log()
         let vm = reloadFailsOnce(list: list, create: create, restore: restore, downloadFailures: 1)
 
@@ -351,10 +393,15 @@ struct DeletionFollowupTests {
         await vm.backupThenRestore()
         #expect(vm.errorMessage == UserFacingError.timeoutMessage) // the restore's error wins
         #expect(restore.events.isEmpty)
+        #expect(list.events.count == 1)
 
         await vm.retry()
         #expect(create.events == ["upload"]) // no second upload
         #expect(restore.events == ["restored"])
         #expect(vm.errorMessage == nil)
+        // The failed reload isn't dropped: the restore's success reloads the list.
+        #expect(list.events.count == 2)
+        #expect(vm.backups.count == 1)
+        #expect(vm.successMessage?.hasPrefix("Restored") == true)
     }
 }

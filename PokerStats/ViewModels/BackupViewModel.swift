@@ -23,12 +23,15 @@ final class BackupViewModel {
     private(set) var retryableAction: RetryableAction?
 
     /// A manual backup or restore that account deletion stopped (#268).
-    private(set) var stoppedAction: StoppedAction?
+    /// Stored outside this view model (on `AuthService` in the app), so a
+    /// Cloud Backup screen opened after the deletion still sees it.
+    var stoppedAction: StoppedAction? { actions?.stoppedWork() }
 
-    enum StoppedAction {
-        case backup
-        case restore
-    }
+    typealias StoppedAction = StoppedCloudWork
+
+    /// The backup list didn't reload after Back Up First, Then Restore, and
+    /// the restore failed too; a restore that then succeeds reloads it.
+    private var needsReloadAfterRestore = false
 
     static let backupStoppedMessage = "Backup stopped. Tap Back Up Now to try again."
     static let restoreStoppedMessage = "Restore stopped. Choose a backup to try again."
@@ -48,6 +51,8 @@ final class BackupViewModel {
         var downloadBackup: @MainActor (BackupMetadata) async throws -> BackupPayload
         var restoreBackup: @MainActor (BackupPayload) throws -> Void
         var isCloudWorkSuspended: @MainActor () -> Bool = { false }
+        var stoppedWork: @MainActor () -> StoppedAction? = { nil }
+        var setStoppedWork: @MainActor (StoppedAction?) -> Void = { _ in }
     }
 
     private var actions: Actions?
@@ -67,7 +72,9 @@ final class BackupViewModel {
                 try await authService.performCloudWork { try await backupService.downloadBackup(metadata: backup) }
             },
             restoreBackup: { try backupService.restoreBackup($0) },
-            isCloudWorkSuspended: { authService.isCloudWorkSuspended }
+            isCloudWorkSuspended: { authService.isCloudWorkSuspended },
+            stoppedWork: { authService.stoppedCloudWork },
+            setStoppedWork: { authService.setStoppedCloudWork($0) }
         ))
     }
 
@@ -80,7 +87,7 @@ final class BackupViewModel {
     func loadBackups() async {
         guard let actions, actions.isSignedIn() else {
             backups = []
-            stoppedAction = nil
+            actions?.setStoppedWork(nil)
             return
         }
 
@@ -89,6 +96,7 @@ final class BackupViewModel {
 
         do {
             backups = try await actions.listBackups()
+            needsReloadAfterRestore = false
         } catch {
             show(error, action: .loadBackups, retry: .loadBackups)
         }
@@ -110,7 +118,8 @@ final class BackupViewModel {
         isBackingUp = true
         clearError()
         successMessage = nil
-        stoppedAction = nil
+        needsReloadAfterRestore = false
+        actions.setStoppedWork(nil)
         defer { isBackingUp = false }
 
         do {
@@ -121,7 +130,7 @@ final class BackupViewModel {
         } catch is CancellationError {
             // Stopped by account deletion (#61). `stoppedNote` says so only
             // if the deletion doesn't complete (#268).
-            stoppedAction = .backup
+            actions.setStoppedWork(.backup)
             return false
         } catch {
             show(error, action: .backup, retry: .backup)
@@ -147,7 +156,7 @@ final class BackupViewModel {
         isRestoring = true
         clearError()
         successMessage = nil
-        stoppedAction = nil
+        actions.setStoppedWork(nil)
 
         do {
             let payload = try await actions.downloadBackup(backup)
@@ -156,7 +165,7 @@ final class BackupViewModel {
         } catch is CancellationError {
             // Stopped by account deletion (#61): nothing was written. `stoppedNote`
             // says so only if the deletion doesn't complete (#268).
-            stoppedAction = .restore
+            actions.setStoppedWork(.restore)
         } catch {
             show(error, action: .restore, retry: .restore(backup))
         }
@@ -171,7 +180,7 @@ final class BackupViewModel {
             // Try Again runs both steps again, not just the backup.
             if retryableAction != nil { retryableAction = .backupThenRestore(backup) }
             // The restore the user asked for didn't happen either.
-            if stoppedAction != nil { stoppedAction = .restore }
+            if stoppedAction != nil { actions?.setStoppedWork(.restore) }
             selectedBackup = nil
             return
         }
@@ -181,9 +190,13 @@ final class BackupViewModel {
         let reloadError = errorMessage
         let reloadRetry = retryableAction
         await restore(backup)
-        if let reloadError, errorMessage == nil, stoppedAction == nil {
+        guard let reloadError else { return }
+        if errorMessage == nil, stoppedAction == nil {
             errorMessage = reloadError
             retryableAction = reloadRetry
+        } else if errorMessage != nil {
+            // The restore's error is up instead; its Try Again reloads the list too.
+            needsReloadAfterRestore = true
         }
     }
 
@@ -203,6 +216,9 @@ final class BackupViewModel {
             await createBackup()
         case .restore(let backup):
             await restore(backup)
+            if needsReloadAfterRestore, errorMessage == nil, stoppedAction == nil {
+                await loadBackups()
+            }
         case .backupThenRestore(let backup):
             selectedBackup = backup
             await backupThenRestore()
