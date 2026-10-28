@@ -174,7 +174,9 @@ final class BackupService {
     /// which uses `LocalDataRestorer.restoreIfStoreEmpty`.
     /// Validates first, then deletes and inserts in one save, rolling back on error.
     /// The restored data is the signed-in account's, so that account owns it.
+    /// Refuses while account deletion runs or after sign-out (#61).
     func restoreBackup(_ payload: BackupPayload) throws {
+        try authService.checkRestoreCanWrite()
         try LocalDataRestorer(modelContext: modelContext).restore(payload)
         if let userId = authService.userId {
             owner.adopt(userId)

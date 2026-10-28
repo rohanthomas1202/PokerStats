@@ -144,8 +144,22 @@ final class AuthService {
 
     private(set) var backupStatus: String?
     private var backupTask: Task<Void, Never>?
-    /// True while account deletion runs; no new backup starts.
-    private var backupsSuspended = false
+    /// Account deletions in progress. While above zero, no backup or restore
+    /// starts and no restore writes. A count, so overlapping callers nest.
+    private var suspendCount = 0
+    /// A scheduled backup that hasn't finished yet. Kept when deletion stops
+    /// it, so it runs again if the deletion fails or is cancelled.
+    @ObservationIgnored private var unfinishedBackup: (@MainActor () async throws -> BackupMetadata)?
+    /// Manual backups and restores, and the auto-restore, in flight.
+    @ObservationIgnored private var cloudWork: [UUID: CloudWork] = [:]
+
+    private struct CloudWork {
+        let cancel: () -> Void
+        let wait: () async -> Void
+    }
+
+    /// True while account deletion runs.
+    var isCloudWorkSuspended: Bool { suspendCount > 0 }
 
     /// Which account the local data belongs to (#69). Tests use an isolated store.
     @ObservationIgnored var localDataOwner = LocalDataOwner.standard
@@ -161,19 +175,23 @@ final class AuthService {
     }
 
     /// Runs `backup` as the one pending backup, replacing any earlier one.
-    /// Separate so tests can supply the work.
+    /// While deletion runs it waits, and starts if the deletion doesn't
+    /// finish. Separate so tests can supply the work.
     func scheduleBackup(_ backup: @escaping @MainActor () async throws -> BackupMetadata) {
-        guard !backupsSuspended else { return }
+        unfinishedBackup = backup
+        guard !isCloudWorkSuspended else { return }
         backupTask?.cancel()
         backupTask = Task {
             backupStatus = "Backing up..."
             do {
                 let metadata = try await backup()
                 if Task.isCancelled { return }
+                unfinishedBackup = nil
                 backupStatus = "Backed up \(metadata.sessionCount) sessions"
             } catch {
                 // A cancelled backup was replaced or stopped; it reports nothing.
                 if Task.isCancelled { return }
+                unfinishedBackup = nil
                 UserFacingError.log(error, action: .backup, to: Self.logger)
                 backupStatus = UserFacingError(error).bannerMessage(for: .backup, isSignedIn: isAuthenticated)
             }
@@ -183,19 +201,67 @@ final class AuthService {
         }
     }
 
-    /// Cancels the scheduled or in-flight backup, waits until it has stopped,
-    /// and blocks new ones until `resumeBackups()`.
+    /// Runs a manual backup, a manual restore, or the auto-restore so that
+    /// account deletion can stop it and wait for it. Refuses while deletion
+    /// runs (`CancellationError`) or while signed out. Work stopped by a
+    /// deletion also ends in `CancellationError`, which callers don't report.
+    func performCloudWork<T: Sendable>(_ work: @escaping @MainActor () async throws -> T) async throws -> T {
+        guard !isCloudWorkSuspended else { throw CancellationError() }
+        guard isAuthenticated else { throw BackupError.notAuthenticated }
+        let id = UUID()
+        let task = Task { try await work() }
+        cloudWork[id] = CloudWork(cancel: { task.cancel() }, wait: { _ = await task.result })
+        defer { cloudWork[id] = nil }
+        do {
+            let value = try await withTaskCancellationHandler {
+                try await task.value
+            } onCancel: {
+                task.cancel()
+            }
+            // Work that ignored cancellation and finished anyway still counts as
+            // stopped, so its caller doesn't go on to write (a restore's download
+            // can return after deletion has already failed and resumed).
+            if task.isCancelled { throw CancellationError() }
+            return value
+        } catch {
+            if task.isCancelled { throw CancellationError() }
+            throw error
+        }
+    }
+
+    /// Called right before a restore writes to the local store, with no
+    /// suspension point in between. Throws `CancellationError` while deletion
+    /// runs, and `SupabaseError.sessionChanged` if the user signed out.
+    func checkRestoreCanWrite() throws {
+        if isCloudWorkSuspended { throw CancellationError() }
+        if !isAuthenticated { throw SupabaseError.sessionChanged }
+    }
+
+    /// Cancels the scheduled or in-flight backup and any manual backup,
+    /// restore, or auto-restore, waits until they have stopped, and blocks
+    /// new ones until the matching `resumeBackups()`.
     func suspendBackups() async {
-        backupsSuspended = true
+        suspendCount += 1
         let task = backupTask
         backupTask = nil
         task?.cancel()
+        let work = Array(cloudWork.values)
+        work.forEach { $0.cancel() }
         await task?.value
+        for item in work { await item.wait() }
         backupStatus = nil
     }
 
+    /// Ends one `suspendBackups()`. After the last one, a backup that was
+    /// stopped or held back runs again if the user is still signed in (the
+    /// deletion failed or was cancelled).
     func resumeBackups() {
-        backupsSuspended = false
+        suspendCount = max(0, suspendCount - 1)
+        guard suspendCount == 0, let backup = unfinishedBackup else { return }
+        unfinishedBackup = nil
+        if isAuthenticated {
+            scheduleBackup(backup)
+        }
     }
 
     // MARK: - Delete Account
