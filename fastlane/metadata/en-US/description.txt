@@ -1,4 +1,4 @@
-PokerStats tracks your live poker sessions and the hands you play in them. Log a hand in a few taps at the table, then see the stats that show how you really play: VPIP, PFR, C-Bet %, WTSD % and more. Your data stays on your iPhone, and the app works without an internet connection.
+PokerStats tracks your live poker sessions and the hands you play in them. Log a hand in a few taps at the table, then see the stats that show how you really play: VPIP, PFR, C-Bet %, WTSD % and more. Your data is stored on your iPhone and the app works without an internet connection. If you sign in with Apple, your sessions are also backed up to our servers.
 
 LOG HANDS IN A FEW TAPS
 Record your preflop action, whether you faced a 3-bet and how you answered it, how the hand ended, and whether you made a continuation bet. The logger only asks the next question that applies, so a preflop fold is one tap once your seat is known. Set up your table once and the app moves your position with the button each hand. Add a note to any hand.
@@ -21,7 +21,7 @@ Rate your tilt, energy and focus when you start a session and check in during it
 SESSION HISTORY
 Browse past sessions by month, search by location or stakes, and open any session for its results, stats, hands and notes.
 
-ON YOUR LOCK SCREEN
+LOCK SCREEN AND WIDGETS
 A Live Activity shows your session time, hands logged and amount invested on the Lock Screen and in the Dynamic Island. A Home Screen widget shows your lifetime profit, session count and winning streak.
 
 OPTIONAL CLOUD BACKUP
