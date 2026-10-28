@@ -8,6 +8,7 @@ final class BackupService {
     private let client: SupabaseClient
     private let authService: AuthService
     private let modelContext: ModelContext
+    private let owner: LocalDataOwner
 
     private let encoder: JSONEncoder = {
         let encoder = JSONEncoder()
@@ -24,10 +25,16 @@ final class BackupService {
         return decoder
     }()
 
-    init(authService: AuthService, modelContext: ModelContext, client: SupabaseClient = .shared) {
+    init(
+        authService: AuthService,
+        modelContext: ModelContext,
+        client: SupabaseClient = .shared,
+        owner: LocalDataOwner = .standard
+    ) {
         self.authService = authService
         self.modelContext = modelContext
         self.client = client
+        self.owner = owner
     }
 
     // MARK: - Create & Upload Backup
@@ -36,6 +43,10 @@ final class BackupService {
         guard authService.isAuthenticated,
               let userId = authService.userId else {
             throw BackupError.notAuthenticated
+        }
+        // Another account's data is never uploaded without the user's choice (#69).
+        guard owner.allowsUpload(for: userId) else {
+            throw BackupError.dataFromAnotherAccount
         }
 
         // 1. Fetch all local data
@@ -113,7 +124,12 @@ final class BackupService {
             .eq("id", value: userId.uuidString)
             .execute()
 
-        // 10. Enforce retention
+        // 10. Data with no owner yet now belongs to this account.
+        if owner.ownerId == nil {
+            owner.adopt(userId)
+        }
+
+        // 11. Enforce retention
         try await enforceRetention(userId: userId)
 
         return metadata
@@ -157,8 +173,12 @@ final class BackupService {
     /// Manual restore (Settings). Auto-restore goes through `AutoRestore`,
     /// which uses `LocalDataRestorer.restoreIfStoreEmpty`.
     /// Validates first, then deletes and inserts in one save, rolling back on error.
+    /// The restored data is the signed-in account's, so that account owns it.
     func restoreBackup(_ payload: BackupPayload) throws {
         try LocalDataRestorer(modelContext: modelContext).restore(payload)
+        if let userId = authService.userId {
+            owner.adopt(userId)
+        }
     }
 
     // MARK: - Private Helpers
@@ -220,6 +240,8 @@ enum BackupError: LocalizedError, Sendable {
     case schemaVersionTooNew(Int)
     case metadataCreationFailed
     case restoreFailed(String)
+    /// The local data belongs to a different account (#69).
+    case dataFromAnotherAccount
 
     var errorDescription: String? {
         switch self {
@@ -235,6 +257,8 @@ enum BackupError: LocalizedError, Sendable {
             "Failed to save backup metadata."
         case .restoreFailed(let message):
             "Restore failed: \(message)"
+        case .dataFromAnotherAccount:
+            "The local data belongs to a different account."
         }
     }
 }

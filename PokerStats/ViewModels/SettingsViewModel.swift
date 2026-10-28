@@ -16,6 +16,8 @@ final class SettingsViewModel {
 
     /// Tests use an isolated store.
     @ObservationIgnored var autoRestoreFlag = AutoRestoreFlag.standard
+    /// Tests use an isolated store.
+    @ObservationIgnored var localDataOwner = LocalDataOwner.standard
 
     func loadSettings(from context: ModelContext) {
         let descriptor = FetchDescriptor<Settings>()
@@ -50,6 +52,8 @@ final class SettingsViewModel {
             try context.delete(model: Hand.self)
             try context.delete(model: Session.self)
             try context.save()
+            // No stats left, so they belong to no account (#69).
+            localDataOwner.clear()
         } catch {
             // Silently fail for MVP — could add error reporting later
         }
@@ -60,11 +64,13 @@ final class SettingsViewModel {
     /// After the server confirmed account deletion: remove every local model
     /// (settings too), end any Live Activity, and refresh widgets. Also clears
     /// the auto-restore flag: the account and its backups are gone, so the
-    /// next sign-in is treated like a fresh install.
+    /// next sign-in is treated like a fresh install. Once the wipe succeeds
+    /// the empty store has no owner (#69).
     func wipeAfterAccountDeletion(from context: ModelContext) {
         autoRestoreFlag.clear()
         do {
             try LocalDataWiper(modelContext: context).wipe()
+            localDataOwner.clear()
         } catch {
             Self.logger.error("Local wipe after account deletion failed: \(error.localizedDescription, privacy: .private)")
         }

@@ -167,14 +167,7 @@ struct SettingsView: View {
         .onChange(of: viewModel.defaultGameType) { _, _ in
             viewModel.saveSettings(to: modelContext)
         }
-        .sheet(isPresented: Binding(
-            get: { authViewModel?.isShowingSignIn ?? false },
-            set: { authViewModel?.isShowingSignIn = $0 }
-        )) {
-            if let authViewModel {
-                SignInView(authViewModel: authViewModel)
-            }
-        }
+        .modifier(SignInSheet(authViewModel: authViewModel))
         .modifier(SignOutConfirmation(authViewModel: authViewModel))
         .alert("Delete All Data?", isPresented: $viewModel.showDeleteAllConfirmation) {
             Button("Cancel", role: .cancel) { }
@@ -240,6 +233,30 @@ struct SettingsView: View {
         } message: {
             Text("Your account, all cloud backups, and all local data will be permanently deleted.")
         }
+    }
+}
+
+/// The sign-in sheet. While it's up, the "Stats From Another Account" choice
+/// waits, so it can show once the sheet has closed (#69).
+private struct SignInSheet: ViewModifier {
+    let authViewModel: AuthViewModel?
+    @Environment(LocalDataOwnershipViewModel.self) private var ownership
+
+    private var isPresented: Binding<Bool> {
+        Binding(
+            get: { authViewModel?.isShowingSignIn ?? false },
+            set: { authViewModel?.isShowingSignIn = $0 }
+        )
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .sheet(isPresented: isPresented, onDismiss: { ownership.resumePrompt() }) {
+                if let authViewModel {
+                    SignInView(authViewModel: authViewModel)
+                        .onAppear { ownership.deferPrompt() }
+                }
+            }
     }
 }
 
