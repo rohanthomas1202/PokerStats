@@ -102,7 +102,7 @@ struct UserFacingErrorTests {
     @Test func unknownCopy_dependsOnTheAction() {
         #expect(UserFacingError.unknown.message(for: .backup) == "Couldn't back up right now. Your data on this phone is safe. Try again.")
         #expect(UserFacingError.unknown.message(for: .signIn) == AuthViewModel.signInFailedMessage)
-        let actions: [UserFacingError.Action] = [.signIn, .loadBackups, .backup, .restore, .autoRestore]
+        let actions: [UserFacingError.Action] = [.signIn, .loadBackups, .backup, .restore, .autoRestore, .deleteAllData]
         #expect(Set(actions.map { UserFacingError.unknown.message(for: $0) }).count == actions.count)
     }
 
@@ -129,7 +129,7 @@ struct UserFacingErrorTests {
             StorageError(statusCode: "500", message: "storage raw"),
             BackupError.schemaVersionTooNew(99),
         ]
-        let actions: [UserFacingError.Action] = [.signIn, .loadBackups, .backup, .restore, .autoRestore]
+        let actions: [UserFacingError.Action] = [.signIn, .loadBackups, .backup, .restore, .autoRestore, .deleteAllData]
         for error in errors {
             for action in actions {
                 let shown = UserFacingError(error).bannerMessage(for: action)

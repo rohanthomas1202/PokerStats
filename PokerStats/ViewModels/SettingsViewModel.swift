@@ -13,11 +13,17 @@ final class SettingsViewModel {
     var defaultGameType: GameType = .cash
     var showDeleteAllConfirmation = false
     var showDeleteAllSecondConfirmation = false
+    /// Shown when Delete All Data failed; nil otherwise (#263).
+    var deleteAllDataFailure: String?
+
+    static let deleteAllDataFailedTitle = "Couldn't Delete Data"
 
     /// Tests use an isolated store.
     @ObservationIgnored var autoRestoreFlag = AutoRestoreFlag.standard
     /// Tests use an isolated store.
     @ObservationIgnored var localDataOwner = LocalDataOwner.standard
+    /// Tests inject a failing save.
+    @ObservationIgnored var makeWiper: @MainActor (ModelContext) -> LocalDataWiper = { LocalDataWiper(modelContext: $0) }
 
     func loadSettings(from context: ModelContext) {
         let descriptor = FetchDescriptor<Settings>()
@@ -48,16 +54,20 @@ final class SettingsViewModel {
         // Set first: a deliberate wipe must never be undone by auto-restore,
         // even if the app is killed mid-delete.
         autoRestoreFlag.set()
-        do {
-            try context.delete(model: Hand.self)
-            try context.delete(model: Session.self)
-            try context.save()
-            // No stats left, so they belong to no account (#69).
-            localDataOwner.clear()
-        } catch {
-            // Silently fail for MVP — could add error reporting later
-        }
         showDeleteAllSecondConfirmation = false
+        do {
+            // Deletes hands before sessions in one save; a batch delete fails
+            // when sessions have hands (#263). On error nothing is deleted.
+            try makeWiper(context).wipe()
+        } catch {
+            UserFacingError.log(error, action: .deleteAllData, to: Self.logger)
+            deleteAllDataFailure = UserFacingError(error).message(for: .deleteAllData)
+            return
+        }
+        deleteAllDataFailure = nil
+        // No stats left, so they belong to no account (#69).
+        localDataOwner.clear()
+        resetToDefaults()
         WidgetCenter.shared.reloadAllTimelines()
     }
 
@@ -74,16 +84,21 @@ final class SettingsViewModel {
         } catch {
             Self.logger.error("Local wipe after account deletion failed: \(error.localizedDescription, privacy: .private)")
         }
-        let defaults = Settings()
-        defaultBuyIn = String(Int(defaults.defaultBuyIn))
-        defaultStakes = defaults.defaultStakes
-        defaultGameType = defaults.defaultGameType
+        resetToDefaults()
         Task {
             for activity in Activity<SessionActivityAttributes>.activities {
                 await activity.end(nil, dismissalPolicy: .immediate)
             }
         }
         WidgetCenter.shared.reloadAllTimelines()
+    }
+
+    /// The wiper also deletes the saved Settings, so show the defaults.
+    private func resetToDefaults() {
+        let defaults = Settings()
+        defaultBuyIn = String(Int(defaults.defaultBuyIn))
+        defaultStakes = defaults.defaultStakes
+        defaultGameType = defaults.defaultGameType
     }
 
     private static let logger = Logger(subsystem: "com.rohanthomas.PokerStats", category: "SettingsViewModel")
