@@ -49,8 +49,11 @@ final class BackupViewModel {
         configure(Actions(
             isSignedIn: { authService.isAuthenticated },
             listBackups: { try await backupService.listBackups() },
-            createBackup: { try await backupService.createAndUploadBackup() },
-            downloadBackup: { try await backupService.downloadBackup(metadata: $0) },
+            // Through AuthService, so account deletion stops them and waits (#61).
+            createBackup: { try await authService.performCloudWork { try await backupService.createAndUploadBackup() } },
+            downloadBackup: { backup in
+                try await authService.performCloudWork { try await backupService.downloadBackup(metadata: backup) }
+            },
             restoreBackup: { try backupService.restoreBackup($0) }
         ))
     }
@@ -82,21 +85,31 @@ final class BackupViewModel {
     // MARK: - Create Backup
 
     func createBackup() async {
-        guard let actions else { return }
+        await runBackup()
+    }
+
+    /// Returns true when the backup finished.
+    @discardableResult
+    private func runBackup() async -> Bool {
+        guard let actions else { return false }
 
         isBackingUp = true
         clearError()
         successMessage = nil
+        defer { isBackingUp = false }
 
         do {
             let metadata = try await actions.createBackup()
             successMessage = "Backed up \(metadata.sessionCount) sessions, \(metadata.handCount) hands (\(metadata.formattedSize))"
             await loadBackups()
+            return true
+        } catch is CancellationError {
+            // Stopped by account deletion (#61): nothing to report.
+            return false
         } catch {
             show(error, action: .backup, retry: .backup)
+            return false
         }
-
-        isBackingUp = false
     }
 
     // MARK: - Restore
@@ -122,6 +135,8 @@ final class BackupViewModel {
             let payload = try await actions.downloadBackup(backup)
             try actions.restoreBackup(payload)
             successMessage = "Restored \(payload.sessions.count) sessions from \(backup.formattedDate)"
+        } catch is CancellationError {
+            // Stopped by account deletion (#61): nothing was written, nothing to report.
         } catch {
             show(error, action: .restore, retry: .restore(backup))
         }
@@ -132,8 +147,7 @@ final class BackupViewModel {
 
     func backupThenRestore() async {
         guard let backup = selectedBackup else { return }
-        await createBackup()
-        guard errorMessage == nil else {
+        guard await runBackup() else {
             // Try Again runs both steps again, not just the backup.
             if retryableAction != nil { retryableAction = .backupThenRestore(backup) }
             selectedBackup = nil

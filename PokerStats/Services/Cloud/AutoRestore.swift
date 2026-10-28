@@ -11,7 +11,7 @@ import os
 /// as the restore, so data created mid-download is never deleted.
 @MainActor
 struct AutoRestore {
-    enum Outcome: Equatable {
+    enum Outcome: Equatable, Sendable {
         case restored(sessionCount: Int)
         case noBackups
         /// Local data existed before the download started.
@@ -26,6 +26,9 @@ struct AutoRestore {
     let listBackups: @MainActor () async throws -> [BackupMetadata]
     let downloadBackup: @MainActor (BackupMetadata) async throws -> BackupPayload
     let flag: AutoRestoreFlag
+    /// Runs right before the restore writes; throws to stop it (account
+    /// deletion running, or signed out). See `AuthService.checkRestoreCanWrite`.
+    var checkCanWrite: @MainActor () throws -> Void = {}
 
     private static let logger = Logger(subsystem: "com.rohanthomas.PokerStats", category: "AutoRestore")
 
@@ -45,6 +48,7 @@ struct AutoRestore {
         guard let latest = try await listBackups().first else { return .noBackups }
         let payload = try await downloadBackup(latest)
 
+        try checkCanWrite()
         guard try restorer.restoreIfStoreEmpty(payload) else {
             Self.logger.notice("Auto-restore skipped: local data appeared during the backup download")
             return .skippedDataAppearedDuringDownload

@@ -68,12 +68,16 @@ struct PokerStatsApp: App {
             modelContext: context,
             listBackups: { try await backupService.listBackups() },
             downloadBackup: { try await backupService.downloadBackup(metadata: $0) },
-            flag: .standard
+            flag: .standard,
+            checkCanWrite: { try authService.checkRestoreCanWrite() }
         )
         guard !AutoRestoreFlag.standard.isSet,
               (try? LocalDataRestorer(modelContext: context).isStoreEmpty()) == true else { return }
 
-        autoRestore.start(isSignedIn: { authService.isAuthenticated }) { try await restore.run() }
+        // Account deletion stops it and waits for it (#61).
+        autoRestore.start(isSignedIn: { authService.isAuthenticated }) {
+            try await authService.performCloudWork { try await restore.run() }
+        }
     }
 }
 
