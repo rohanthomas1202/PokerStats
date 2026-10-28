@@ -1,4 +1,5 @@
 import Foundation
+import SwiftData
 import Testing
 @testable import PokerStats
 
@@ -172,6 +173,125 @@ struct DeletionFollowupTests {
 
         #expect(log.events == ["backup started", "backup stopped"])
         #expect(auth.backupStatus == nil)
+    }
+
+    // MARK: - #275 item 1: signing back in after sign-out dropped a backup
+
+    /// The sessions in the backup `upload` sent: the gzip part of the
+    /// multipart body, decoded like `BackupService.downloadBackup`.
+    private func uploadedLocations(_ upload: SeenRequest) throws -> [String] {
+        let boundary = try #require(upload.header("Content-Type")?.components(separatedBy: "boundary=").last)
+        let body = try #require(upload.body)
+        let start = try #require(body.range(of: Data("Content-Type: application/gzip\r\n\r\n".utf8))).upperBound
+        let end = try #require(body.range(of: Data("\r\n--\(boundary)".utf8), in: start..<body.endIndex)).lowerBound
+        let json = try (body.subdata(in: start..<end) as NSData).decompressed(using: .zlib) as Data
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        return try decoder.decode(BackupPayload.self, from: json).sessions.map(\.location).sorted()
+    }
+
+    /// Kate's conditions on #277: sign-out drops the in-flight scheduled
+    /// backup but keeps the local data and its owner, and once the same
+    /// account signs back in, the next session's automatic backup uploads
+    /// everything, including the changes the dropped backup never sent.
+    /// No backup runs at sign-in itself; `scheduleBackup(modelContext:)` is
+    /// what `ActiveSessionViewModel.endSession` calls, and it snapshots the
+    /// whole store.
+    @Test func signOutDuringAScheduledBackup_keepsTheData_andTheNextAutoBackupAfterSigningBackInSendsIt() async throws {
+        let container = try TestHelpers.createContainer()
+        let context = container.mainContext
+        let owner = LocalDataOwner(defaults: UserDefaults(suiteName: "DeletionFollowupTests.\(UUID().uuidString)")!)
+        let ownership = LocalDataOwnershipViewModel()
+        ownership.owner = owner
+
+        // The first upload hangs until cancelled; later ones succeed.
+        let server = FakeServer()
+        let storage = InMemoryAuthStorage()
+        storage.seed(testSession(accessToken: "fresh-access", expired: false))
+        let client = testClient(storage, server: server) { request, _ in
+            switch (request.method, request.path) {
+            case ("POST", let path) where path.hasPrefix("/storage/v1/object/backups/"):
+                let uploads = server.requests.filter { $0.path.hasPrefix("/storage/v1/object/backups/") }
+                if uploads.count == 1 { try await Task.sleep(for: .seconds(60)) }
+                return .status(200, #"{"Key":"backups/x","Id":"1"}"#)
+            case ("POST", "/rest/v1/backup_metadata"):
+                return .status(201, """
+                [{"id":"\(UUID().uuidString)","user_id":"\(TestUser.id.uuidString)","storage_path":"p",
+                  "file_size_bytes":1,"schema_version":1,"session_count":3,"hand_count":1,
+                  "created_at":"2026-10-28T10:00:00+00:00"}]
+                """)
+            case ("GET", "/rest/v1/backup_metadata"):
+                return .status(200, "[]")
+            default:
+                return .status(204, "")
+            }
+        }
+        let auth = AuthService(client: client)
+        auth.localDataOwner = owner
+        auth.restoreSession()
+        ownership.signedIn(TestUser.id, modelContext: context)
+
+        func addSession(_ location: String, withHand: Bool = false) throws {
+            let session = Session(location: location)
+            context.insert(session)
+            if withHand {
+                let hand = TestHelpers.foldHand()
+                hand.session = session
+                context.insert(hand)
+            }
+            try context.save()
+        }
+        func uploads() -> [SeenRequest] {
+            server.requests.filter { $0.path.hasPrefix("/storage/v1/object/backups/") }
+        }
+        func metadataInserts() -> [SeenRequest] {
+            server.requests.filter { $0.method == "POST" && $0.path == "/rest/v1/backup_metadata" }
+        }
+
+        // A session ends and its automatic backup starts uploading.
+        try addSession("Backed up before", withHand: true)
+        try addSession("Unsent")
+        auth.scheduleBackup(modelContext: context)
+        await waitUntil("first upload started") { uploads().count == 1 }
+
+        // Sign out while it's in flight.
+        await auth.signOut()
+        ownership.signedOut()
+        for _ in 0..<20 { await Task.yield() }
+        #expect(!auth.isAuthenticated)
+        #expect(auth.backupStatus == nil)
+        #expect(metadataInserts().isEmpty) // the dropped backup never finished
+
+        // (1) The local data and its owner are intact.
+        let stored = try ModelContext(container).fetch(FetchDescriptor<Session>())
+        #expect(stored.map(\.location).sorted() == ["Backed up before", "Unsent"])
+        #expect(try ModelContext(container).fetchCount(FetchDescriptor<Hand>()) == 1)
+        #expect(owner.ownerId == TestUser.id)
+
+        // The same account signs back in: it still owns the data, no prompt.
+        storage.seed(testSession(accessToken: "fresh-access", expired: false))
+        auth.restoreSession()
+        ownership.signedIn(TestUser.id, modelContext: context)
+        #expect(auth.isAuthenticated)
+        #expect(owner.ownerId == TestUser.id)
+        #expect(!ownership.isShowingChoice)
+        #expect(!ownership.backupsBlocked)
+
+        // (2) The next session's automatic backup sends everything, including "Unsent".
+        try addSession("Next session")
+        auth.scheduleBackup(modelContext: context)
+        await waitUntil("backup finished") { auth.backupStatus?.hasPrefix("Backed up") == true }
+
+        #expect(uploads().count == 2)
+        let upload = try #require(uploads().last)
+        let path = upload.path.removingPercentEncoding ?? upload.path
+        #expect(path.hasPrefix("/storage/v1/object/backups/\(TestUser.id.uuidString.lowercased())/"))
+        #expect(try uploadedLocations(upload) == ["Backed up before", "Next session", "Unsent"])
+        let insert = try #require(metadataInserts().first)
+        #expect(metadataInserts().count == 1)
+        #expect(insert.json?["session_count"] as? Int == 3)
+        #expect(insert.json?["hand_count"] as? Int == 1)
     }
 
     // MARK: - #275 item 2: backup first, then restore, when the list reload fails
