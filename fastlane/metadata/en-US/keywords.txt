@@ -1,1 +1,1 @@
-poker,tracker,session,stats,VPIP,PFR,bankroll,live poker,hand log,leak finder,tilt,c-bet,WTSD,poker stats
+session,hand,log,cash,tournament,sng,mtt,hourly,bankroll,vpip,pfr,cbet,3bet,tilt,holdem,profit,leak

@@ -1,33 +1,30 @@
-PokerStats is the fastest way to track your live poker sessions and understand your game.
+PokerStats tracks your live poker sessions and the hands you play in them. Log a hand in a few taps at the table, then see the stats that show how you really play: VPIP, PFR, C-Bet %, WTSD % and more. Your data stays on your iPhone, and the app works without an internet connection.
 
-LOG HANDS IN UNDER 3 SECONDS
-Our progressive hand logger captures every decision — preflop action, 3-bet responses, postflop results, and c-bets — with just a few taps. Fold in one tap. Full hand in five.
+LOG HANDS IN A FEW TAPS
+Record your preflop action, whether you faced a 3-bet and how you answered it, how the hand ended, and whether you made a continuation bet. The logger only asks the next question that applies, so a preflop fold is one tap once your seat is known. Set up your table once and the app moves your position with the button each hand. Add a note to any hand.
 
-REAL-TIME SESSION TRACKING
-Start a session and track your buy-ins, rebuys, and cash-outs with a crash-proof timer that keeps running even if you close the app. Live Activities keep your session visible on your Lock Screen.
+TRACK EVERY SESSION
+Start a cash game, tournament or sit and go session with your buy-in, stakes and location. Add rebuys as you go and enter your cash-out when you're done to get your profit and hourly rate. The session timer is based on your start time, so it keeps counting if you close the app, and an unfinished session is still there when you come back.
 
 KNOW YOUR NUMBERS
-See the stats that matter: VPIP, PFR, C-Bet%, WTSD%, W$SD%, Fold-to-3-Bet, and more. Understand whether you're playing tight-aggressive, loose-passive, or anywhere in between.
+See VPIP, PFR, C-Bet %, Fold to 3-Bet %, WTSD % and W$SD %, worked out from the hands you log. A play style chart shows whether you're playing tight or loose, passive or aggressive. Position stats show your VPIP and PFR from each seat.
 
-FIND YOUR LEAKS
-The built-in Leak Finder analyzes your stats against proven ranges and tells you exactly where you're losing money — with coaching-style insights to help you improve.
+LEAK FINDER
+Leak Finder compares your stats with reference ranges for full ring or 6-max cash games and rates each one as healthy, borderline or a leak, with a suggestion for what to change. It looks at your lifetime stats once you've logged 20 hands, and at single sessions too.
 
-TRENDS & ANALYTICS
-Track your cumulative bankroll, spot patterns in your VPIP/PFR over time, see which days of the week are most profitable, and review your session P&L distribution.
+TRENDS
+Follow your cumulative profit, your VPIP and PFR over time, your profit by day of the week and how your session results are spread. Filter by the last 30 days, 90 days, 6 months or all time.
 
-POSITION-AWARE STATS
-Break down your play by table position (UTG, MP, CO, BTN, SB, BB) to see where you're strongest and where you need work.
-
-MENTAL GAME TRACKING
-Log your tilt level, energy, and focus for each session. See how your mental state correlates with your win rate — data-driven tilt management.
+MENTAL GAME
+Rate your tilt, energy and focus when you start a session and check in during it. The dashboard compares your hourly rate when you're calm with when you're tilted.
 
 SESSION HISTORY
-Review every session with detailed breakdowns, hand logs, notes, and financial summaries. Search by location or stakes.
+Browse past sessions by month, search by location or stakes, and open any session for its results, stats, hands and notes.
 
-DESIGNED FOR LIVE PLAYERS
-Built by a poker player, for poker players. No bloat, no subscriptions, no ads. Just fast, focused tracking that works at the table.
+ON YOUR LOCK SCREEN
+A Live Activity shows your session time, hands logged and amount invested on the Lock Screen and in the Dynamic Island. A Home Screen widget shows your lifetime profit, session count and winning streak.
 
-• Offline-first — works without internet
-• Dark mode optimized for casino lighting
-• Home screen widget for quick session info
-• iCloud backup to keep your data safe
+OPTIONAL CLOUD BACKUP
+Sign in with Apple to back up your sessions. The app backs up after each session you finish, and you can back up or restore by hand in Settings. You can delete your account and its cloud backups at any time in Settings.
+
+No ads and no subscriptions. Built for players at a live table.
