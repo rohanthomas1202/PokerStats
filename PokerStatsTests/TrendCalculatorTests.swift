@@ -100,4 +100,58 @@ struct TrendCalculatorTests {
         let totalCount = result.reduce(0) { $0 + $1.count }
         #expect(totalCount == 3) // all 3 sessions accounted for
     }
+
+    private func buckets(_ result: [TrendCalculator.PLBucket]) -> [(String, Double, Int)] {
+        result.map { ($0.rangeLabel, $0.lowerBound, $0.count) }
+    }
+
+    @Test func plDistribution_maxOnTopEdge_isCounted() {
+        // pl-distribution-boundary fixture: -50 and +100.
+        let s1 = TestHelpers.completedSession(buyIn: 100, cashOut: 50)  // -50
+        let s2 = TestHelpers.completedSession(buyIn: 100, cashOut: 200) // +100
+        let result = buckets(TrendCalculator.sessionPLDistribution(sessions: [s1, s2]))
+        #expect(result.map { $0.0 } == ["-$100", "+$0", "+$100"])
+        #expect(result.map { $0.1 } == [-100, 0, 100])
+        #expect(result.map { $0.2 } == [1, 0, 1])
+    }
+
+    @Test func plDistribution_narrowRange_usesRealBucket() {
+        let s1 = TestHelpers.completedSession(buyIn: 100, cashOut: 330) // +230
+        let s2 = TestHelpers.completedSession(buyIn: 100, cashOut: 370) // +270
+        let result = buckets(TrendCalculator.sessionPLDistribution(sessions: [s1, s2]))
+        #expect(result.map { $0.0 } == ["+$200"])
+        #expect(result.map { $0.1 } == [200])
+        #expect(result.map { $0.2 } == [2])
+    }
+
+    @Test func plDistribution_narrowNegativeRange_usesRealBucket() {
+        let s1 = TestHelpers.completedSession(buyIn: 300, cashOut: 140) // -160
+        let s2 = TestHelpers.completedSession(buyIn: 300, cashOut: 180) // -120
+        let result = buckets(TrendCalculator.sessionPLDistribution(sessions: [s1, s2]))
+        #expect(result.map { $0.0 } == ["-$200"])
+        #expect(result.map { $0.1 } == [-200])
+        #expect(result.map { $0.2 } == [2])
+    }
+
+    @Test func plDistribution_singlePlus100_isOwnBucket() {
+        // single-session fixture: one +100 session.
+        let s = TestHelpers.completedSession(buyIn: 100, cashOut: 200)
+        let result = buckets(TrendCalculator.sessionPLDistribution(sessions: [s]))
+        #expect(result.map { $0.0 } == ["+$100"])
+        #expect(result.map { $0.1 } == [100])
+        #expect(result.map { $0.2 } == [1])
+    }
+
+    @Test func plDistribution_singleZero_isZeroBucket() {
+        let s = TestHelpers.completedSession(buyIn: 100, cashOut: 100)
+        let result = buckets(TrendCalculator.sessionPLDistribution(sessions: [s]))
+        #expect(result.map { $0.0 } == ["+$0"])
+        #expect(result.map { $0.1 } == [0])
+        #expect(result.map { $0.2 } == [1])
+    }
+
+    @Test func plDistribution_onlyActiveSessions_returnsEmpty() {
+        let s = Session(status: .active, buyIn: 200)
+        #expect(TrendCalculator.sessionPLDistribution(sessions: [s]).isEmpty)
+    }
 }

@@ -1,5 +1,5 @@
 {
-  "description": "Two completed sessions at -50 and +100. The +100 session sits exactly on the top bucket edge and is not counted in any bucket (app behavior; see README).",
+  "description": "Two completed sessions at -50 and +100. The +100 session is the maximum and a multiple of 100; it is counted in the last bucket, +$100 (#248).",
   "now": "2026-10-20T12:00:00Z",
   "time_zone": "America/Chicago",
   "sessions": [
@@ -187,6 +187,11 @@
             "range_label": "+$0",
             "lower_bound": 0,
             "count": 0
+          },
+          {
+            "range_label": "+$100",
+            "lower_bound": 100,
+            "count": 1
           }
         ]
       },
@@ -264,6 +269,11 @@
             "range_label": "+$0",
             "lower_bound": 0,
             "count": 0
+          },
+          {
+            "range_label": "+$100",
+            "lower_bound": 100,
+            "count": 1
           }
         ]
       }

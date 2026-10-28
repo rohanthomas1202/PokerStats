@@ -218,14 +218,14 @@ Deno.test("the datasets keep their edge cases", () => {
     "rolling stats with 20 or more hands": Object.values(datasets).some((d) =>
       d.expected.trends.all_time.rolling_vpip_pfr.length > 0
     ),
-    "a P/L on the top bucket boundary (left out of the histogram)": Object
-      .values(datasets).some((d) => {
-        const t = d.expected.trends.all_time;
-        return t.pl_distribution.reduce(
-          (n: number, b: Json) => n + b.count,
-          0,
-        ) < t.session_count;
-      }),
+    "a maximum P/L on a bucket boundary": Object.values(datasets).some(
+      (d) => {
+        const profits = d.expected.sessions
+          .filter((s: Json) => s.counts_toward_money_stats)
+          .map((s: Json) => s.net_profit);
+        return profits.length > 1 && Math.max(...profits) % 100 === 0;
+      },
+    ),
   };
   const missing = Object.entries(edges).filter(([, ok]) => !ok).map(([what]) =>
     what

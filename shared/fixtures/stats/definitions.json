@@ -282,10 +282,10 @@
         "trends.*.pl_distribution"
       ],
       "inputs": "live sessions in the window",
-      "formula": "completed net_profit values in buckets of 100 from floor(min/100)*100 up to ceil(max/100)*100, each [lower, lower+100); if upper <= lower, one bucket labelled $0 with lower_bound 0 holding every session. Labels +$N for N >= 0, -$N below",
+      "formula": "completed net_profit values in buckets of 100 from floor(min/100)*100 up to floor(max/100)*100 + 100, each [lower, lower+100), so the maximum is always in the last bucket. Labels +$N for N >= 0, -$N below",
       "null_when": "no completed sessions: empty list",
       "display": "label",
-      "source": "PokerStats/Services/TrendCalculator.swift:122-155"
+      "source": "PokerStats/Services/TrendCalculator.swift:122-153"
     },
     "mental_correlation": {
       "paths": [

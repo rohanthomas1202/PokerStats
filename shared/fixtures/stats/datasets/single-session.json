@@ -1,5 +1,5 @@
 {
-  "description": "One completed session at +100 with three preflop-only hands. Its P/L histogram is one bucket labelled $0 with lower bound 0 (app behavior; see README), and the postflop ratios are null.",
+  "description": "One completed session at +100 with three preflop-only hands. Its P/L histogram is one bucket, +$100 with lower bound 100 (#248), and the postflop ratios are null.",
   "now": "2026-10-20T12:00:00Z",
   "time_zone": "America/Chicago",
   "sessions": [
@@ -208,8 +208,8 @@
         ],
         "pl_distribution": [
           {
-            "range_label": "$0",
-            "lower_bound": 0,
+            "range_label": "+$100",
+            "lower_bound": 100,
             "count": 1
           }
         ]
@@ -275,8 +275,8 @@
         ],
         "pl_distribution": [
           {
-            "range_label": "$0",
-            "lower_bound": 0,
+            "range_label": "+$100",
+            "lower_bound": 100,
             "count": 1
           }
         ]

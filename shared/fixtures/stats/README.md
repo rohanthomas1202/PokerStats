@@ -55,7 +55,7 @@ Sources ported (read-only): `PokerStats/Services/StatCalculator.swift`, `TrendCa
 - **Time.** `now` and `time_zone` are dataset inputs. Weekdays use `time_zone` (the app uses the device's). The 30-day window keeps rows at or after `now` minus 30 days.
 - **Display.** Percent and currency round half to even, as printf and NumberFormatter do. JavaScript's `toFixed` rounds ties up (`(6.25).toFixed(1)` is `6.3`, the app shows `6.2%`), so the web must not use it for these.
 
-Edge cases present (the test fails if one disappears). Apart from the three tombstone cases, each must be on a live row by the same rule the stats use (`liveRows` in `reference.ts`): no `deleted_at`, and a hand counts only if its session is live in the same dataset, so a tombstoned row or an orphan hand doesn't count. The cases: no rows, a tombstoned session with hands, a tombstoned hand in a live session, an active session, an unknown status (`paused`), an abandoned session, a zero-length session, custom stakes, a nonzero `tip_rake`, a session shorter than the 0.01-hour hourly guard, hands at the unknown position `?`, a session with 10+ hands (session Leak Finder), 20+ hands (lifetime Leak Finder and rolling stats), a P/L on the top histogram edge, a session outside the 30-day window, and a session whose weekday differs between UTC and America/Chicago.
+Edge cases present (the test fails if one disappears). Apart from the three tombstone cases, each must be on a live row by the same rule the stats use (`liveRows` in `reference.ts`): no `deleted_at`, and a hand counts only if its session is live in the same dataset, so a tombstoned row or an orphan hand doesn't count. The cases: no rows, a tombstoned session with hands, a tombstoned hand in a live session, an active session, an unknown status (`paused`), an abandoned session, a zero-length session, custom stakes, a nonzero `tip_rake`, a session shorter than the 0.01-hour hourly guard, hands at the unknown position `?`, a session with 10+ hands (session Leak Finder), 20+ hands (lifetime Leak Finder and rolling stats), a maximum P/L on a histogram bucket edge, a session outside the 30-day window, and a session whose weekday differs between UTC and America/Chicago.
 
 ## App and doc disagreements
 
@@ -66,7 +66,7 @@ The fixtures encode the app as of #246. The team's positions on these points are
 3. **tip_rake** is not part of net profit.
 4. **Hand scope.** Lifetime hand stats include hands of active and unknown-status sessions. The app also counts hands with no session, which are never synced (design 7.1), so a web total could be lower than the app's for the same account. The datasets have no orphan hands.
 5. **Fold to 3-bet** counts every hand with `faced_3bet`, not only hands where hero raised first, as the code comment says.
-6. **P/L histogram.** A session whose profit is a multiple of 100 and is the maximum falls outside every bucket. When every profit is in one bucket width (for example a single +100 session), the app shows one bucket labelled `$0` with lower bound 0. Both look like bugs; the fixtures record what the app shows.
+6. **P/L histogram.** Before #248, a session whose profit is a multiple of 100 and is the maximum fell outside every bucket, and when every profit was in one bucket width (for example a single +100 session) the app showed one bucket labelled `$0` with lower bound 0. Fixed in #248: the last bucket includes the maximum and the `$0` case is gone.
 7. **Time zone.** Weekday grouping and the 30-day cutoff use the device's calendar and zone, so the same account can chart differently on two devices or on the web. The app subtracts 30 calendar days; the fixtures subtract 30 x 24 hours and avoid a DST change.
 8. **Widget money** truncates toward zero, with `+` for zero and `-$0` for a loss under $1, and the widget's hourly rate is whole dollars. The app rounds half to even and shows hourly to the cent.
 9. **ROI** exists per session only (shown when completed with an invested amount above 0). Spec section 12 lists ROI with no lifetime definition.
@@ -95,7 +95,6 @@ These will move expected values. Each fix updates `reference.ts`, regenerates th
 
 - Unknown status counts as completed (1), and a completed session with no `end_time` ends at its start time (12): #236.
 - Fold to 3-bet counts only hands where hero raised preflop (5): #253.
-- The P/L histogram's last bucket includes the maximum, and the `$0` special case goes away (6): #248.
 - Widget money rounds half to even instead of truncating (8): #249.
 - Mental insight pools tilt levels 4 and 5 (10): #250.
 - Lifetime ROI is the owner's call (9): #252.
