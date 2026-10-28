@@ -213,11 +213,16 @@ final class AuthService {
         cloudWork[id] = CloudWork(cancel: { task.cancel() }, wait: { _ = await task.result })
         defer { cloudWork[id] = nil }
         do {
-            return try await withTaskCancellationHandler {
+            let value = try await withTaskCancellationHandler {
                 try await task.value
             } onCancel: {
                 task.cancel()
             }
+            // Work that ignored cancellation and finished anyway still counts as
+            // stopped, so its caller doesn't go on to write (a restore's download
+            // can return after deletion has already failed and resumed).
+            if task.isCancelled { throw CancellationError() }
+            return value
         } catch {
             if task.isCancelled { throw CancellationError() }
             throw error
