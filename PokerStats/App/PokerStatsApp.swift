@@ -71,7 +71,7 @@ struct PokerStatsApp: App {
             flag: .standard,
             checkCanWrite: { try authService.checkRestoreCanWrite() }
         )
-        guard !AutoRestoreFlag.standard.isSet,
+        guard !restore.flag.isSet,
               (try? LocalDataRestorer(modelContext: context).isStoreEmpty()) == true else { return }
 
         // Account deletion stops it and waits for it (#61).
