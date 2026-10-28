@@ -57,6 +57,14 @@ struct BackupSettingsView: View {
                 }
             }
 
+            if let note = viewModel.stoppedNote {
+                // Not an error: account deletion stopped it and didn't finish (#268).
+                Section {
+                    Text(note)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
             if let error = viewModel.errorMessage {
                 Section {
                     Label(error, systemImage: "exclamationmark.triangle.fill")

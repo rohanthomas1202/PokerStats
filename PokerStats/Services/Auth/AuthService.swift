@@ -127,11 +127,18 @@ final class AuthService {
     }
 
     /// Resets the signed-in UI state. Callers clear the stored session.
+    /// Also drops the scheduled backup, so a later failed deletion under
+    /// another sign-in can't run it again (#275).
     private func clearSignedInState() {
         isAuthenticated = false
         userEmail = nil
         userId = nil
         error = nil
+        backupTask?.cancel()
+        backupTask = nil
+        unfinishedBackup = nil
+        backupStatus = nil
+        stoppedCloudWork = nil
     }
 
     private func apply(_ user: User) {
@@ -150,6 +157,20 @@ final class AuthService {
     /// A scheduled backup that hasn't finished yet. Kept when deletion stops
     /// it, so it runs again if the deletion fails or is cancelled.
     @ObservationIgnored private var unfinishedBackup: (@MainActor () async throws -> BackupMetadata)?
+    /// A manual backup or restore that account deletion stopped (#268).
+    /// Kept here rather than on the Cloud Backup screen, which the user
+    /// leaves to delete the account. Cleared by sign-out, including the one
+    /// a finished deletion does.
+    private(set) var stoppedCloudWork: StoppedCloudWork?
+
+    /// Records or clears the stopped backup or restore. A stop recorded
+    /// after sign-out is dropped: the work was stopped by a deletion that
+    /// finished, so there's nothing to say.
+    func setStoppedCloudWork(_ work: StoppedCloudWork?) {
+        if work != nil, !isAuthenticated { return }
+        stoppedCloudWork = work
+    }
+
     /// Manual backups and restores, and the auto-restore, in flight.
     @ObservationIgnored private var cloudWork: [UUID: CloudWork] = [:]
 
@@ -169,8 +190,10 @@ final class AuthService {
     func scheduleBackup(modelContext: ModelContext) {
         guard isAuthenticated, let userId, localDataOwner.allowsUpload(for: userId) else { return }
         let owner = localDataOwner
+        // Same client as the session, so the upload uses this sign-in (and tests can intercept it).
+        let client = client
         scheduleBackup {
-            try await BackupService(authService: self, modelContext: modelContext, owner: owner).createAndUploadBackup()
+            try await BackupService(authService: self, modelContext: modelContext, client: client, owner: owner).createAndUploadBackup()
         }
     }
 
@@ -330,6 +353,12 @@ final class AuthService {
             }
         }
     }
+}
+
+/// A manual backup or restore that account deletion stopped (#268).
+enum StoppedCloudWork: Equatable, Sendable {
+    case backup
+    case restore
 }
 
 // MARK: - Error
