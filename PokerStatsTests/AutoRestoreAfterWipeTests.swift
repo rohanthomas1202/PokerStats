@@ -65,7 +65,25 @@ struct AutoRestoreAfterWipeTests {
     private func settingsViewModel(_ flag: AutoRestoreFlag) -> SettingsViewModel {
         let vm = SettingsViewModel()
         vm.autoRestoreFlag = flag
+        vm.localDataOwner = LocalDataOwner(defaults: ThrowawayDefaults("AutoRestoreAfterWipeTests"))
         return vm
+    }
+
+    /// A first auto-restore whose download runs `duringDownload` before it returns.
+    private func launch(
+        _ container: ModelContainer,
+        flag: AutoRestoreFlag,
+        duringDownload: @escaping @MainActor () -> Void
+    ) async throws -> AutoRestore.Outcome {
+        try await AutoRestore(
+            modelContext: container.mainContext,
+            listBackups: { [metadata] in [metadata] },
+            downloadBackup: { [self] _ in
+                duringDownload()
+                return payload()
+            },
+            flag: flag
+        ).run()
     }
 
     @Test func freshInstall_emptyStore_autoRestores_andSetsFlag() async throws {
@@ -154,11 +172,43 @@ struct AutoRestoreAfterWipeTests {
         #expect(try await launch(container, flag: flag, calls: Calls()) == .restored(sessionCount: 1))
     }
 
-    @Test func manualRestore_ignoresFlag() throws {
+    // MARK: - A wipe while the first download is in flight (#68)
+
+    @Test func deleteAllData_duringDownload_leavesTheStoreEmpty() async throws {
         let container = try TestHelpers.createContainer()
         let flag = freshFlag()
+
+        let outcome = try await launch(container, flag: flag) {
+            settingsViewModel(flag).deleteAllData(from: container.mainContext)
+        }
+
+        #expect(outcome == .skippedAlreadyRan)
+        #expect(try sessionCount(container) == 0)
+        #expect(flag.isSet)
+    }
+
+    @Test func accountDeletion_duringDownload_leavesTheStoreEmpty_andTheFlagCleared() async throws {
+        let container = try TestHelpers.createContainer()
+        let flag = freshFlag()
+
+        let outcome = try await launch(container, flag: flag) {
+            settingsViewModel(flag).wipeAfterAccountDeletion(from: container.mainContext)
+        }
+
+        #expect(outcome == .skippedAlreadyRan)
+        #expect(try sessionCount(container) == 0)
+        // The stale run doesn't set the flag again, so the next sign-in
+        // still gets its first restore.
+        #expect(!flag.isSet)
+        #expect(try await launch(container, flag: flag, calls: Calls()) == .restored(sessionCount: 1))
+    }
+
+    @Test func clear_isCountedForRunsInFlight() {
+        let flag = freshFlag()
+        #expect(flag.clearCount == 0)
         flag.set()
-        try LocalDataRestorer(modelContext: container.mainContext).restore(payload())
-        #expect(try sessionCount(container) == 1)
+        flag.clear()
+        #expect(!flag.isSet)
+        #expect(flag.clearCount == 1)
     }
 }
