@@ -27,7 +27,7 @@ Everything you enter is stored in the app's local database on your iPhone:
 
 The PokerStats widgets read this database to show your lifetime stats on the Home Screen. During a session, a Live Activity shows the stakes, location, start time, hand count, and amount invested on the Lock Screen and in the Dynamic Island, where anyone who can see your screen can see them. Widgets and Live Activities run on your iPhone. Their data is not sent to us.
 
-If you sign in, the app also keeps your sign-in tokens, your account user ID, your email address, and your Apple user ID in the iOS Keychain on your iPhone. It also keeps two settings on your iPhone: whether automatic restore has already run on this install of the app, and the account user ID of the account the data on your iPhone belongs to.
+If you sign in, the app also keeps your sign-in tokens, your account user ID, your email address, and your Apple user ID in the iOS Keychain on your iPhone. It also keeps up to three settings on your iPhone: whether automatic restore should be skipped on this install of the app, the account user ID of the account the data on your iPhone belongs to, and, if you chose Keep on This iPhone Only, the account user ID of the account that made that choice.
 
 ## Data we collect if you sign in
 
@@ -47,9 +47,9 @@ PokerStats does not store your name.
 
 Backups are sent over HTTPS. Access rules limit each account to its own backups, and Supabase encrypts stored data at rest. Backups are not end-to-end encrypted, so as the operator of the service we are technically able to access them. We use backups only to restore your data to you.
 
-**Signing in with a different account.** Signing out keeps your data on your iPhone. If someone then signs in with a different account and the iPhone still has data from the first account, the app does not back that data up until they choose what to do: back it up to the account they signed in with, keep it on that iPhone only, or delete it from that iPhone. Until they choose, and for as long as they keep it on that iPhone only, nothing is uploaded.
+**Signing in with a different account.** Signing out keeps your data on your iPhone. If someone then signs in with a different account and the iPhone still has data saved with the first account, the app does not back that data up until they choose what to do: Back Up to This Account, Keep on This iPhone Only, or Delete from This iPhone. Until they choose, and for as long as they keep it on that iPhone only, nothing is uploaded. Data that is not tied to any account, such as data entered before you first signed in or data saved by a version of the app from before this choice existed, belongs to the next account that signs in and is backed up to it.
 
-**Restoring.** When you sign in on an iPhone that has no PokerStats data, the app restores your most recent backup automatically. This happens at most once per install of the app, and not after you use Delete All Data. Deleting and reinstalling the app, or deleting your account, resets this. You can restore any listed backup yourself from Settings > Cloud Backup.
+**Restoring.** When you sign in on an iPhone that has no PokerStats data, the app restores your most recent backup automatically. The app tries this only once per install of the app: after the first check it does not try again, even if there was no backup to restore or you added data while the backup was downloading. It also does not run after you use Delete All Data. Deleting and reinstalling the app, or deleting your account, resets this. You can restore any listed backup yourself from Settings > Cloud Backup.
 
 **Technical data.** Like any online service, Supabase receives your IP address and basic request details when the app talks to it, and keeps them in service logs. If account deletion fails, our server logs your account ID and the failed step so the problem can be fixed. We do not use this data to track you.
 
