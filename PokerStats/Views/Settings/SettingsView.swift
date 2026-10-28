@@ -170,6 +170,14 @@ struct SettingsView: View {
         .modifier(SignInSheet(authViewModel: authViewModel))
         .modifier(SignOutConfirmation(authViewModel: authViewModel))
         .modifier(DeleteAllDataFailureAlert(viewModel: viewModel))
+        .alert(SettingsViewModel.localWipeFailedTitle, isPresented: $viewModel.localWipeFailed) {
+            Button("Cancel", role: .cancel) { }
+            Button("Delete Local Data", role: .destructive) {
+                viewModel.wipeAfterAccountDeletion(from: modelContext)
+            }
+        } message: {
+            Text(SettingsViewModel.localWipeFailedMessage)
+        }
         .alert("Delete All Data?", isPresented: $viewModel.showDeleteAllConfirmation) {
             Button("Cancel", role: .cancel) { }
             Button("Delete Everything", role: .destructive) {

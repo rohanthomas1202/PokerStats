@@ -18,6 +18,13 @@ final class SettingsViewModel {
 
     static let deleteAllDataFailedTitle = "Couldn't Delete Data"
 
+    /// The account was deleted but the local wipe threw; the alert offers a
+    /// retry so the next person on this iPhone doesn't see the data (#60).
+    var localWipeFailed = false
+
+    static let localWipeFailedTitle = "Data Still on This iPhone"
+    static let localWipeFailedMessage = "Your account was deleted, but the data on this iPhone couldn't be removed. Delete it now so no one else using this iPhone can see it."
+
     /// Tests use an isolated store.
     @ObservationIgnored var autoRestoreFlag = AutoRestoreFlag.standard
     /// Tests use an isolated store.
@@ -75,14 +82,17 @@ final class SettingsViewModel {
     /// (settings too), end any Live Activity, and refresh widgets. Also clears
     /// the auto-restore flag: the account and its backups are gone, so the
     /// next sign-in is treated like a fresh install. Once the wipe succeeds
-    /// the empty store has no owner (#69).
+    /// the empty store has no owner (#69). If it fails, `localWipeFailed`
+    /// shows an alert whose retry calls this again (#60).
     func wipeAfterAccountDeletion(from context: ModelContext) {
         autoRestoreFlag.clear()
         do {
-            try LocalDataWiper(modelContext: context).wipe()
+            try makeWiper(context).wipe()
             localDataOwner.clear()
+            localWipeFailed = false
         } catch {
             Self.logger.error("Local wipe after account deletion failed: \(error.localizedDescription, privacy: .private)")
+            localWipeFailed = true
         }
         resetToDefaults()
         Task {
