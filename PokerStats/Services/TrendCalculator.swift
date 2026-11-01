@@ -208,9 +208,12 @@ enum TrendCalculator {
     /// at least `plAxisLabelSpacing` apart, and none past either end of the plot.
     /// Wider plots (landscape, iPad) get more labels. Falls back to one label on
     /// the first bar when not even two fit, or before the plot is measured.
+    /// A lone bar's label is centered on it, the middle of the plot, so it stays
+    /// inside whenever it is no wider than the plot.
     /// Each bar keeps its full range in VoiceOver whether or not it is labeled.
     static func plAxisLayout(bucketCount: Int, plotWidth: Double, labelWidth: Double) -> PLAxisLayout {
         guard bucketCount > 0 else { return PLAxisLayout(indices: [], insetsEnds: false) }
+        guard bucketCount > 1 else { return PLAxisLayout(indices: [0], insetsEnds: false) }
         let barWidth = plotWidth / Double(bucketCount)
         guard plotWidth > 0, plotWidth.isFinite, labelWidth.isFinite else {
             return PLAxisLayout(indices: [0], insetsEnds: true)
