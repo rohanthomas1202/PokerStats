@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import PokerStats
 
-/// #286: Settings > Live Activity > Show on Lock Screen decides whether a
+/// #286: Settings > Live Activity > Show Live Activity decides whether a
 /// session starts a Live Activity. Default on.
 @Suite("Live Activity Preference Tests")
 @MainActor

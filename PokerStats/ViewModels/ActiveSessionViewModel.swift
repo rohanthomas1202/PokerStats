@@ -232,7 +232,7 @@ final class ActiveSessionViewModel {
     }
 
     func startLiveActivity() {
-        // Settings > Live Activity > Show on Lock Screen (#286).
+        // Settings > Live Activity > Show Live Activity (#286).
         guard LiveActivityPreference.shouldStart(
             showOnLockScreen: liveActivityPreference.showOnLockScreen,
             activitiesEnabled: ActivityAuthorizationInfo().areActivitiesEnabled
