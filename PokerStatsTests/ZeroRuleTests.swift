@@ -153,6 +153,8 @@ struct ZeroRuleTests {
         #expect(profit.text == "+25.0%")
         #expect(profit.accessibilityLabel == "Session ROI, +25.0%")
         let loss = SessionDetailView.roiDisplay(netProfit: -300, totalInvested: 200)
+        #expect(loss.text == "-150.0%")
+        #expect(loss.result == .loss)
         #expect(loss.accessibilityLabel == "Session ROI, -150.0%")
         let zero = SessionDetailView.roiDisplay(netProfit: 0, totalInvested: 100)
         #expect(zero.text == "0.0%")
