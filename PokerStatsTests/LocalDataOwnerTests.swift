@@ -315,6 +315,51 @@ struct LocalDataOwnerTests {
         #expect(owner.allowsUpload(for: accountB))
     }
 
+    /// #311: a restore replaces the local store, so nothing is left unsent.
+    @Test func manualRestore_clearsUnsentChanges() throws {
+        owner.adopt(accountB)
+        owner.hasUnsentChanges = true
+        try addSession("B's unsent session")
+        let (auth, client) = signedInAuthService(server: FakeServer())
+        let service = BackupService(authService: auth, modelContext: context, client: client, owner: owner)
+        let payload = BackupPayload(
+            schemaVersion: BackupPayload.currentSchemaVersion, createdAt: .now,
+            appVersion: "1.0.0", sessions: [], settings: nil
+        )
+
+        try service.restoreBackup(payload)
+
+        #expect(owner.ownerId == accountB)
+        #expect(!owner.hasUnsentChanges)
+    }
+
+    /// #311: when another account takes the data, the old owner's unsent
+    /// changes are dropped. The same owner, or data with no owner, keeps them.
+    @Test func ownerChange_clearsUnsentChanges() {
+        owner.hasUnsentChanges = true
+        owner.adopt(accountA) // no owner before
+        #expect(owner.hasUnsentChanges)
+        owner.adopt(accountA) // same owner
+        #expect(owner.hasUnsentChanges)
+
+        owner.adopt(accountB)
+
+        #expect(owner.ownerId == accountB)
+        #expect(!owner.hasUnsentChanges)
+    }
+
+    /// #311: B signs in over A's emptied store; the owner check gives B the
+    /// store and A's unsent flag is cleared, so B's sign-in uploads nothing.
+    @Test func signInOverAnotherAccountsEmptyStore_clearsUnsentChanges() {
+        owner.adopt(accountA)
+        owner.hasUnsentChanges = true
+
+        viewModel().signedIn(accountB, modelContext: context)
+
+        #expect(owner.ownerId == accountB)
+        #expect(!owner.hasUnsentChanges)
+    }
+
     @Test func deleteAllData_clearsTheOwner_butKeepsTheAutoRestoreFlag() throws {
         owner.adopt(accountA)
         owner.hasUnsentChanges = true
