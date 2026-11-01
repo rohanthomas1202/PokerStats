@@ -34,9 +34,9 @@ enum TrendCalculator {
         let upperBound: Double
         let count: Int
 
-        /// VoiceOver text for the bar, for example "+$100 to under +$200, 3 sessions".
+        /// VoiceOver text for the bar, for example "+$1,000 to under +$1,100, 3 sessions".
         var accessibilityLabel: String {
-            let upper = upperBound == 0 ? "$0" : TrendCalculator.signedDollarLabel(upperBound)
+            let upper = CurrencyFormatter.formatSigned(upperBound)
             let sessions = count == 1 ? "1 session" : "\(count) sessions"
             return "\(rangeLabel) to under \(upper), \(sessions)"
         }
@@ -140,7 +140,10 @@ enum TrendCalculator {
         let completed = sessions.filter { $0.status == .completed }
         guard !completed.isEmpty else { return [] }
 
-        let profits = completed.map(\.netProfit)
+        // A non-finite profit (corrupt data) can't go in a bucket, and an infinite
+        // bound would never end the loop below.
+        let profits = completed.map(\.netProfit).filter(\.isFinite)
+        guard !profits.isEmpty else { return [] }
         let minProfit = (profits.min() ?? 0)
         let maxProfit = (profits.max() ?? 0)
         let width = plBucketWidth(min: minProfit, max: maxProfit, baseWidth: bucketWidth, maxBuckets: maxBuckets)
@@ -179,15 +182,18 @@ enum TrendCalculator {
         }
     }
 
-    /// Signed whole-dollar label: "+$100", "+$0" for zero, "-$200" below zero.
+    /// Signed whole-dollar bar label: "+$100", "+$0" for zero, "-$2,000" below zero.
+    /// Uses CurrencyFormatter rather than Int(value), which traps on a non-finite
+    /// or out-of-range Double. Zero keeps its "+" because the +$0 bar starts a
+    /// range that runs up into profit.
     static func signedDollarLabel(_ value: Double) -> String {
-        value >= 0 ? "+$\(Int(value))" : "-$\(Int(abs(value)))"
+        (value < 0 ? "-" : "+") + CurrencyFormatter.format(abs(value))
     }
 
-    /// Chart subtitle naming the bucket width, for example "Sessions per $100 range, labelled by the low end".
+    /// Chart subtitle naming the bucket width, for example "Sessions per $2,000 range, labeled by the low end".
     static func plDistributionSubtitle(_ buckets: [PLBucket]) -> String? {
         guard let first = buckets.first else { return nil }
-        return "Sessions per $\(Int(first.upperBound - first.lowerBound)) range, labelled by the low end"
+        return "Sessions per \(CurrencyFormatter.format(first.upperBound - first.lowerBound)) range, labeled by the low end"
     }
 
     // MARK: - Mental Correlation

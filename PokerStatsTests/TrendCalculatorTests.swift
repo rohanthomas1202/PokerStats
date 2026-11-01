@@ -162,7 +162,7 @@ struct TrendCalculatorTests {
     @Test func plDistribution_subtitle_namesBucketWidth() {
         let s = TestHelpers.completedSession(buyIn: 100, cashOut: 200)
         let result = TrendCalculator.sessionPLDistribution(sessions: [s])
-        #expect(TrendCalculator.plDistributionSubtitle(result) == "Sessions per $100 range, labelled by the low end")
+        #expect(TrendCalculator.plDistributionSubtitle(result) == "Sessions per $100 range, labeled by the low end")
         #expect(TrendCalculator.plDistributionSubtitle([]) == nil)
     }
 
@@ -198,12 +198,35 @@ struct TrendCalculatorTests {
         let result = TrendCalculator.sessionPLDistribution(sessions: [s1, s2])
         #expect(result.count == 14)
         #expect(result.count <= TrendCalculator.maxPLBuckets)
-        #expect(result.first?.rangeLabel == "-$6000")
-        #expect(result.last?.rangeLabel == "+$20000")
+        #expect(result.first?.rangeLabel == "-$6,000")
+        #expect(result.last?.rangeLabel == "+$20,000")
         #expect(result.map(\.count).reduce(0, +) == 2)
         #expect(result.allSatisfy { $0.upperBound - $0.lowerBound == 2000 })
-        #expect(TrendCalculator.plDistributionSubtitle(result) == "Sessions per $2000 range, labelled by the low end")
-        #expect(result.last?.accessibilityLabel == "+$20000 to under +$22000, 1 session")
+        #expect(TrendCalculator.plDistributionSubtitle(result) == "Sessions per $2,000 range, labeled by the low end")
+        #expect(result.last?.accessibilityLabel == "+$20,000 to under +$22,000, 1 session")
+    }
+
+    @Test func plDistribution_labels_doNotTrapOnNonFiniteOrHugeValues() {
+        #expect(TrendCalculator.signedDollarLabel(1e300).hasPrefix("+$1,000,000"))
+        #expect(TrendCalculator.signedDollarLabel(-1e300).hasPrefix("-$1,000,000"))
+        _ = TrendCalculator.signedDollarLabel(.infinity)
+        _ = TrendCalculator.signedDollarLabel(-.infinity)
+        _ = TrendCalculator.signedDollarLabel(.nan)
+
+        let huge = TestHelpers.completedSession(buyIn: 0, cashOut: 1e300)
+        let result = TrendCalculator.sessionPLDistribution(sessions: [huge])
+        #expect(result.map(\.count).reduce(0, +) == 1)
+        #expect(TrendCalculator.plDistributionSubtitle(result)?.hasPrefix("Sessions per $") == true)
+        _ = result.map(\.accessibilityLabel)
+    }
+
+    @Test func plDistribution_skipsNonFiniteProfits() {
+        let ok = TestHelpers.completedSession(buyIn: 100, cashOut: 200) // +100
+        let corrupt = TestHelpers.completedSession(buyIn: 100, cashOut: .infinity)
+        let result = TrendCalculator.sessionPLDistribution(sessions: [ok, corrupt])
+        #expect(result.map(\.rangeLabel) == ["+$100"])
+        #expect(result.map(\.count) == [1])
+        #expect(TrendCalculator.sessionPLDistribution(sessions: [corrupt]).isEmpty)
     }
 
     @Test func plBucketWidth_staysAt100UpTo20Buckets() {

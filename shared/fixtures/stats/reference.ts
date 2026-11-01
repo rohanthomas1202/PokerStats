@@ -223,7 +223,7 @@ export function profitByDayOfWeek(sessions: SessionRow[], timeZone: string) {
   }));
 }
 
-// TrendCalculator.swift:135-185 (sessionPLDistribution, plBucketWidth).
+// TrendCalculator.swift: sessionPLDistribution and plBucketWidth.
 // The width is the smallest of base x 1, 2, 5, 10, 20, 50... that covers
 // min..max in at most maxBuckets buckets, so a wide range can't give
 // hundreds of bars (#288).
