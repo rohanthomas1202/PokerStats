@@ -24,13 +24,15 @@ struct SignedCurrencyTests {
         #expect(CurrencyFormatter.formatSigned(-100) == "-$100")
     }
 
-    @Test func isLoss_followsTheRoundedValue() {
-        #expect(!CurrencyFormatter.isLoss(0))
-        #expect(!CurrencyFormatter.isLoss(-0.4))
-        #expect(!CurrencyFormatter.isLoss(-0.5))
-        #expect(CurrencyFormatter.isLoss(-0.6))
-        #expect(!CurrencyFormatter.isLoss(250))
-        #expect(!CurrencyFormatter.isLoss(-0.004, fractionDigits: 2))
-        #expect(CurrencyFormatter.isLoss(-0.25, fractionDigits: 2))
+    /// A loss that rounds to zero shows as "$0" and is break even, not a loss.
+    @Test func result_followsTheRoundedValue() {
+        #expect(CurrencyFormatter.result(0) == .breakEven)
+        #expect(CurrencyFormatter.result(-0.4) == .breakEven)
+        #expect(CurrencyFormatter.result(-0.5) == .breakEven)
+        #expect(CurrencyFormatter.result(-0.6) == .loss)
+        #expect(CurrencyFormatter.result(250) == .profit)
+        #expect(CurrencyFormatter.result(-0.004, fractionDigits: 2) == .breakEven)
+        #expect(CurrencyFormatter.result(-0.25, fractionDigits: 2) == .loss)
+        #expect(CurrencyFormatter.formatSigned(-0.25, fractionDigits: 2) == "-$0.25")
     }
 }

@@ -271,7 +271,8 @@ export function plDistribution(
     buckets.push({
       range_label: label,
       lower_bound: current,
-      upper_bound: current + width,
+      // Same expression as the next bar's lower bound, so the bars touch.
+      upper_bound: (first + i + 1) * width,
       count: counts[i],
     });
   }
@@ -501,15 +502,16 @@ export function display(format: string, value: number | null): string {
   switch (format) {
     case "percent": // ComputedStats.formatPercent
       return value === null ? "--" : `${roundHalfEven(value * 100, 1)}%`;
-    case "currency": // ComputedStats.formatCurrency, CurrencyFormatter.format
+    case "currency": // CurrencyFormatter.format
       return dollars(value!, 0);
     case "currency_signed": // CurrencyFormatter.formatSigned: half even, no sign on zero
       return signedRounded(value!, 0);
     case "hourly_rate": // ComputedStats.formatHourlyRate
       return value === null ? "--" : `${dollars(value, 2)}/hr`;
-    case "roi": { // SessionDetailView: String(format: "%+.1f%%", roi * 100)
-      const r = roundHalfEven(value! * 100, 1);
-      return `${r.startsWith("-") ? "" : "+"}${r}%`;
+    case "roi": { // CurrencyFormatter.formatSignedPercent(roi * 100): no sign on 0.0%
+      const r = roundHalfEven(Math.abs(value! * 100), 1);
+      if (!/[1-9]/.test(r)) return `${r}%`;
+      return `${value! < 0 ? "-" : "+"}${r}%`;
     }
     case "widget_currency": // CurrencyFormatter.formatSigned, as currency_signed
       return signedRounded(value!, 0);

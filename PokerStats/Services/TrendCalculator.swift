@@ -156,6 +156,13 @@ enum TrendCalculator {
         // division rather than by stepping lower += width: at huge magnitudes
         // width can be below the Double spacing, where stepping drops sessions
         // or never ends. plBucketWidth keeps bucketCount at most maxBuckets.
+        //
+        // At huge magnitudes (far beyond any real session) the division rounds,
+        // so a value can land in a bar whose bounds sit slightly off from it,
+        // and near the Double limits (about 1.7e308) the first lower bound or
+        // the last upper bound can overflow to -inf or +inf. Each bar's upper
+        // bound is computed the same way as the next bar's lower bound, so the
+        // bars always touch.
         let first = floor(minProfit / width)
         let bucketCount = Int(floor(maxProfit / width) - first) + 1
         var counts = Array(repeating: 0, count: bucketCount)
@@ -166,7 +173,8 @@ enum TrendCalculator {
 
         return counts.indices.map { i in
             let lower = (first + Double(i)) * width
-            return PLBucket(rangeLabel: signedDollarLabel(lower), lowerBound: lower, upperBound: lower + width, count: counts[i])
+            let upper = (first + Double(i + 1)) * width
+            return PLBucket(rangeLabel: signedDollarLabel(lower), lowerBound: lower, upperBound: upper, count: counts[i])
         }
     }
 
@@ -189,7 +197,8 @@ enum TrendCalculator {
     /// Uses CurrencyFormatter rather than Int(value), which traps on a non-finite
     /// or out-of-range Double. Zero keeps its "+" because the +$0 bar starts a
     /// range that runs up into profit.
-    /// A non-finite value (never a bucket bound) reads "+$∞", "-$∞", or "$0" for NaN.
+    /// A non-finite value reads "+$∞", "-$∞", or "$0" for NaN. A bucket bound is
+    /// non-finite only for profits near the Double limits, where it overflows.
     static func signedDollarLabel(_ value: Double) -> String {
         guard value.isFinite else { return value.isNaN ? "$0" : (value < 0 ? "-$∞" : "+$∞") }
         return (value < 0 ? "-" : "+") + CurrencyFormatter.format(abs(value))

@@ -149,8 +149,14 @@
     {
       "format": "roi",
       "value": 0,
-      "expected": "+0.0%",
-      "note": "Zero shows +"
+      "expected": "0.0%",
+      "note": "Zero has no sign"
+    },
+    {
+      "format": "roi",
+      "value": -0.0004,
+      "expected": "0.0%",
+      "note": "Rounds to 0.0, no sign, never -0.0%"
     },
     {
       "format": "roi",

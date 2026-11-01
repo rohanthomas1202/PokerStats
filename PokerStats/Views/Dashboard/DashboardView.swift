@@ -7,6 +7,18 @@ struct DashboardView: View {
     @State private var viewModel = DashboardViewModel()
     @State private var navigationPath = NavigationPath()
 
+    /// The lifetime total as the Dashboard shows it: "+$1,234", "-$567", or
+    /// "$0" when it rounds to zero (#299).
+    nonisolated static func totalProfitText(_ totalProfit: Double) -> String {
+        CurrencyFormatter.formatSigned(totalProfit)
+    }
+
+    /// A Calm or Tilted hourly rate as the Mental Insights card shows it:
+    /// "+$12.50/hr", "-$3.00/hr", or "$0.00/hr" when it rounds to zero (#308).
+    nonisolated static func mentalRateText(_ rate: Double) -> String {
+        CurrencyFormatter.formatSigned(rate, fractionDigits: 2) + "/hr"
+    }
+
     var body: some View {
         NavigationStack(path: $navigationPath) {
             ScrollView {
@@ -154,7 +166,7 @@ struct DashboardView: View {
     private var financialSummary: some View {
         VStack(spacing: 12) {
             // Total P/L
-            Text(CurrencyFormatter.formatSigned(viewModel.lifetimeStats.totalProfit))
+            Text(Self.totalProfitText(viewModel.lifetimeStats.totalProfit))
                 .font(.system(.largeTitle, design: .rounded))
                 .fontWeight(.bold)
                 .foregroundStyle(Color.pokerResult(viewModel.lifetimeStats.totalProfit))
@@ -308,7 +320,7 @@ struct DashboardView: View {
                         Text("Calm")
                             .font(.caption2)
                             .foregroundStyle(Color.pokerTextSecondary)
-                        Text(CurrencyFormatter.formatSigned(insight.calmRate, fractionDigits: 2) + "/hr")
+                        Text(Self.mentalRateText(insight.calmRate))
                             .font(.subheadline)
                             .fontWeight(.bold)
                             .foregroundStyle(Color.pokerResult(insight.calmRate, fractionDigits: 2))
@@ -330,7 +342,7 @@ struct DashboardView: View {
                         Text("Tilted")
                             .font(.caption2)
                             .foregroundStyle(Color.pokerTextSecondary)
-                        Text(CurrencyFormatter.formatSigned(insight.tiltedRate, fractionDigits: 2) + "/hr")
+                        Text(Self.mentalRateText(insight.tiltedRate))
                             .font(.subheadline)
                             .fontWeight(.bold)
                             .foregroundStyle(Color.pokerResult(insight.tiltedRate, fractionDigits: 2))
