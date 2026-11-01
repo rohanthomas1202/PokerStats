@@ -128,12 +128,14 @@ final class AuthService {
 
     /// Resets the signed-in UI state. Callers clear the stored session.
     /// Also drops the scheduled backup, so a later failed deletion under
-    /// another sign-in can't run it again (#275).
+    /// another sign-in can't run it again (#275). A dropped backup leaves
+    /// its changes unsent until the owner signs back in (#293).
     private func clearSignedInState() {
         isAuthenticated = false
         userEmail = nil
         userId = nil
         error = nil
+        if unfinishedBackup != nil { hasUnsentChanges = true }
         backupTask?.cancel()
         backupTask = nil
         unfinishedBackup = nil
@@ -185,10 +187,19 @@ final class AuthService {
     /// Which account the local data belongs to (#69). Tests use an isolated store.
     @ObservationIgnored var localDataOwner = LocalDataOwner.standard
 
+    /// Local changes no backup has sent: sign-out dropped the scheduled
+    /// backup, it failed, or a session ended while signed out. Cleared when a backup
+    /// is scheduled, which snapshots the whole store (#293).
+    @ObservationIgnored private(set) var hasUnsentChanges = false
+
     /// The automatic backup after a session ends. Skipped while the local
     /// data belongs to another account and the user hasn't chosen (#69).
     func scheduleBackup(modelContext: ModelContext) {
-        guard isAuthenticated, let userId, localDataOwner.allowsUpload(for: userId) else { return }
+        guard isAuthenticated, let userId else {
+            hasUnsentChanges = true
+            return
+        }
+        guard localDataOwner.allowsUpload(for: userId) else { return }
         let owner = localDataOwner
         // Same client as the session, so the upload uses this sign-in (and tests can intercept it).
         let client = client
@@ -202,6 +213,7 @@ final class AuthService {
     /// finish. Separate so tests can supply the work.
     func scheduleBackup(_ backup: @escaping @MainActor () async throws -> BackupMetadata) {
         unfinishedBackup = backup
+        hasUnsentChanges = false
         guard !isCloudWorkSuspended else { return }
         backupTask?.cancel()
         backupTask = Task {
@@ -215,6 +227,7 @@ final class AuthService {
                 // A cancelled backup was replaced or stopped; it reports nothing.
                 if Task.isCancelled { return }
                 unfinishedBackup = nil
+                hasUnsentChanges = true
                 UserFacingError.log(error, action: .backup, to: Self.logger)
                 backupStatus = UserFacingError(error).bannerMessage(for: .backup, isSignedIn: isAuthenticated)
             }
@@ -222,6 +235,26 @@ final class AuthService {
             if Task.isCancelled { return }
             backupStatus = nil
         }
+    }
+
+    /// At sign-in, before the owner check adopts anything: when the account
+    /// that signed in already owned the local data and changes are unsent,
+    /// runs one backup (#293). Not while account deletion runs (#61).
+    func backUpUnsentChangesAtSignIn(modelContext: ModelContext) {
+        guard canBackUpUnsentChangesAtSignIn else { return }
+        scheduleBackup(modelContext: modelContext)
+    }
+
+    /// `backUpUnsentChangesAtSignIn(modelContext:)` with the backup work
+    /// supplied, for tests.
+    func backUpUnsentChangesAtSignIn(_ backup: @escaping @MainActor () async throws -> BackupMetadata) {
+        guard canBackUpUnsentChangesAtSignIn else { return }
+        scheduleBackup(backup)
+    }
+
+    private var canBackUpUnsentChangesAtSignIn: Bool {
+        guard hasUnsentChanges, !isCloudWorkSuspended, isAuthenticated, let userId else { return false }
+        return localDataOwner.ownerId == userId
     }
 
     /// Runs a manual backup, a manual restore, or the auto-restore so that
@@ -325,6 +358,7 @@ final class AuthService {
             // the SDK removes the local session before calling it.
             try? await client.auth.signOut(scope: .local)
             clearSignedInState()
+            hasUnsentChanges = false // the account and its backups are gone
             isLoading = false
         } catch let error as AccountDeletionError {
             // Cancelled, or a server failure with its own alert: the caller shows these.

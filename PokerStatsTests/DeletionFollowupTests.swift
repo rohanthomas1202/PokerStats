@@ -237,8 +237,9 @@ struct DeletionFollowupTests {
     /// backup but keeps the local data and its owner, and once the same
     /// account signs back in, the next session's automatic backup uploads
     /// everything, including the changes the dropped backup never sent.
-    /// No backup runs at sign-in itself; `scheduleBackup(modelContext:)` is
-    /// what `ActiveSessionViewModel.endSession` calls, and it snapshots the
+    /// This test doesn't run the sign-in backup (#293, covered in
+    /// SignInBackupTests); `scheduleBackup(modelContext:)` is what
+    /// `ActiveSessionViewModel.endSession` calls, and it snapshots the
     /// whole store.
     @Test func signOutDuringAScheduledBackup_keepsTheData_andTheNextAutoBackupAfterSigningBackInSendsIt() async throws {
         let container = try TestHelpers.createContainer()
