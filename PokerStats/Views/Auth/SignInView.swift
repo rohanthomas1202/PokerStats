@@ -61,12 +61,13 @@ struct SignInView: View {
                     .disabled(authViewModel.isProcessing)
                 }
 
-                // Loading overlay
-                if authViewModel.isProcessing {
-                    ProgressView("Signing in…")
-                        .tint(.white)
-                        .foregroundStyle(.white)
-                }
+                // Always in the layout so the sheet doesn't shift when
+                // sign-in starts or ends (#228); hidden while idle.
+                ProgressView("Signing in…")
+                    .tint(.white)
+                    .foregroundStyle(.white)
+                    .opacity(authViewModel.isProcessing ? 1 : 0)
+                    .accessibilityHidden(!authViewModel.isProcessing)
 
                 Spacer()
                     .frame(height: 40)
