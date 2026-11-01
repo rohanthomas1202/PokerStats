@@ -55,7 +55,7 @@ Sources ported (read-only): `PokerStats/Services/StatCalculator.swift`, `TrendCa
 - **Time.** `now` and `time_zone` are dataset inputs. Weekdays use `time_zone` (the app uses the device's). The 30-day window keeps rows at or after `now` minus 30 days.
 - **Display.** Percent and currency round half to even, as printf and NumberFormatter do. JavaScript's `toFixed` rounds ties up (`(6.25).toFixed(1)` is `6.3`, the app shows `6.2%`), so the web must not use it for these.
 
-Edge cases present (the test fails if one disappears). Apart from the three tombstone cases, each must be on a live row by the same rule the stats use (`liveRows` in `reference.ts`): no `deleted_at`, and a hand counts only if its session is live in the same dataset, so a tombstoned row or an orphan hand doesn't count. The cases: no rows, a tombstoned session with hands, a tombstoned hand in a live session, an active session, an unknown status (`paused`), an abandoned session, a zero-length session, custom stakes, a nonzero `tip_rake`, a session shorter than the 0.01-hour hourly guard, hands at the unknown position `?`, a hand with `faced_3bet` where hero did not raise preflop, a session with 10+ hands (session Leak Finder), 20+ hands (lifetime Leak Finder and rolling stats), a maximum P/L on a histogram bucket edge, a session outside the 30-day window, and a session whose weekday differs between UTC and America/Chicago.
+Edge cases present (the test fails if one disappears). Apart from the three tombstone cases, each must be on a live row by the same rule the stats use (`liveRows` in `reference.ts`): no `deleted_at`, and a hand counts only if its session is live in the same dataset, so a tombstoned row or an orphan hand doesn't count. The cases: no rows, a tombstoned session with hands, a tombstoned hand in a live session, an active session, an unknown status (`paused`), an abandoned session, a zero-length session, custom stakes, a nonzero `tip_rake`, a session shorter than the 0.01-hour hourly guard, hands at the unknown position `?`, a hand with `faced_3bet` where hero did not raise preflop, a tilt level 4 with one session alongside level 5 sessions (mental insight), a session with 10+ hands (session Leak Finder), 20+ hands (lifetime Leak Finder and rolling stats), a maximum P/L on a histogram bucket edge, a session outside the 30-day window, and a session whose weekday differs between UTC and America/Chicago.
 
 ## App and doc disagreements
 
@@ -70,7 +70,7 @@ The fixtures encode the app as of #246. The team's positions on these points are
 7. **Time zone.** Weekday grouping and the 30-day cutoff use the device's calendar and zone, so the same account can chart differently on two devices or on the web. The app subtracts 30 calendar days; the fixtures subtract 30 x 24 hours and avoid a DST change.
 8. **Widget money** truncates toward zero, with `+` for zero and `-$0` for a loss under $1, and the widget's hourly rate is whole dollars. The app rounds half to even and shows hourly to the cent.
 9. **ROI** exists per session only (shown when completed with an invested amount above 0). Spec section 12 lists ROI with no lifetime definition.
-10. **Mental insight** takes the first tilt level of 4 or higher, so level 5 is ignored when level 4 has data.
+10. **Mental insight.** Before #250 it took the first tilt level of 4 or higher, so level 5 was ignored when level 4 had data, and the card was hidden when level 4 had one session. Fixed in #250: tilted pools levels 4 and 5, averaging over all their sessions, and the 2-session minimum applies to the pooled group.
 11. **Ties.** The cumulative bankroll sorts sessions by start time and rolling VPIP/PFR sorts hands by time; equal timestamps have no defined order. Leak Finder's list order within one rating is also unstable, so the datasets store ratings by stat rather than as a list. The datasets avoid equal timestamps.
 12. **Completed with no end_time** gets a duration up to now. Pulled rows could carry this; the app never writes it.
 13. **Display locale.** NumberFormatter follows the device locale; `display.json` assumes en_US.
@@ -95,5 +95,4 @@ These will move expected values. Each fix updates `reference.ts`, regenerates th
 
 - Unknown status counts as completed (1), and a completed session with no `end_time` ends at its start time (12): #236.
 - Widget money rounds half to even instead of truncating (8): #249.
-- Mental insight pools tilt levels 4 and 5 (10): #250.
 - Lifetime ROI is the owner's call (9): #252.

@@ -302,10 +302,10 @@
         "mental_insight"
       ],
       "inputs": "mental_correlation",
-      "formula": "calm = tilt level 1 point; tilted = first tilt point with level >= 4 in level order; both need session_count >= 2",
-      "null_when": "either point missing or below 2 sessions",
+      "formula": "calm = tilt level 1 point; tilted = average hourly_rate over every session at tilt level 4 or 5 (the level 4 and 5 points weighted by session_count); calm and the pooled tilted group each need 2 or more sessions",
+      "null_when": "no tilt level 1 point, or calm or the pooled level 4 and 5 group below 2 sessions",
       "display": "hourly_rate",
-      "source": "PokerStats/ViewModels/DashboardViewModel.swift:73-79"
+      "source": "PokerStats/Services/TrendCalculator.swift:192-203"
     },
     "leak_finder": {
       "paths": [

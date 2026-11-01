@@ -212,6 +212,13 @@ Deno.test("the datasets keep their edge cases", () => {
     "a faced_3bet hand where hero did not raise preflop": hands.some((h) =>
       h.faced_3bet && h.preflop_action !== "raise"
     ),
+    "tilt level 4 with one session and level 5 sessions": all.some((d) => {
+      const points = d.expected.mental_correlation.filter((p: Json) =>
+        p.metric === "tilt"
+      );
+      return points.some((p: Json) => p.level === 4 && p.session_count === 1) &&
+        points.some((p: Json) => p.level === 5);
+    }),
     "a session with 10 or more hands": Object.values(datasets).some((d) =>
       d.expected.sessions.some((s: Json) => s.leak_finder !== null)
     ),

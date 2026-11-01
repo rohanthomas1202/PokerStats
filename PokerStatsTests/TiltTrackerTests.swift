@@ -86,4 +86,52 @@ struct TiltTrackerTests {
         #expect(tiltPoints.count == 1)
         #expect(tiltPoints[0].level == 3)
     }
+
+    // MARK: - Mental Insight
+
+    private func session(tilt: Int, buyIn: Double = 200, cashOut: Double) -> Session {
+        let s = TestHelpers.completedSession(buyIn: buyIn, cashOut: cashOut, hours: 2)
+        s.tiltLevel = tilt
+        return s
+    }
+
+    @Test func mentalInsight_level4WithOneSession_poolsLevel5() {
+        let sessions = [
+            session(tilt: 1, cashOut: 300), // +$50/hr
+            session(tilt: 1, cashOut: 400), // +$100/hr
+            session(tilt: 4, cashOut: 100), // -$50/hr
+            session(tilt: 5, cashOut: 0),   // -$100/hr
+            session(tilt: 5, buyIn: 300, cashOut: 0), // -$150/hr
+        ]
+        let points = TrendCalculator.mentalCorrelation(sessions: sessions)
+        let insight = TrendCalculator.mentalInsight(points: points)
+        #expect(insight != nil)
+        #expect(abs((insight?.calmRate ?? 0) - 75.0) < 0.01)
+        // (-50 - 100 - 150) / 3 sessions
+        #expect(abs((insight?.tiltedRate ?? 0) - -100.0) < 0.01)
+    }
+
+    @Test func mentalInsight_level5Only_shown() {
+        let sessions = [
+            session(tilt: 1, cashOut: 300), // +$50/hr
+            session(tilt: 1, cashOut: 300), // +$50/hr
+            session(tilt: 5, cashOut: 100), // -$50/hr
+            session(tilt: 5, cashOut: 0),   // -$100/hr
+        ]
+        let points = TrendCalculator.mentalCorrelation(sessions: sessions)
+        let insight = TrendCalculator.mentalInsight(points: points)
+        #expect(insight != nil)
+        #expect(abs((insight?.calmRate ?? 0) - 50.0) < 0.01)
+        #expect(abs((insight?.tiltedRate ?? 0) - -75.0) < 0.01)
+    }
+
+    @Test func mentalInsight_oneTiltedSession_hidden() {
+        let sessions = [
+            session(tilt: 1, cashOut: 300),
+            session(tilt: 1, cashOut: 300),
+            session(tilt: 5, cashOut: 100),
+        ]
+        let points = TrendCalculator.mentalCorrelation(sessions: sessions)
+        #expect(TrendCalculator.mentalInsight(points: points) == nil)
+    }
 }

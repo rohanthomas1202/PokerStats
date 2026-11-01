@@ -188,4 +188,17 @@ enum TrendCalculator {
 
         return points.sorted { ($0.metricType.rawValue, $0.level) < ($1.metricType.rawValue, $1.level) }
     }
+
+    /// Calm (tilt level 1) and tilted (tilt levels 4 and 5 pooled) hourly rates.
+    /// The tilted rate averages every session at level 4 or 5, so each level is
+    /// weighted by its session count. Each group needs at least 2 sessions.
+    static func mentalInsight(points: [MentalCorrelationPoint]) -> (calmRate: Double, tiltedRate: Double)? {
+        let tiltPoints = points.filter { $0.metricType == .tilt }
+        let tilted = tiltPoints.filter { $0.level >= 4 }
+        let tiltedCount = tilted.reduce(0) { $0 + $1.sessionCount }
+        guard let calm = tiltPoints.first(where: { $0.level == 1 }),
+              calm.sessionCount >= 2, tiltedCount >= 2 else { return nil }
+        let tiltedTotal = tilted.reduce(0.0) { $0 + $1.averageHourlyRate * Double($1.sessionCount) }
+        return (calmRate: calm.averageHourlyRate, tiltedRate: tiltedTotal / Double(tiltedCount))
+    }
 }
