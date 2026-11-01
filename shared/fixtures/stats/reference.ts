@@ -273,17 +273,20 @@ export function mentalCorrelation(sessions: SessionRow[], now: string) {
   return points;
 }
 
-// DashboardViewModel.swift:73-79
+// TrendCalculator.swift:192-203 (TrendCalculator.mentalInsight)
+// Tilted pools levels 4 and 5, averaged over their sessions (#250).
 export function mentalInsight(points: ReturnType<typeof mentalCorrelation>) {
   const tilt = points.filter((p) => p.metric === "tilt");
   const calm = tilt.find((p) => p.level === 1);
-  const tilted = tilt.find((p) => p.level >= 4);
-  if (!calm || !tilted || calm.session_count < 2 || tilted.session_count < 2) {
-    return null;
-  }
+  const tilted = tilt.filter((p) => p.level >= 4);
+  const tiltedCount = tilted.reduce((a, p) => a + p.session_count, 0);
+  if (!calm || calm.session_count < 2 || tiltedCount < 2) return null;
   return {
     calm_rate: calm.average_hourly_rate,
-    tilted_rate: tilted.average_hourly_rate,
+    tilted_rate: tilted.reduce(
+      (a, p) => a + p.average_hourly_rate * p.session_count,
+      0,
+    ) / tiltedCount,
   };
 }
 
