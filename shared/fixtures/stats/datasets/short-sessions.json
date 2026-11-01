@@ -181,11 +181,13 @@
           {
             "range_label": "-$100",
             "lower_bound": -100,
+            "upper_bound": 0,
             "count": 1
           },
           {
             "range_label": "+$0",
             "lower_bound": 0,
+            "upper_bound": 100,
             "count": 1
           }
         ]
@@ -258,11 +260,13 @@
           {
             "range_label": "-$100",
             "lower_bound": -100,
+            "upper_bound": 0,
             "count": 1
           },
           {
             "range_label": "+$0",
             "lower_bound": 0,
+            "upper_bound": 100,
             "count": 1
           }
         ]

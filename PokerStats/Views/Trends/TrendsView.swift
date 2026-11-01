@@ -231,8 +231,15 @@ struct TrendsView: View {
 
     private var plDistributionChart: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Session P&L Distribution")
-                .font(.headline)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Session P&L Distribution")
+                    .font(.headline)
+                if let subtitle = TrendCalculator.plDistributionSubtitle(viewModel.plDistribution) {
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundStyle(Color.pokerTextSecondary)
+                }
+            }
 
             Chart(viewModel.plDistribution) { bucket in
                 BarMark(
@@ -241,6 +248,7 @@ struct TrendsView: View {
                 )
                 .foregroundStyle(bucket.lowerBound >= 0 ? Color.pokerProfit : Color.pokerLoss)
                 .cornerRadius(4)
+                .accessibilityLabel(Text(bucket.accessibilityLabel))
             }
             .chartYAxis {
                 AxisMarks(position: .leading) { value in

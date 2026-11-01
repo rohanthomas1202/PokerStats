@@ -150,6 +150,70 @@ struct TrendCalculatorTests {
         #expect(result.map { $0.2 } == [1])
     }
 
+    // MARK: - P&L Distribution labels (#288)
+
+    @Test func plDistribution_bucketsCarryUpperBound() {
+        let s1 = TestHelpers.completedSession(buyIn: 100, cashOut: 50)  // -50
+        let s2 = TestHelpers.completedSession(buyIn: 100, cashOut: 200) // +100
+        let result = TrendCalculator.sessionPLDistribution(sessions: [s1, s2])
+        #expect(result.map(\.upperBound) == [0, 100, 200])
+    }
+
+    @Test func plDistribution_subtitle_namesBucketWidth() {
+        let s = TestHelpers.completedSession(buyIn: 100, cashOut: 200)
+        let result = TrendCalculator.sessionPLDistribution(sessions: [s])
+        #expect(TrendCalculator.plDistributionSubtitle(result) == "Sessions per $100 range, labelled by the low end")
+        #expect(TrendCalculator.plDistributionSubtitle([]) == nil)
+    }
+
+    @Test func plDistribution_accessibilityLabels_stateRangeAndCount() {
+        let s1 = TestHelpers.completedSession(buyIn: 100, cashOut: 50)  // -50
+        let s2 = TestHelpers.completedSession(buyIn: 100, cashOut: 200) // +100
+        let result = TrendCalculator.sessionPLDistribution(sessions: [s1, s2])
+        #expect(result.map(\.accessibilityLabel) == [
+            "-$100 to under $0, 1 session",
+            "+$0 to under +$100, 0 sessions",
+            "+$100 to under +$200, 1 session",
+        ])
+    }
+
+    @Test func plDistribution_accessibilityLabels_pluralAndNegative() {
+        let gains = [
+            TestHelpers.completedSession(buyIn: 100, cashOut: 330), // +230
+            TestHelpers.completedSession(buyIn: 100, cashOut: 370), // +270
+        ]
+        #expect(TrendCalculator.sessionPLDistribution(sessions: gains).map(\.accessibilityLabel)
+            == ["+$200 to under +$300, 2 sessions"])
+        let losses = [
+            TestHelpers.completedSession(buyIn: 300, cashOut: 140), // -160
+            TestHelpers.completedSession(buyIn: 300, cashOut: 180), // -120
+        ]
+        #expect(TrendCalculator.sessionPLDistribution(sessions: losses).map(\.accessibilityLabel)
+            == ["-$200 to under -$100, 2 sessions"])
+    }
+
+    @Test func plDistribution_wideRange_isCappedAt20Buckets() {
+        let s1 = TestHelpers.completedSession(buyIn: 5000, cashOut: 0)   // -5000
+        let s2 = TestHelpers.completedSession(buyIn: 100, cashOut: 20100) // +20000
+        let result = TrendCalculator.sessionPLDistribution(sessions: [s1, s2])
+        #expect(result.count == 14)
+        #expect(result.count <= TrendCalculator.maxPLBuckets)
+        #expect(result.first?.rangeLabel == "-$6000")
+        #expect(result.last?.rangeLabel == "+$20000")
+        #expect(result.map(\.count).reduce(0, +) == 2)
+        #expect(result.allSatisfy { $0.upperBound - $0.lowerBound == 2000 })
+        #expect(TrendCalculator.plDistributionSubtitle(result) == "Sessions per $2000 range, labelled by the low end")
+        #expect(result.last?.accessibilityLabel == "+$20000 to under +$22000, 1 session")
+    }
+
+    @Test func plBucketWidth_staysAt100UpTo20Buckets() {
+        #expect(TrendCalculator.plBucketWidth(min: 0, max: 1999) == 100)   // 20 buckets
+        #expect(TrendCalculator.plBucketWidth(min: 0, max: 2000) == 200)   // 21 at $100
+        #expect(TrendCalculator.plBucketWidth(min: -5000, max: 20000) == 2000)
+        #expect(TrendCalculator.plBucketWidth(min: -1_000_000, max: 1_000_000) == 200_000)
+        #expect(TrendCalculator.plBucketWidth(min: 50, max: 50) == 100)
+    }
+
     @Test func plDistribution_onlyActiveSessions_returnsEmpty() {
         let s = Session(status: .active, buyIn: 200)
         #expect(TrendCalculator.sessionPLDistribution(sessions: [s]).isEmpty)
