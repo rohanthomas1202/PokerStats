@@ -213,10 +213,13 @@ struct TrendCalculatorTests {
         _ = TrendCalculator.signedDollarLabel(-.infinity)
         _ = TrendCalculator.signedDollarLabel(.nan)
 
-        let huge = TestHelpers.completedSession(buyIn: 0, cashOut: 1e300)
-        let result = TrendCalculator.sessionPLDistribution(sessions: [huge])
-        #expect(result.map(\.count).reduce(0, +) == 1)
-        #expect(TrendCalculator.plDistributionSubtitle(result)?.hasPrefix("Sessions per $") == true)
+        // +1e19 is past Int.max, where the old Int(value) labels trapped.
+        let even = TestHelpers.completedSession(buyIn: 100, cashOut: 100)
+        let huge = TestHelpers.completedSession(buyIn: 0, cashOut: 1e19)
+        let result = TrendCalculator.sessionPLDistribution(sessions: [even, huge])
+        #expect(result.map(\.count).reduce(0, +) == 2)
+        #expect(result.last?.rangeLabel.hasPrefix("+$10,000,000,000") == true)
+        #expect(TrendCalculator.plDistributionSubtitle(result)?.hasPrefix("Sessions per $1,000,000,000") == true)
         _ = result.map(\.accessibilityLabel)
     }
 
