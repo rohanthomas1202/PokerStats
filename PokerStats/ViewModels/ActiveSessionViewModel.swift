@@ -10,6 +10,7 @@ final class ActiveSessionViewModel {
     let session: Session
     private let modelContext: ModelContext
     private var authService: AuthService?
+    private let liveActivityPreference: LiveActivityPreference
 
     var isShowingHandLogger = false
     var isShowingRebuy = false
@@ -27,10 +28,16 @@ final class ActiveSessionViewModel {
 
     private var liveActivity: Activity<SessionActivityAttributes>?
 
-    init(session: Session, modelContext: ModelContext, authService: AuthService? = nil) {
+    init(
+        session: Session,
+        modelContext: ModelContext,
+        authService: AuthService? = nil,
+        liveActivityPreference: LiveActivityPreference = .standard
+    ) {
         self.session = session
         self.modelContext = modelContext
         self.authService = authService
+        self.liveActivityPreference = liveActivityPreference
         self.sessionNotes = session.notes
         self.tiltLevel = session.tiltLevel ?? 3
         self.energyLevel = session.energyLevel ?? 3
@@ -225,7 +232,11 @@ final class ActiveSessionViewModel {
     }
 
     func startLiveActivity() {
-        guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+        // Settings > Live Activity > Show on Lock Screen (#286).
+        guard LiveActivityPreference.shouldStart(
+            showOnLockScreen: liveActivityPreference.showOnLockScreen,
+            activitiesEnabled: ActivityAuthorizationInfo().areActivitiesEnabled
+        ) else { return }
 
         let attributes = SessionActivityAttributes(
             stakes: session.stakes,

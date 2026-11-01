@@ -10,6 +10,7 @@ struct SettingsView: View {
     @State private var isShowingDeleteAccountFinal = false
     @State private var isSeeding = false
     @State private var seedComplete = false
+    @AppStorage(LiveActivityPreference.key) private var showOnLockScreen = LiveActivityPreference.defaultValue
 
     var body: some View {
         Form {
@@ -84,6 +85,15 @@ struct SettingsView: View {
                         Text(type.displayName).tag(type)
                     }
                 }
+            }
+
+            // MARK: - Live Activity Section
+            Section {
+                Toggle("Show on Lock Screen", isOn: $showOnLockScreen)
+            } header: {
+                Text("Live Activity")
+            } footer: {
+                Text("Shows the session timer, hands, and amount invested on the Lock Screen and in the Dynamic Island. Applies to the next session you start.")
             }
 
             // MARK: - Data Section
