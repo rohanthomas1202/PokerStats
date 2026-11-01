@@ -68,7 +68,7 @@ The fixtures encode the app as of #246. The team's positions on these points are
 5. **Fold to 3-bet.** Before #253 it counted every hand with `faced_3bet`, not only hands where hero raised first, as the code comment says. Fixed in #253: only hands with `faced_3bet` and a preflop raise count, and folds among those only.
 6. **P/L histogram.** Before #248, a session whose profit is a multiple of 100 and is the maximum fell outside every bucket, and when every profit was in one bucket width (for example a single +100 session) the app showed one bucket labelled `$0` with lower bound 0. Fixed in #248: the last bucket includes the maximum and the `$0` case is gone.
 7. **Time zone.** Weekday grouping and the 30-day cutoff use the device's calendar and zone, so the same account can chart differently on two devices or on the web. The app subtracts 30 calendar days; the fixtures subtract 30 x 24 hours and avoid a DST change.
-8. **Widget money** truncates toward zero, with `+` for zero and `-$0` for a loss under $1, and the widget's hourly rate is whole dollars. The app rounds half to even and shows hourly to the cent.
+8. **Widget money.** Before #249 the widget truncated toward zero, with `+` for zero and `-$0` for a loss under $1, and showed its hourly rate in whole dollars. Fixed in #249: the widget rounds half to even like the app, shows hourly to the cent, and a value that rounds to zero shows as `$0` with no sign (`widget_currency` and `widget_hourly` in `display.json`).
 9. **ROI** exists per session only (shown when completed with an invested amount above 0). Spec section 12 lists ROI with no lifetime definition.
 10. **Mental insight.** Before #250 it took the first tilt level of 4 or higher, so level 5 was ignored when level 4 had data, and the card was hidden when level 4 had one session. Fixed in #250: tilted pools levels 4 and 5, averaging over all their sessions, and the 2-session minimum applies to the pooled group.
 11. **Ties.** The cumulative bankroll sorts sessions by start time and rolling VPIP/PFR sorts hands by time; equal timestamps have no defined order. Leak Finder's list order within one rating is also unstable, so the datasets store ratings by stat rather than as a list. The datasets avoid equal timestamps.
@@ -86,7 +86,7 @@ Team positions on the points raised in #246 (point numbers from the #246 PR body
 - **Time zone and the 30-day window (7).** The app uses the device zone and subtracts 30 calendar days; the web uses the browser zone and calendar-day subtraction. The fixtures stay pinned to America/Chicago with no DST crossing.
 - **Ties (11).** The datasets avoid equal timestamps. If a port needs a deterministic order, sort on (time, id) on both sides (#238).
 - **Locale (13).** `display.json` is en_US; the app follows the device locale.
-- **Rounding (14).** Percent and currency round half to even. The web must not use JavaScript's `toFixed`. The home-screen widget still truncates money toward zero until #249 lands (see Pending changes).
+- **Rounding (14).** Percent and currency round half to even. The web must not use JavaScript's `toFixed`.
 - **Tombstones (15).** Excluding `deleted_at` rows is the 1.1 rule (design 9.1). The app hard-deletes today; #85 implements tombstones.
 
 ### Pending changes
@@ -94,5 +94,4 @@ Team positions on the points raised in #246 (point numbers from the #246 PR body
 These will move expected values. Each fix updates `reference.ts`, regenerates the expected values with `update.ts`, and #238 checks the Swift against them.
 
 - Unknown status counts as completed (1), and a completed session with no `end_time` ends at its start time (12): #236.
-- Widget money rounds half to even instead of truncating (8): #249.
 - Lifetime ROI is the owner's call (9): #252.

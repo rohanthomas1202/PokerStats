@@ -322,7 +322,7 @@
         "widget"
       ],
       "inputs": "live completed sessions",
-      "formula": "total_profit, sessions_played and hourly_rate as the lifetime money stats; current_streak = number of completed sessions, newest start_time first, with net_profit > 0 before the first that is not",
+      "formula": "total_profit, sessions_played and hourly_rate as the lifetime money stats (total_profit shown as widget_currency, hourly_rate as widget_hourly); current_streak = number of completed sessions, newest start_time first, with net_profit > 0 before the first that is not",
       "null_when": null,
       "display": "widget_currency",
       "source": "PokerStatsWidgets/PokerStatsLifetimeWidget.swift:59-85"
@@ -468,6 +468,7 @@
     "currency_signed": "'+' for >= 0, '-' below, then the whole-dollar currency of the absolute value. PokerStats/Utilities/CurrencyFormatter.swift:31-38",
     "hourly_rate": "en_US currency with 2 decimals, half even, then '/hr'. null is '--'. PokerStats/Models/ComputedStats.swift:73-81",
     "roi": "value * 100 with printf %+.1f, then '%'. PokerStats/Views/History/SessionDetailView.swift:196-203",
-    "widget_currency": "'-' below 0 else '+', '$', then the absolute value truncated to an integer, with thousands separators from 1000. PokerStatsWidgets/PokerStatsLifetimeWidget.swift:189-196"
+    "widget_currency": "en_US currency, whole dollars, half even, as currency; '+' above 0 and '-' below, but a value that rounds to $0 shows as '$0' with no sign. PokerStats/Utilities/CurrencyFormatter.swift:40-48",
+    "widget_hourly": "As widget_currency with 2 decimals (the widget's $/hr row): '+$18.50', '-$35.00', '$0.00'. PokerStats/Utilities/CurrencyFormatter.swift:40-48"
   }
 }
