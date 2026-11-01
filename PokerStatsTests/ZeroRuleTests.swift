@@ -124,6 +124,14 @@ struct ZeroRuleTests {
         #expect(DashboardView.mentalRateText(0) == "$0.00/hr")
     }
 
+    /// Each Calm or Tilted rate block is one VoiceOver element that says the
+    /// unit once (#313).
+    @Test func mentalRates_accessibilityLabel() {
+        #expect(DashboardView.mentalRateAccessibilityLabel("Calm", 12.5) == "Calm, +$12.50 per hour")
+        #expect(DashboardView.mentalRateAccessibilityLabel("Tilted", -3) == "Tilted, -$3.00 per hour")
+        #expect(DashboardView.mentalRateAccessibilityLabel("Calm", -0.004) == "Calm, $0.00 per hour")
+    }
+
     /// The Session ROI row as SessionDetailView builds it (#308).
     @Test func sessionROI_display() {
         let profit = SessionDetailView.roiDisplay(netProfit: 50, totalInvested: 200)
