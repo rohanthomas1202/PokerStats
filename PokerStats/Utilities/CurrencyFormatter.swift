@@ -50,12 +50,6 @@ enum CurrencyFormatter {
         }
     }
 
-    /// Whether `formatSigned` shows this amount as a loss. A loss that rounds to
-    /// zero is not one: it shows as "$0" and reads as break even.
-    static func isLoss(_ amount: Double, fractionDigits: Int = 0) -> Bool {
-        result(amount, fractionDigits: fractionDigits) == .loss
-    }
-
     /// Profit, loss or break even, from the value `formatSigned` shows. It rounds
     /// the number itself (half to even, like the formatters) instead of reading
     /// the formatted string, so it does not depend on the locale's minus sign.
@@ -82,8 +76,10 @@ enum CurrencyFormatter {
 
     /// Signed percent with one decimal, as the session ROI shows it: "+12.5%",
     /// "-3.0%". A value that rounds to 0.0 shows as "0.0%", never "+0.0%" or "-0.0%".
+    /// A non-finite percent has no meaningful value, so it shows as "--" and
+    /// `percentResult` calls it break even, never "nan%" or "+inf%".
     static func formatSignedPercent(_ percent: Double) -> String {
-        guard percent.isFinite else { return String(format: "%+.1f%%", percent) }
+        guard percent.isFinite else { return "--" }
         let magnitude = String(format: "%.1f%%", abs(percent))
         switch percentResult(percent) {
         case .breakEven: return magnitude
@@ -94,10 +90,9 @@ enum CurrencyFormatter {
 
     /// Profit, loss or break even for a percent shown with one decimal. Reads the
     /// same "%.1f" rounding `formatSignedPercent` shows, so the two always agree.
+    /// Non-finite is break even, to match the unsigned "--" it shows as.
     static func percentResult(_ percent: Double) -> Result {
-        guard percent.isFinite else {
-            return percent.isNaN ? .breakEven : (percent < 0 ? .loss : .profit)
-        }
+        guard percent.isFinite else { return .breakEven }
         if String(format: "%.1f", abs(percent)) == "0.0" { return .breakEven }
         return percent < 0 ? .loss : .profit
     }

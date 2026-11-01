@@ -148,6 +148,8 @@ targets:
       - path: PokerStats/Services/AppGroupContainer.swift
       # Shared money formatting, so the widget matches the app (#249).
       - path: PokerStats/Utilities/CurrencyFormatter.swift
+      # Shared result colors, so the widget's $0 gray is one mapping (#309).
+      - path: PokerStats/Utilities/ResultPalette.swift
     entitlements:
       path: PokerStatsWidgets/PokerStatsWidgets.entitlements
       properties:

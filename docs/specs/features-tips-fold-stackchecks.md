@@ -88,7 +88,7 @@ How to read the labels:
 
 **Currency**
 - `Settings.currency` is saved but ignored.
-- `CurrencyFormatter` and `ComputedStats.formatCurrency` hard-code USD.
+- `CurrencyFormatter` hard-codes USD.
 - The Live Activity uses the literal `"$\(Int(x))"`, and `CurrencyField` defaults its prefix to `"$"`.
 - Money inputs use `.numberPad`, so whole dollars only. Edit fields are pre-filled with `String(Int(value))`, which drops any cents.
 
@@ -519,7 +519,7 @@ Stack checks are **records in the 1.1 sync data**, not a field inside a backup f
 - `Views/Session/ActiveSessionView.swift`: add the Live P/L tile, the stack sheet (inline or a new `StackCheckSheet.swift`), and the "Use last stack" chip in `endSessionSheet`.
 - `Models/SessionActivityAttributes.swift`: `ContentState` gets `var livePL: Double? = nil` and `var livePLAsOf: Date? = nil`.
 - `Services/LiveActivityController.swift` (from F1): include the P/L when the toggle is on.
-- `PokerStatsWidgets/PokerStatsLiveActivity.swift`: show the P/L. Use `ComputedStats.formatCurrency` (already in the widget target), **not** a `"$"` literal.
+- `PokerStatsWidgets/PokerStatsLiveActivity.swift`: show the P/L. Use `CurrencyFormatter` (already in the widget target), **not** a `"$"` literal.
 - `Services/StackCalculator.swift` (new, pure): `stackSeries(session:) -> [StackPoint]`.
 - `ViewModels/SessionDetailViewModel.swift`: `stackSeries`, computed once. `Views/History/SessionDetailView.swift`: the "Session P/L" card (`import Charts`).
 - `Views/Settings/SettingsView.swift`: "Show live P/L on Lock Screen" toggle, in App Group `UserDefaults` (`livePL.onLockScreen`), device-only (never synced).
@@ -611,7 +611,7 @@ Stack checks are **records in the 1.1 sync data**, not a field inside a backup f
     - Dedupe identical timestamps.
     - Clamp the time range to the session's start and end (or now).
     - Session duration edits aren't possible today, so checks always fall inside the session. Keep it that way.
-11. **Currency.** All new money text goes through `CurrencyFormatter` or `ComputedStats.formatCurrency` (still USD [code]). Never add `"$"` literals, so the future currency fix is one change.
+11. **Currency.** All new money text goes through `CurrencyFormatter` (still USD [code]). Never add `"$"` literals, so the future currency fix is one change.
 12. **Abandon session.** `cashOut = 0` [code], so the chart ends at −invested even if the last check was positive. That's correct accounting; label the end point "Abandoned".
 13. **Restore while a session is active.** With sync, a session can also be deleted from another device. Don't make it worse: the Live Activity controller must handle a missing session (shared with F1, pitfall 14).
 

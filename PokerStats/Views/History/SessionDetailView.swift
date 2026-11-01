@@ -11,6 +11,13 @@ struct SessionDetailView: View {
         viewModel ?? SessionDetailViewModel(session: session, modelContext: modelContext)
     }
 
+    /// The Session ROI row's text and result (#308): net profit over amount
+    /// invested, one decimal, "0.0%" in the secondary color when it rounds to zero.
+    nonisolated static func roiDisplay(netProfit: Double, totalInvested: Double) -> (text: String, result: CurrencyFormatter.Result) {
+        let roi = (netProfit / totalInvested) * 100
+        return (CurrencyFormatter.formatSignedPercent(roi), CurrencyFormatter.percentResult(roi))
+    }
+
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
@@ -194,16 +201,16 @@ struct SessionDetailView: View {
 
                 // ROI display
                 if session.status == .completed && session.totalInvested > 0 {
-                    let roi = (session.netProfit / session.totalInvested) * 100
+                    let roi = Self.roiDisplay(netProfit: session.netProfit, totalInvested: session.totalInvested)
                     HStack {
                         Text("Session ROI")
                             .font(.caption)
                             .foregroundStyle(Color.pokerTextSecondary)
                         Spacer()
-                        Text(CurrencyFormatter.formatSignedPercent(roi))
+                        Text(roi.text)
                             .font(.subheadline)
                             .fontWeight(.bold)
-                            .foregroundStyle(Color.pokerResult(CurrencyFormatter.percentResult(roi)))
+                            .foregroundStyle(Color.pokerResult(roi.result))
                     }
                     .padding(.top, 4)
                 }

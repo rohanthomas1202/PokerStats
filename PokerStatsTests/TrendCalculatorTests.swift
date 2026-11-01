@@ -239,6 +239,11 @@ struct TrendCalculatorTests {
         #expect(!result.isEmpty)
         #expect(result.count <= TrendCalculator.maxPLBuckets)
         #expect(result.map(\.count).reduce(0, +) == 2)
+        // The bars touch: each upper bound is the next bar's lower bound.
+        for (bar, next) in zip(result, result.dropFirst()) {
+            #expect(bar.upperBound == next.lowerBound, "\(bar.upperBound) vs \(next.lowerBound)")
+        }
+        #expect(result[0].lowerBound <= 1e19)
     }
 
     @Test func plDistribution_skipsNonFiniteProfits() {

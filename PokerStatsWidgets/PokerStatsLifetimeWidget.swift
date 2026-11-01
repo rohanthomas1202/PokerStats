@@ -106,11 +106,7 @@ struct LifetimeWidgetView: View {
     /// Green for a profit, red for a loss, and the secondary text color when the
     /// total rounds to $0, as the app does (#299).
     private var totalColor: Color {
-        switch CurrencyFormatter.result(entry.totalProfit) {
-        case .profit: return .green
-        case .loss: return .red
-        case .breakEven: return .white.opacity(0.6)
-        }
+        ResultPalette.widget.color(for: CurrencyFormatter.result(entry.totalProfit))
     }
 
     private var smallView: some View {

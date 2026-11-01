@@ -47,6 +47,31 @@ struct ZeroRuleTests {
         }
     }
 
+    /// Values one Double step either side of a rounding tie, where the rounded
+    /// value and NumberFormatter are most likely to disagree (#309).
+    @Test func boundaryAdjacentValues() {
+        let wholeDollars: [(Double, String)] = [
+            (0.5.nextUp, "+$1"), (0.5.nextDown, "$0"),
+            ((-0.5).nextUp, "$0"), ((-0.5).nextDown, "-$1"),
+            (-0.49999999999999994, "$0"), (0.5000000000000001, "+$1"),
+            (1.5.nextDown, "+$1"), (1.5, "+$2"), (2.5.nextUp, "+$3"),
+        ]
+        let cents: [(Double, String)] = [
+            (0.005.nextUp, "+$0.01"), (0.005.nextDown, "$0.00"),
+            ((-0.005).nextUp, "$0.00"), ((-0.005).nextDown, "-$0.01"),
+            (0.0050000000000001, "+$0.01"), (-0.0050000000000001, "-$0.01"),
+            (0.015, "+$0.02"), (0.025, "+$0.02"),
+        ]
+        for (digits, cases) in [(0, wholeDollars), (2, cents)] {
+            for (amount, expected) in cases {
+                let shown = CurrencyFormatter.formatSigned(amount, fractionDigits: digits)
+                #expect(shown == expected, "\(amount) at \(digits)")
+                let result: CurrencyFormatter.Result = expected.hasPrefix("+") ? .profit : expected.hasPrefix("-") ? .loss : .breakEven
+                #expect(CurrencyFormatter.result(amount, fractionDigits: digits) == result, "\(amount) at \(digits)")
+            }
+        }
+    }
+
     @Test func colors() {
         #expect(Color.pokerResult(-0.004) == .pokerTextSecondary)
         #expect(Color.pokerResult(0.004) == .pokerTextSecondary)
@@ -66,11 +91,51 @@ struct ZeroRuleTests {
         #expect(EndSessionSummaryView.headline(for: 250) == "Profit")
     }
 
-    /// The Dashboard total now uses formatSigned, like the Lifetime widget.
-    @Test func dashboardTotal_usesSignedFormat() {
-        #expect(CurrencyFormatter.formatSigned(1_234) == "+$1,234")
-        #expect(CurrencyFormatter.formatSigned(-567) == "-$567")
-        #expect(CurrencyFormatter.formatSigned(-0.004) == "$0")
+    /// The Lifetime widget's total color goes through the shared palette: system
+    /// green and red, and the widget's own secondary white at 0.6 for $0 (#309).
+    @Test func widgetColors() {
+        let widget = ResultPalette.widget
+        #expect(widget.color(for: CurrencyFormatter.result(-0.4)) == Color.white.opacity(0.6))
+        #expect(widget.color(for: CurrencyFormatter.result(0)) == Color.white.opacity(0.6))
+        #expect(widget.color(for: CurrencyFormatter.result(250)) == Color.green)
+        #expect(widget.color(for: CurrencyFormatter.result(-0.6)) == Color.red)
+        #expect(ResultPalette.app.color(for: .breakEven) == Color.pokerTextSecondary)
+        #expect(ResultPalette.app.color(for: .profit) == Color.pokerProfit)
+        #expect(ResultPalette.app.color(for: .loss) == Color.pokerLoss)
+    }
+
+    /// The Dashboard total as DashboardView builds it, with a "+" on a profit
+    /// like the Lifetime widget (#299).
+    @Test func dashboardTotal_text() {
+        #expect(DashboardView.totalProfitText(1_234) == "+$1,234")
+        #expect(DashboardView.totalProfitText(1_234_567.5) == "+$1,234,568")
+        #expect(DashboardView.totalProfitText(-567) == "-$567")
+        #expect(DashboardView.totalProfitText(-0.004) == "$0")
+        #expect(DashboardView.totalProfitText(0.5) == "$0")
+        #expect(DashboardView.totalProfitText(-280) == "-$280")
+    }
+
+    /// The Calm vs Tilted rates as the Mental Insights card builds them (#308).
+    @Test func mentalRates_text() {
+        #expect(DashboardView.mentalRateText(12.5) == "+$12.50/hr")
+        #expect(DashboardView.mentalRateText(1_234.56) == "+$1,234.56/hr")
+        #expect(DashboardView.mentalRateText(-3) == "-$3.00/hr")
+        #expect(DashboardView.mentalRateText(-0.004) == "$0.00/hr")
+        #expect(DashboardView.mentalRateText(0) == "$0.00/hr")
+    }
+
+    /// The Session ROI row as SessionDetailView builds it (#308).
+    @Test func sessionROI_display() {
+        let profit = SessionDetailView.roiDisplay(netProfit: 50, totalInvested: 200)
+        #expect(profit.text == "+25.0%")
+        #expect(profit.result == .profit)
+        let loss = SessionDetailView.roiDisplay(netProfit: -300, totalInvested: 200)
+        #expect(loss.text == "-150.0%")
+        #expect(loss.result == .loss)
+        let even = SessionDetailView.roiDisplay(netProfit: -0.01, totalInvested: 100)
+        #expect(even.text == "0.0%")
+        #expect(even.result == .breakEven)
+        #expect(SessionDetailView.roiDisplay(netProfit: 12.5, totalInvested: 200).text == "+6.2%")
     }
 
     // MARK: - Hourly rates and ROI (#308)
@@ -104,12 +169,32 @@ struct ZeroRuleTests {
         #expect(Color.pokerResult(CurrencyFormatter.percentResult(-50)) == .pokerLoss)
     }
 
-    /// The ROI sign, its result and the old "%+.1f" digits agree across ties.
+    /// Exact strings, including ties and values just off a tie.
+    @Test func roi_expectedStrings() {
+        let cases: [(Double, String)] = [
+            (0.05, "+0.1%"), (-0.05, "-0.1%"), (0.25, "+0.2%"), (0.35, "+0.3%"),
+            (6.25, "+6.2%"), (6.25.nextUp, "+6.3%"), (-0.049, "0.0%"),
+            (12.34, "+12.3%"), (1_234.56, "+1234.6%"), (-100, "-100.0%"),
+        ]
+        for (roi, expected) in cases {
+            #expect(CurrencyFormatter.formatSignedPercent(roi) == expected, "\(roi)")
+        }
+    }
+
+    /// A non-finite percent shows as "--" and is break even, so the text and
+    /// the color agree (#309).
+    @Test func roi_nonFinite_isPlaceholder() {
+        for roi in [Double.nan, .infinity, -.infinity] {
+            #expect(CurrencyFormatter.formatSignedPercent(roi) == "--", "\(roi)")
+            #expect(CurrencyFormatter.percentResult(roi) == .breakEven, "\(roi)")
+        }
+    }
+
+    /// The ROI sign and its result agree across ties.
     @Test func roi_resultMatchesFormattedString() {
         for i in -2_000...2_000 {
             let roi = Double(i) / 1_000
             let shown = CurrencyFormatter.formatSignedPercent(roi)
-            #expect(shown.dropFirst(shown.first == "+" || shown.first == "-" ? 1 : 0) == String(format: "%.1f%%", abs(roi)), "\(roi): \(shown)")
             switch CurrencyFormatter.percentResult(roi) {
             case .loss: #expect(shown.hasPrefix("-"), "\(roi): \(shown)")
             case .profit: #expect(shown.hasPrefix("+"), "\(roi): \(shown)")

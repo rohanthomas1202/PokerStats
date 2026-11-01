@@ -60,15 +60,6 @@ extension ComputedStats {
         return String(format: "%.1f%%", value * 100)
     }
 
-    /// Format a currency amount as "$1,234" or "-$567".
-    static func formatCurrency(_ value: Double) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .currency
-        formatter.currencyCode = "USD"
-        formatter.maximumFractionDigits = 0
-        return formatter.string(from: NSNumber(value: value)) ?? "$\(Int(value))"
-    }
-
     /// Format hourly rate as "$34.50/hr". Returns "--" if nil.
     static func formatHourlyRate(_ value: Double?) -> String {
         guard let value else { return "--" }
