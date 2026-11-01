@@ -216,7 +216,11 @@ final class ActiveSessionViewModel {
     // MARK: - Live Activity
 
     private func resumeOrStartLiveActivity() {
-        guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+        // A resumed session follows Settings > Live Activity too (#286).
+        guard LiveActivityPreference.shouldStart(
+            showOnLockScreen: liveActivityPreference.showOnLockScreen,
+            activitiesEnabled: ActivityAuthorizationInfo().areActivitiesEnabled
+        ) else { return }
 
         // Check if there's an existing activity for this session
         let existing = Activity<SessionActivityAttributes>.activities.first { activity in

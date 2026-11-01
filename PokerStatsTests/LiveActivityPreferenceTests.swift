@@ -4,24 +4,30 @@ import Testing
 
 /// #286: Settings > Live Activity > Show Live Activity decides whether a
 /// session starts a Live Activity. Default on.
-@Suite("Live Activity Preference Tests")
+///
+/// Each test that reads the setting makes its own ThrowawayDefaults and holds
+/// it for the whole test, like `freshFlag()` in AutoRestoreTests. The suite
+/// keeps no stored UserDefaults, so the pure-function tests never touch
+/// defaults, and it runs serialized so no two tests share a suite.
+@Suite("Live Activity Preference Tests", .serialized)
 @MainActor
 struct LiveActivityPreferenceTests {
-    private let defaults = ThrowawayDefaults("LiveActivityPreferenceTests")
 
     @Test func unset_defaultsToOn() {
-        let preference = LiveActivityPreference(defaults: defaults)
-        #expect(preference.showOnLockScreen)
+        let defaults = ThrowawayDefaults("LiveActivityPreferenceTests")
+        #expect(LiveActivityPreference(defaults: defaults).showOnLockScreen)
         #expect(LiveActivityPreference.defaultValue)
     }
 
     @Test func toggleOff_isRead() {
+        let defaults = ThrowawayDefaults("LiveActivityPreferenceTests")
         // @AppStorage in SettingsView writes a Bool under this key.
         defaults.set(false, forKey: LiveActivityPreference.key)
         #expect(!LiveActivityPreference(defaults: defaults).showOnLockScreen)
     }
 
     @Test func toggleBackOn_isRead() {
+        let defaults = ThrowawayDefaults("LiveActivityPreferenceTests")
         defaults.set(false, forKey: LiveActivityPreference.key)
         defaults.set(true, forKey: LiveActivityPreference.key)
         #expect(LiveActivityPreference(defaults: defaults).showOnLockScreen)
