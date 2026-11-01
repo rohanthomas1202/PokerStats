@@ -115,7 +115,7 @@ struct LifetimeWidgetView: View {
 
             Spacer()
 
-            Text(formatCurrency(entry.totalProfit))
+            Text(CurrencyFormatter.formatSignedRounded(entry.totalProfit))
                 .font(.title2)
                 .fontWeight(.bold)
                 .foregroundStyle(entry.totalProfit >= 0 ? .green : .red)
@@ -143,7 +143,7 @@ struct LifetimeWidgetView: View {
 
                 Spacer()
 
-                Text(formatCurrency(entry.totalProfit))
+                Text(CurrencyFormatter.formatSignedRounded(entry.totalProfit))
                     .font(.title)
                     .fontWeight(.bold)
                     .foregroundStyle(entry.totalProfit >= 0 ? .green : .red)
@@ -163,7 +163,7 @@ struct LifetimeWidgetView: View {
                 statRow(label: "Sessions", value: "\(entry.sessionsPlayed)")
 
                 if let hourly = entry.hourlyRate {
-                    statRow(label: "$/hr", value: formatCurrency(hourly))
+                    statRow(label: "$/hr", value: CurrencyFormatter.formatSignedRounded(hourly, fractionDigits: 2))
                 }
 
                 if entry.currentStreak > 0 {
@@ -176,22 +176,31 @@ struct LifetimeWidgetView: View {
 
     private func statRow(label: String, value: String) -> some View {
         VStack(alignment: .trailing, spacing: 2) {
+            // Long values such as "+$1,234.56" shrink instead of truncating (#249).
             Text(value)
                 .font(.subheadline)
                 .fontWeight(.semibold)
                 .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
             Text(label)
                 .font(.caption2)
                 .foregroundStyle(.white.opacity(0.5))
         }
     }
+}
 
-    private func formatCurrency(_ value: Double) -> String {
-        let absValue = abs(value)
-        let prefix = value < 0 ? "-" : "+"
-        if absValue >= 1000 {
-            return "\(prefix)$\(Int(absValue).formatted())"
-        }
-        return "\(prefix)$\(Int(absValue))"
-    }
+// MARK: - Previews
+
+#Preview("Long hourly", as: .systemMedium) {
+    PokerStatsLifetimeWidget()
+} timeline: {
+    LifetimeEntry(date: .now, totalProfit: 98_765.43, sessionsPlayed: 128, hourlyRate: 1_234.56, currentStreak: 12)
+    LifetimeEntry(date: .now, totalProfit: -0.5, sessionsPlayed: 1, hourlyRate: -0.25, currentStreak: 0)
+}
+
+#Preview("Long total", as: .systemSmall) {
+    PokerStatsLifetimeWidget()
+} timeline: {
+    LifetimeEntry(date: .now, totalProfit: 98_765.43, sessionsPlayed: 128, hourlyRate: 1_234.56, currentStreak: 12)
 }

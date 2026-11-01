@@ -428,7 +428,7 @@ export function expectedFor(d: Dataset) {
 }
 
 // --- Display (ComputedStats.swift:191-214, CurrencyFormatter.swift, SessionDetailView.swift:196-203,
-// PokerStatsLifetimeWidget.swift:189-196). en_US locale. ---
+// PokerStatsLifetimeWidget.swift). en_US locale. ---
 
 // Rounds the exact binary value of x to `digits` decimals, ties to even. This is
 // what printf "%.1f" does, and NumberFormatter's default rounding mode is half
@@ -455,6 +455,14 @@ const dollars = (x: number, decimals: number) => {
   return `${neg ? "-" : ""}$${group(i)}${f !== undefined ? "." + f : ""}`;
 };
 
+// The widget's signed money: "+" or "-" unless the rounded value is zero, which
+// shows as "$0" (never "+$0" or "-$0").
+const signedRounded = (x: number, decimals: number) => {
+  const formatted = dollars(Math.abs(x), decimals);
+  if (!/[1-9]/.test(formatted)) return formatted;
+  return `${x < 0 ? "-" : "+"}${formatted}`;
+};
+
 export function display(format: string, value: number | null): string {
   switch (format) {
     case "percent": // ComputedStats.formatPercent
@@ -471,12 +479,10 @@ export function display(format: string, value: number | null): string {
       const r = roundHalfEven(value! * 100, 1);
       return `${r.startsWith("-") ? "" : "+"}${r}%`;
     }
-    case "widget_currency": { // PokerStatsLifetimeWidget.formatCurrency: Int() truncates
-      const whole = Math.trunc(Math.abs(value!));
-      return `${value! < 0 ? "-" : "+"}$${
-        whole >= 1000 ? group(String(whole)) : whole
-      }`;
-    }
+    case "widget_currency": // CurrencyFormatter.formatSignedRounded: half even, no sign on zero
+      return signedRounded(value!, 0);
+    case "widget_hourly": // CurrencyFormatter.formatSignedRounded(_, fractionDigits: 2)
+      return signedRounded(value!, 2);
     default:
       throw new Error(`unknown display format ${format}`);
   }

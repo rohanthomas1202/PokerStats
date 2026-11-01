@@ -143,32 +143,56 @@
     {
       "format": "widget_currency",
       "value": 1999.99,
-      "expected": "+$1,999",
-      "note": "Truncates, never rounds"
+      "expected": "+$2,000",
+      "note": "Rounds half even, never truncates"
     },
     {
       "format": "widget_currency",
       "value": -0.5,
-      "expected": "-$0",
-      "note": "Truncates to 0 but keeps -"
+      "expected": "$0",
+      "note": "Tie rounds to 0, no sign, never -$0"
     },
     {
       "format": "widget_currency",
       "value": 0,
-      "expected": "+$0",
-      "note": "Zero shows +"
+      "expected": "$0",
+      "note": "Zero has no sign"
     },
     {
       "format": "widget_currency",
       "value": 999.9,
-      "expected": "+$999",
-      "note": "No separator under 1000"
+      "expected": "+$1,000",
+      "note": "Rounds up across 1000, with separator"
     },
     {
       "format": "widget_currency",
       "value": -280,
       "expected": "-$280",
       "note": "core widget total"
+    },
+    {
+      "format": "widget_hourly",
+      "value": 18.5,
+      "expected": "+$18.50",
+      "note": "Cents, signed"
+    },
+    {
+      "format": "widget_hourly",
+      "value": 1234.56,
+      "expected": "+$1,234.56",
+      "note": "Long value with separator"
+    },
+    {
+      "format": "widget_hourly",
+      "value": -35,
+      "expected": "-$35.00",
+      "note": "core widget hourly"
+    },
+    {
+      "format": "widget_hourly",
+      "value": -0.004,
+      "expected": "$0.00",
+      "note": "Rounds to zero, no sign"
     }
   ]
 }
