@@ -68,6 +68,29 @@ struct StatCalculatorTests {
         #expect(abs(result - 0.5) < 0.001)
     }
 
+    @Test func foldTo3Bet_faced3BetAfterCall_doesNotChangePercentage() {
+        let raised = [
+            TestHelpers.raiseFaced3BetHand(number: 1, response: .folded),
+            TestHelpers.raiseFaced3BetHand(number: 2, response: .called, result: .wonAtShowdown),
+        ]
+        let calledThenFaced = [
+            Hand(handNumber: 3, preflopAction: .call, faced3Bet: true, threeBetResponse: .folded),
+            Hand(handNumber: 4, preflopAction: .call, faced3Bet: true, threeBetResponse: .called, postflopResult: .lostAtShowdown),
+        ]
+        let base = StatCalculator.foldTo3BetPercent(hands: raised)!
+        let mixed = StatCalculator.foldTo3BetPercent(hands: raised + calledThenFaced)!
+        #expect(abs(base - 0.5) < 0.001)
+        #expect(abs(mixed - base) < 0.001)
+    }
+
+    @Test func foldTo3Bet_onlyFaced3BetAfterCall_returnsNil() {
+        let hands = [
+            Hand(handNumber: 1, preflopAction: .call, faced3Bet: true, threeBetResponse: .folded),
+            Hand(handNumber: 2, preflopAction: .call, faced3Bet: true, threeBetResponse: .called, postflopResult: .wonAtShowdown),
+        ]
+        #expect(StatCalculator.foldTo3BetPercent(hands: hands) == nil)
+    }
+
     // MARK: - C-Bet Tests
 
     @Test func cBet_zeroOpportunities_returnsNil() {

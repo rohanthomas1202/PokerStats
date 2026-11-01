@@ -97,7 +97,7 @@ const cbetOpportunity = (h: HandRow) => pfrFlag(h) && sawFlop(h);
 
 export function handStats(hands: HandRow[]) {
   const count = (f: (h: HandRow) => boolean, of = hands) => of.filter(f).length;
-  const faced = hands.filter((h) => h.faced_3bet);
+  const faced = hands.filter((h) => h.faced_3bet && pfrFlag(h));
   const opps = hands.filter(cbetOpportunity);
   const flops = hands.filter(sawFlop);
   const showdowns = hands.filter(wentToShowdown);

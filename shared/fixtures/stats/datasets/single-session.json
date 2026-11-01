@@ -1,5 +1,5 @@
 {
-  "description": "One completed session at +100 with three preflop-only hands. Its P/L histogram is one bucket, +$100 with lower bound 100 (#248), and the postflop ratios are null.",
+  "description": "One completed session at +100 with three preflop-only hands. Its P/L histogram is one bucket, +$100 with lower bound 100 (#248), and the postflop ratios are null. The call hand faced a 3-bet, which fold to 3-bet leaves out because hero did not raise first (#253), so that ratio is null too.",
   "now": "2026-10-20T12:00:00Z",
   "time_zone": "America/Chicago",
   "sessions": [
@@ -75,8 +75,8 @@
       "hand_number": 3,
       "played_at": "2026-10-03T18:13:00.000Z",
       "preflop_action": "call",
-      "faced_3bet": false,
-      "three_bet_response": null,
+      "faced_3bet": true,
+      "three_bet_response": "called",
       "postflop_result": null,
       "did_cbet": null,
       "notes": "",
