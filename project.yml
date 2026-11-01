@@ -146,6 +146,8 @@ targets:
       - path: PokerStats/Models/SessionActivityAttributes.swift
       - path: PokerStats/Models/TableConfig.swift
       - path: PokerStats/Services/AppGroupContainer.swift
+      # Shared money formatting, so the widget matches the app (#249).
+      - path: PokerStats/Utilities/CurrencyFormatter.swift
     entitlements:
       path: PokerStatsWidgets/PokerStatsWidgets.entitlements
       properties:
