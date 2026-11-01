@@ -282,7 +282,7 @@
         "trends.*.pl_distribution"
       ],
       "inputs": "live sessions in the window",
-      "formula": "completed net_profit values in buckets of width w, where w is the smallest of 100 x 1, 2, 5, 10, 20, 50... with floor(max/w) - floor(min/w) + 1 <= 20 (at most 20 bars, #288). Buckets run from floor(min/w)*w up to floor(max/w)*w + w, each [lower_bound, upper_bound) with upper_bound = lower_bound + w, so the maximum is always in the last bucket. Labels +$N for N >= 0, -$N below",
+      "formula": "completed net_profit values in buckets of width w, where w is the smallest of 100 x 1, 2, 5, 10, 20, 50... with floor(max/w) - floor(min/w) + 1 <= 20 (at most 20 bars, #288). Buckets run from floor(min/w)*w up to floor(max/w)*w + w, each [lower_bound, upper_bound) with upper_bound = lower_bound + w, so the maximum is always in the last bucket. Each profit goes to bucket floor(p/w) - floor(min/w). Labels +$N for N >= 0, -$N below, with thousands grouping (+$0, +$2,000, -$6,000)",
       "null_when": "no completed sessions: empty list",
       "display": "label",
       "source": "PokerStats/Services/TrendCalculator.swift:135-185"

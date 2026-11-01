@@ -209,9 +209,9 @@ struct TrendCalculatorTests {
     @Test func plDistribution_labels_doNotTrapOnNonFiniteOrHugeValues() {
         #expect(TrendCalculator.signedDollarLabel(1e300).hasPrefix("+$1,000,000"))
         #expect(TrendCalculator.signedDollarLabel(-1e300).hasPrefix("-$1,000,000"))
-        _ = TrendCalculator.signedDollarLabel(.infinity)
-        _ = TrendCalculator.signedDollarLabel(-.infinity)
-        _ = TrendCalculator.signedDollarLabel(.nan)
+        #expect(TrendCalculator.signedDollarLabel(.infinity) == "+$∞")
+        #expect(TrendCalculator.signedDollarLabel(-.infinity) == "-$∞")
+        #expect(TrendCalculator.signedDollarLabel(.nan) == "$0")
 
         // +1e19 is past Int.max, where the old Int(value) labels trapped.
         let even = TestHelpers.completedSession(buyIn: 100, cashOut: 100)
@@ -221,6 +221,24 @@ struct TrendCalculatorTests {
         #expect(result.last?.rangeLabel.hasPrefix("+$10,000,000,000") == true)
         #expect(TrendCalculator.plDistributionSubtitle(result)?.hasPrefix("Sessions per $1,000,000,000") == true)
         _ = result.map(\.accessibilityLabel)
+    }
+
+    @Test func plDistribution_loneHugeSession_getsOneBar() {
+        // At 1e300 the $100 width is below the Double spacing, so lower + width == lower.
+        let huge = TestHelpers.completedSession(buyIn: 0, cashOut: 1e300)
+        let result = TrendCalculator.sessionPLDistribution(sessions: [huge])
+        #expect(result.count == 1)
+        #expect(result.map(\.count) == [1])
+    }
+
+    @Test func plDistribution_closeHugeSessions_finishAndCountBoth() {
+        // A narrow range at a huge magnitude used to loop forever.
+        let a = TestHelpers.completedSession(buyIn: 0, cashOut: 1e19)
+        let b = TestHelpers.completedSession(buyIn: 0, cashOut: 1e19 + 4096)
+        let result = TrendCalculator.sessionPLDistribution(sessions: [a, b])
+        #expect(!result.isEmpty)
+        #expect(result.count <= TrendCalculator.maxPLBuckets)
+        #expect(result.map(\.count).reduce(0, +) == 2)
     }
 
     @Test func plDistribution_skipsNonFiniteProfits() {
