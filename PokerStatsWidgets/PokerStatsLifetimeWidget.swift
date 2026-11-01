@@ -115,11 +115,12 @@ struct LifetimeWidgetView: View {
 
             Spacer()
 
-            Text(CurrencyFormatter.formatSignedRounded(entry.totalProfit))
+            Text(CurrencyFormatter.formatSigned(entry.totalProfit))
                 .font(.title2)
                 .fontWeight(.bold)
-                .foregroundStyle(entry.totalProfit >= 0 ? .green : .red)
-                .minimumScaleFactor(0.6)
+                .foregroundStyle(CurrencyFormatter.isLoss(entry.totalProfit) ? .red : .green)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
 
             Text("\(entry.sessionsPlayed) sessions")
                 .font(.caption2)
@@ -143,11 +144,12 @@ struct LifetimeWidgetView: View {
 
                 Spacer()
 
-                Text(CurrencyFormatter.formatSignedRounded(entry.totalProfit))
+                Text(CurrencyFormatter.formatSigned(entry.totalProfit))
                     .font(.title)
                     .fontWeight(.bold)
-                    .foregroundStyle(entry.totalProfit >= 0 ? .green : .red)
-                    .minimumScaleFactor(0.6)
+                    .foregroundStyle(CurrencyFormatter.isLoss(entry.totalProfit) ? .red : .green)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
 
                 Text("Lifetime P&L")
                     .font(.caption2)
@@ -163,7 +165,7 @@ struct LifetimeWidgetView: View {
                 statRow(label: "Sessions", value: "\(entry.sessionsPlayed)")
 
                 if let hourly = entry.hourlyRate {
-                    statRow(label: "$/hr", value: CurrencyFormatter.formatSignedRounded(hourly, fractionDigits: 2))
+                    statRow(label: "$/hr", value: CurrencyFormatter.formatSigned(hourly, fractionDigits: 2))
                 }
 
                 if entry.currentStreak > 0 {

@@ -27,23 +27,19 @@ enum CurrencyFormatter {
         preciseFormatter.string(from: NSNumber(value: amount)) ?? String(format: "$%.2f", amount)
     }
 
-    /// Format as signed string with color hint: "+$250" or "-$100"
-    static func formatSigned(_ amount: Double) -> String {
-        let formatted = format(abs(amount))
-        if amount >= 0 {
-            return "+\(formatted)"
-        } else {
-            return "-\(formatted)"
-        }
-    }
-
-    /// Signed money for the home-screen widget, rounded half to even like
-    /// `format` and `formatPrecise`: "+$2,000", "-$280", "+$18.50".
+    /// Signed money, rounded half to even like `format` and `formatPrecise`:
+    /// "+$250", "-$100", "+$18.50" with `fractionDigits: 2`.
     /// A value that rounds to zero shows as "$0" (or "$0.00"), never "+$0" or "-$0".
-    static func formatSignedRounded(_ amount: Double, fractionDigits: Int = 0) -> String {
+    static func formatSigned(_ amount: Double, fractionDigits: Int = 0) -> String {
         let magnitude = fractionDigits > 0 ? formatPrecise(abs(amount)) : format(abs(amount))
         let isZero = !magnitude.contains { ($0.wholeNumberValue ?? 0) != 0 }
         if isZero { return magnitude }
         return amount < 0 ? "-\(magnitude)" : "+\(magnitude)"
+    }
+
+    /// Whether `formatSigned` shows this amount as a loss. A loss that rounds to
+    /// zero is not one: it shows as "$0" and takes the break-even (profit) color.
+    static func isLoss(_ amount: Double, fractionDigits: Int = 0) -> Bool {
+        formatSigned(amount, fractionDigits: fractionDigits).hasPrefix("-")
     }
 }

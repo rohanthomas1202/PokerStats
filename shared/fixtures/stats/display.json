@@ -83,8 +83,26 @@
     {
       "format": "currency_signed",
       "value": 0,
-      "expected": "+$0",
-      "note": "Zero shows +"
+      "expected": "$0",
+      "note": "Zero has no sign"
+    },
+    {
+      "format": "currency_signed",
+      "value": -0.4,
+      "expected": "$0",
+      "note": "Loss under 50 cents rounds to 0, never -$0"
+    },
+    {
+      "format": "currency_signed",
+      "value": -0.5,
+      "expected": "$0",
+      "note": "Tie rounds half even to 0, no sign"
+    },
+    {
+      "format": "currency_signed",
+      "value": -0.6,
+      "expected": "-$1",
+      "note": "Rounds to -$1"
     },
     {
       "format": "hourly_rate",
