@@ -72,4 +72,49 @@ struct ZeroRuleTests {
         #expect(CurrencyFormatter.formatSigned(-567) == "-$567")
         #expect(CurrencyFormatter.formatSigned(-0.004) == "$0")
     }
+
+    // MARK: - Hourly rates and ROI (#308)
+
+    /// Calm vs Tilted hourly rates show cents, so a rate under half a cent
+    /// shows as "$0.00/hr" in the secondary color.
+    @Test func hourlyRate_roundingToZero_isBreakEven() {
+        for rate in [0, -0.0, 0.004, -0.004, -0.005, 0.005] {
+            #expect(CurrencyFormatter.formatSigned(rate, fractionDigits: 2) + "/hr" == "$0.00/hr", "\(rate)")
+            #expect(Color.pokerResult(rate, fractionDigits: 2) == .pokerTextSecondary, "\(rate)")
+        }
+        #expect(CurrencyFormatter.formatSigned(-0.01, fractionDigits: 2) + "/hr" == "-$0.01/hr")
+        #expect(Color.pokerResult(-0.01, fractionDigits: 2) == .pokerLoss)
+        #expect(CurrencyFormatter.formatSigned(12.5, fractionDigits: 2) + "/hr" == "+$12.50/hr")
+        #expect(Color.pokerResult(12.5, fractionDigits: 2) == .pokerProfit)
+    }
+
+    /// Session ROI shows one decimal, so an ROI that rounds to 0.0 shows as
+    /// "0.0%" with no sign, in the secondary color.
+    @Test func roi_roundingToZero_isBreakEven() {
+        for roi in [0, -0.0, 0.04, -0.04, 0.049, -0.049] {
+            #expect(CurrencyFormatter.formatSignedPercent(roi) == "0.0%", "\(roi)")
+            #expect(CurrencyFormatter.percentResult(roi) == .breakEven, "\(roi)")
+            #expect(Color.pokerResult(CurrencyFormatter.percentResult(roi)) == .pokerTextSecondary, "\(roi)")
+        }
+        #expect(CurrencyFormatter.formatSignedPercent(-0.06) == "-0.1%")
+        #expect(CurrencyFormatter.percentResult(-0.06) == .loss)
+        #expect(CurrencyFormatter.formatSignedPercent(12.34) == "+12.3%")
+        #expect(Color.pokerResult(CurrencyFormatter.percentResult(12.34)) == .pokerProfit)
+        #expect(CurrencyFormatter.formatSignedPercent(-50) == "-50.0%")
+        #expect(Color.pokerResult(CurrencyFormatter.percentResult(-50)) == .pokerLoss)
+    }
+
+    /// The ROI sign, its result and the old "%+.1f" digits agree across ties.
+    @Test func roi_resultMatchesFormattedString() {
+        for i in -2_000...2_000 {
+            let roi = Double(i) / 1_000
+            let shown = CurrencyFormatter.formatSignedPercent(roi)
+            #expect(shown.dropFirst(shown.first == "+" || shown.first == "-" ? 1 : 0) == String(format: "%.1f%%", abs(roi)), "\(roi): \(shown)")
+            switch CurrencyFormatter.percentResult(roi) {
+            case .loss: #expect(shown.hasPrefix("-"), "\(roi): \(shown)")
+            case .profit: #expect(shown.hasPrefix("+"), "\(roi): \(shown)")
+            case .breakEven: #expect(shown == "0.0%", "\(roi): \(shown)")
+            }
+        }
+    }
 }

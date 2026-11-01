@@ -61,7 +61,13 @@ extension Color {
     /// Color for a signed amount as `CurrencyFormatter.formatSigned` shows it:
     /// profit green, loss red, and secondary text for an amount that rounds to $0.
     static func pokerResult(_ amount: Double, fractionDigits: Int = 0) -> Color {
-        switch CurrencyFormatter.result(amount, fractionDigits: fractionDigits) {
+        pokerResult(CurrencyFormatter.result(amount, fractionDigits: fractionDigits))
+    }
+
+    /// Color for a profit, loss or break-even result, such as
+    /// `CurrencyFormatter.percentResult` for a percent.
+    static func pokerResult(_ result: CurrencyFormatter.Result) -> Color {
+        switch result {
         case .profit: return .pokerProfit
         case .loss: return .pokerLoss
         case .breakEven: return .pokerTextSecondary
