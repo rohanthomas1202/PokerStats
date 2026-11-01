@@ -5,6 +5,9 @@ import Foundation
 /// @AppStorage with the same key and default. Stored per device in
 /// UserDefaults, like `AutoRestoreFlag`. On unless the user turns it off.
 struct LiveActivityPreference {
+    /// The key name predates the "Show Live Activity" toggle label and is
+    /// kept as is: it shipped in #286, and renaming it would reset anyone
+    /// who turned the toggle off back to on unless the value were migrated.
     static let key = "liveActivity.showOnLockScreen"
     static let defaultValue = true
 

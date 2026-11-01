@@ -98,7 +98,7 @@ struct SettingsView: View {
             } header: {
                 Text("Live Activity")
             } footer: {
-                Text("Shows your session timer and hand count on the Lock Screen and in the Dynamic Island. Amount invested and location appear only when iPhone is unlocked.")
+                Text("Shows your stakes, session timer and hand count on the Lock Screen and in the Dynamic Island. Amount invested and location appear only when iPhone is unlocked.")
             }
 
             // MARK: - Data Section
