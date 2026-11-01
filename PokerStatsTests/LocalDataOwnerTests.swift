@@ -245,6 +245,39 @@ struct LocalDataOwnerTests {
         #expect(!viewModel.isShowingDeleteConfirmation)
     }
 
+    /// #264: Settings on screen kept account A's defaults after the wipe, so
+    /// the next edit saved them into a new Settings row.
+    @Test func deleteFromThisDevice_showsTheDefaultSettings() throws {
+        let viewModel = try accountBSignsInOverAccountAData()
+        context.insert(Settings(defaultGameType: .tournament, defaultStakes: "5/10", defaultBuyIn: 1000))
+        try context.save()
+        let settings = SettingsViewModel()
+        settings.loadSettings(from: context)
+        #expect(settings.defaultBuyIn == "1000")
+
+        viewModel.requestDelete()
+        viewModel.confirmDelete(modelContext: context)
+        #expect(viewModel.localDataDeletions == 1)
+        // SettingsView reloads when localDataDeletions changes.
+        settings.loadSettings(from: context)
+
+        let defaults = Settings()
+        #expect(settings.defaultBuyIn == String(Int(defaults.defaultBuyIn)))
+        #expect(settings.defaultStakes == defaults.defaultStakes)
+        #expect(settings.defaultGameType == defaults.defaultGameType)
+    }
+
+    @Test func confirmDelete_afterSignOut_deletesNothing_andKeepsTheSettings() throws {
+        let viewModel = try accountBSignsInOverAccountAData()
+        viewModel.requestDelete()
+        viewModel.signedOut() // confirmDelete needs a signed-in account
+
+        viewModel.confirmDelete(modelContext: context)
+
+        #expect(viewModel.localDataDeletions == 0)
+        #expect(try storedLocations() == ["A's session"])
+    }
+
     @Test func cancellingDelete_returnsToTheChoice_andKeepsTheData() throws {
         let viewModel = try accountBSignsInOverAccountAData()
 
@@ -355,6 +388,66 @@ struct LocalDataOwnerTests {
     }
 
     // MARK: - Backup, restore, and wipes
+
+    // MARK: - Owner changes made elsewhere (#264)
+
+    /// Delete All Data clears the owner outside the view model; the Cloud
+    /// Backup blocked row must not stay up.
+    @Test func deleteAllData_unblocksBackups_inTheOwnershipViewModel() throws {
+        let viewModel = try accountBSignsInOverAccountAData()
+        #expect(viewModel.backupsBlocked)
+        let revision = viewModel.ownerRevision
+        let settings = SettingsViewModel()
+        settings.localDataOwner = owner
+        settings.autoRestoreFlag = freshFlag()
+
+        settings.deleteAllData(from: context)
+
+        #expect(viewModel.ownerRevision > revision)
+        #expect(!viewModel.backupsBlocked)
+    }
+
+    @Test func manualRestore_unblocksBackups_inTheOwnershipViewModel() throws {
+        let viewModel = try accountBSignsInOverAccountAData()
+        #expect(viewModel.backupsBlocked)
+        let revision = viewModel.ownerRevision
+        let (auth, client) = signedInAuthService(server: FakeServer())
+        let service = BackupService(authService: auth, modelContext: context, client: client, owner: owner)
+
+        try service.restoreBackup(BackupPayload(
+            schemaVersion: BackupPayload.currentSchemaVersion, createdAt: .now,
+            appVersion: "1.0.0", sessions: [], settings: nil
+        ))
+
+        #expect(viewModel.ownerRevision > revision)
+        #expect(!viewModel.backupsBlocked)
+    }
+
+    @Test func everyOwnerChange_bumpsTheRevision() {
+        let viewModel = viewModel()
+        var revision = viewModel.ownerRevision
+        let changes: [() -> Void] = [
+            { owner.adopt(accountA) },
+            { owner.keepLocalOnly(for: accountB) },
+            { owner.clear() },
+        ]
+        for change in changes {
+            change()
+            #expect(viewModel.ownerRevision == revision + 1)
+            revision = viewModel.ownerRevision
+        }
+    }
+
+    /// Each view model follows only its own store.
+    @Test func ownerChangeInAnotherStore_isIgnored() {
+        let viewModel = viewModel()
+        let revision = viewModel.ownerRevision
+        let other = LocalDataOwner(defaults: UserDefaults(suiteName: "LocalDataOwnerTests.other.\(UUID().uuidString)")!)
+
+        other.adopt(accountA)
+
+        #expect(viewModel.ownerRevision == revision)
+    }
 
     @Test func backupWithNoOwner_adoptsTheData() async throws {
         try addSession("Before any account")
