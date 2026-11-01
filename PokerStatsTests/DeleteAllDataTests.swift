@@ -45,11 +45,21 @@ struct DeleteAllDataTests {
         ]
     }
 
-    private func viewModel() -> SettingsViewModel {
+    /// Results run at once instead of after the alert dismisses, and
+    /// VoiceOver announcements are recorded in `announcements`.
+    private func viewModel(announcements: Announcements = Announcements()) -> SettingsViewModel {
         let vm = SettingsViewModel()
         vm.localDataOwner = owner
         vm.autoRestoreFlag = freshFlag()
+        vm.afterConfirmationDismisses = { $0() }
+        vm.announce = { announcements.list.append($0) }
         return vm
+    }
+
+    private static func failingWiper(_ context: ModelContext) -> LocalDataWiper {
+        var wiper = LocalDataWiper(modelContext: context)
+        wiper.save = { _ in throw InjectedSaveFailure() }
+        return wiper
     }
 
     @Test func sessionsWithHands_deletesEverything_andClearsTheOwner() throws {
@@ -62,6 +72,9 @@ struct DeleteAllDataTests {
 
         vm.deleteAllData(from: context)
 
+        // No Settings row here because the view's onChange -> saveSettings
+        // doesn't run in a unit test. In the app, a fresh default row is
+        // saved right after the wipe (#270). Both are expected.
         #expect(try counts() == [0, 0, 0])
         #expect(owner.ownerId == nil)
         #expect(owner.localOnlyUserId == nil)
@@ -88,6 +101,8 @@ struct DeleteAllDataTests {
         #expect(try counts() == [2, 3, 1])
         #expect(owner.ownerId == ownerId)
         #expect(vm.deleteAllDataFailure == UserFacingError.unknownMessage(for: .deleteAllData))
+        // The title says "Couldn't Delete Data", so the message doesn't repeat it (#266).
+        #expect(vm.deleteAllDataFailure == "Nothing on this iPhone was changed. Try again.")
         #expect(vm.deleteAllDataFailure?.contains("InjectedSaveFailure") == false)
         #expect(!vm.showDeleteAllSecondConfirmation)
     }
@@ -142,4 +157,93 @@ struct DeleteAllDataTests {
         #expect(try counts() == [2, 3, 1])
         #expect(endCalls == 0)
     }
+
+    /// #266: a successful wipe is announced for VoiceOver, like Sign Out.
+    @Test func successfulWipe_announcesAllDataDeleted() throws {
+        try seed()
+        let announcements = Announcements()
+        let vm = viewModel(announcements: announcements)
+
+        vm.deleteAllData(from: context)
+
+        #expect(try counts() == [0, 0, 0])
+        #expect(announcements.list == ["All data deleted"])
+    }
+
+    @Test func failedWipe_announcesNothing() throws {
+        try seed()
+        let announcements = Announcements()
+        let vm = viewModel(announcements: announcements)
+        vm.makeWiper = Self.failingWiper
+
+        vm.deleteAllData(from: context)
+
+        #expect(announcements.list.isEmpty)
+        #expect(vm.deleteAllDataFailure != nil)
+    }
+
+    /// #270: the failure alert waits until the "Are you absolutely sure?"
+    /// alert has dismissed, so SwiftUI doesn't drop it.
+    @Test func failedWipe_showsTheErrorAfterTheConfirmationDismisses() throws {
+        try seed()
+        let vm = viewModel()
+        var pending: [@MainActor @Sendable () -> Void] = []
+        vm.afterConfirmationDismisses = { pending.append($0) }
+        vm.makeWiper = Self.failingWiper
+        vm.showDeleteAllSecondConfirmation = true
+
+        vm.deleteAllData(from: context)
+
+        #expect(!vm.showDeleteAllSecondConfirmation)
+        #expect(vm.deleteAllDataFailure == nil)
+        #expect(pending.count == 1)
+
+        pending.forEach { $0() }
+
+        #expect(vm.deleteAllDataFailure == UserFacingError.unknownMessage(for: .deleteAllData))
+    }
+
+    /// The default delay presents the error on its own, a moment later.
+    @Test func failedWipe_defaultDelay_showsTheError() async throws {
+        try seed()
+        let vm = SettingsViewModel()
+        vm.localDataOwner = owner
+        vm.autoRestoreFlag = freshFlag()
+        vm.announce = { _ in }
+        vm.makeWiper = Self.failingWiper
+
+        vm.deleteAllData(from: context)
+        #expect(vm.deleteAllDataFailure == nil)
+
+        let deadline = ContinuousClock.now + .seconds(5)
+        while vm.deleteAllDataFailure == nil, ContinuousClock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+        #expect(vm.deleteAllDataFailure == UserFacingError.unknownMessage(for: .deleteAllData))
+    }
+
+    /// A late error from an earlier try doesn't show after a retry succeeded.
+    @Test func lateErrorFromAnEarlierTry_isIgnored() throws {
+        try seed()
+        let announcements = Announcements()
+        let vm = viewModel(announcements: announcements)
+        var pending: [@MainActor @Sendable () -> Void] = []
+        vm.afterConfirmationDismisses = { pending.append($0) }
+        vm.makeWiper = Self.failingWiper
+        vm.deleteAllData(from: context)
+
+        vm.makeWiper = { LocalDataWiper(modelContext: $0) }
+        vm.deleteAllData(from: context)
+        pending.forEach { $0() }
+
+        #expect(try counts() == [0, 0, 0])
+        #expect(vm.deleteAllDataFailure == nil)
+        #expect(announcements.list == ["All data deleted"])
+    }
+}
+
+/// VoiceOver announcements a test view model posted.
+@MainActor
+private final class Announcements {
+    var list: [String] = []
 }

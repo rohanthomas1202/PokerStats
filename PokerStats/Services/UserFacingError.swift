@@ -88,7 +88,8 @@ enum UserFacingError: Equatable, Sendable {
         case .backup: "Couldn't back up right now. Your data on this phone is safe. Try again."
         case .restore: "Couldn't restore this backup. Your data on this phone wasn't changed. Try again."
         case .autoRestore: "Couldn't restore your backup. Try again."
-        case .deleteAllData: "Couldn't delete your data. Nothing on this iPhone was changed. Try again."
+        // The alert title already says "Couldn't Delete Data" (#266).
+        case .deleteAllData: "Nothing on this iPhone was changed. Try again."
         }
     }
 
