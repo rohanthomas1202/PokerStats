@@ -69,8 +69,8 @@
         "sessions[].fold_to_3bet"
       ],
       "inputs": "live hands",
-      "formula": "count(faced_3bet AND three_bet_response = folded) / count(faced_3bet)",
-      "null_when": "no hand has faced_3bet",
+      "formula": "count(faced_3bet AND preflop_action = raise AND three_bet_response = folded) / count(faced_3bet AND preflop_action = raise)",
+      "null_when": "no hand has faced_3bet with preflop_action = raise",
       "display": "percent",
       "source": "PokerStats/Services/StatCalculator.swift:25-32"
     },

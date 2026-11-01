@@ -209,6 +209,9 @@ Deno.test("the datasets keep their edge cases", () => {
     ),
     "a nonzero tip_rake": sessions.some((s) => s.tip_rake > 0),
     "a hand with an unknown position": hands.some((h) => h.position === "?"),
+    "a faced_3bet hand where hero did not raise preflop": hands.some((h) =>
+      h.faced_3bet && h.preflop_action !== "raise"
+    ),
     "a session with 10 or more hands": Object.values(datasets).some((d) =>
       d.expected.sessions.some((s: Json) => s.leak_finder !== null)
     ),

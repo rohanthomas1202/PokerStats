@@ -23,9 +23,9 @@ enum StatCalculator {
     }
 
     /// Fold to 3-Bet %: Of hands where hero raised and faced a 3-bet, how often folded.
-    /// Returns nil if never faced a 3-bet.
+    /// Returns nil if hero never raised and then faced a 3-bet.
     static func foldTo3BetPercent(hands: [Hand]) -> Double? {
-        let faced = hands.filter { $0.faced3Bet }
+        let faced = hands.filter { $0.faced3Bet && $0.raisedPreflop }
         guard !faced.isEmpty else { return nil }
         let folded = faced.filter { $0.threeBetResponse == .folded }.count
         return Double(folded) / Double(faced.count)
