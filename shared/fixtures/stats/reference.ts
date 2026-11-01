@@ -223,21 +223,47 @@ export function profitByDayOfWeek(sessions: SessionRow[], timeZone: string) {
   }));
 }
 
-export function plDistribution(sessions: SessionRow[], bucketWidth = 100) {
+// TrendCalculator.swift:135-185 (sessionPLDistribution, plBucketWidth).
+// The width is the smallest of base x 1, 2, 5, 10, 20, 50... that covers
+// min..max in at most maxBuckets buckets, so a wide range can't give
+// hundreds of bars (#288).
+export function plBucketWidth(
+  min: number,
+  max: number,
+  base = 100,
+  maxBuckets = 20,
+) {
+  for (let scale = 1;; scale *= 10) {
+    for (const m of [1, 2, 5]) {
+      const width = base * m * scale;
+      const count = Math.floor(max / width) - Math.floor(min / width) + 1;
+      if (count <= Math.max(maxBuckets, 1)) return width;
+    }
+  }
+}
+
+export function plDistribution(
+  sessions: SessionRow[],
+  bucketWidth = 100,
+  maxBuckets = 20,
+) {
   const profits = sessions.filter(isCompleted).map(netProfit);
   if (profits.length === 0) return [];
-  const lower = Math.floor(Math.min(...profits) / bucketWidth) * bucketWidth;
-  const upper = Math.floor(Math.max(...profits) / bucketWidth) * bucketWidth +
-    bucketWidth;
+  const min = Math.min(...profits);
+  const max = Math.max(...profits);
+  const width = plBucketWidth(min, max, bucketWidth, maxBuckets);
+  const lower = Math.floor(min / width) * width;
+  const upper = Math.floor(max / width) * width + width;
   const buckets = [];
-  for (let current = lower; current < upper; current += bucketWidth) {
-    const next = current + bucketWidth;
+  for (let current = lower; current < upper; current += width) {
+    const next = current + width;
     const label = current >= 0
       ? `+$${Math.trunc(current)}`
       : `-$${Math.trunc(Math.abs(current))}`;
     buckets.push({
       range_label: label,
       lower_bound: current,
+      upper_bound: next,
       count: profits.filter((p) => p >= current && p < next).length,
     });
   }
@@ -273,7 +299,7 @@ export function mentalCorrelation(sessions: SessionRow[], now: string) {
   return points;
 }
 
-// TrendCalculator.swift:192-203 (TrendCalculator.mentalInsight)
+// TrendCalculator.swift:233-241 (TrendCalculator.mentalInsight)
 // Tilted pools levels 4 and 5, averaged over their sessions (#250).
 export function mentalInsight(points: ReturnType<typeof mentalCorrelation>) {
   const tilt = points.filter((p) => p.metric === "tilt");

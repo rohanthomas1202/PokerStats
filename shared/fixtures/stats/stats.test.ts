@@ -236,6 +236,18 @@ Deno.test("the datasets keep their edge cases", () => {
         return profits.length > 1 && Math.max(...profits) % 100 === 0;
       },
     ),
+    "a P/L range wider than 20 buckets of 100": Object.values(datasets).some(
+      (d) => {
+        const profits = d.expected.sessions
+          .filter((s: Json) => s.counts_toward_money_stats)
+          .map((s: Json) => s.net_profit);
+        if (profits.length === 0) return false;
+        const span = Math.floor(Math.max(...profits) / 100) -
+          Math.floor(Math.min(...profits) / 100) + 1;
+        return span > 20 &&
+          d.expected.trends.all_time.pl_distribution.length <= 20;
+      },
+    ),
   };
   const missing = Object.entries(edges).filter(([, ok]) => !ok).map(([what]) =>
     what

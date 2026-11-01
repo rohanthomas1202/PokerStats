@@ -31,7 +31,15 @@ enum TrendCalculator {
         let id = UUID()
         let rangeLabel: String
         let lowerBound: Double
+        let upperBound: Double
         let count: Int
+
+        /// VoiceOver text for the bar, for example "+$100 to under +$200, 3 sessions".
+        var accessibilityLabel: String {
+            let upper = upperBound == 0 ? "$0" : TrendCalculator.signedDollarLabel(upperBound)
+            let sessions = count == 1 ? "1 session" : "\(count) sessions"
+            return "\(rangeLabel) to under \(upper), \(sessions)"
+        }
     }
 
     struct MentalCorrelationPoint: Identifiable {
@@ -118,38 +126,68 @@ enum TrendCalculator {
 
     // MARK: - P&L Distribution Histogram
 
+    /// Most bars the P&L histogram shows. A wider P/L range widens the buckets instead.
+    static let maxPLBuckets = 20
+
     /// Returns buckets of session P&L values for histogram display.
-    static func sessionPLDistribution(sessions: [Session], bucketWidth: Double = 100) -> [PLBucket] {
+    /// Buckets start at `bucketWidth` and widen through 1, 2, 5, 10, 20, 50... times it
+    /// until the range fits in `maxBuckets` bars.
+    static func sessionPLDistribution(
+        sessions: [Session],
+        bucketWidth: Double = 100,
+        maxBuckets: Int = maxPLBuckets
+    ) -> [PLBucket] {
         let completed = sessions.filter { $0.status == .completed }
         guard !completed.isEmpty else { return [] }
 
         let profits = completed.map(\.netProfit)
         let minProfit = (profits.min() ?? 0)
         let maxProfit = (profits.max() ?? 0)
+        let width = plBucketWidth(min: minProfit, max: maxProfit, baseWidth: bucketWidth, maxBuckets: maxBuckets)
 
         // Buckets are [lower, lower + width). The last one starts at
         // floor(max / width) * width, so the maximum always lands in a bucket
         // and a single value or narrow range still gets its real bucket.
-        let lowerBound = floor(minProfit / bucketWidth) * bucketWidth
-        let upperBound = floor(maxProfit / bucketWidth) * bucketWidth + bucketWidth
+        let lowerBound = floor(minProfit / width) * width
+        let upperBound = floor(maxProfit / width) * width + width
 
         var buckets: [PLBucket] = []
         var current = lowerBound
 
         while current < upperBound {
-            let next = current + bucketWidth
+            let next = current + width
             let count = profits.filter { $0 >= current && $0 < next }.count
-            let label: String
-            if current >= 0 {
-                label = "+$\(Int(current))"
-            } else {
-                label = "-$\(Int(abs(current)))"
-            }
-            buckets.append(PLBucket(rangeLabel: label, lowerBound: current, count: count))
+            buckets.append(PLBucket(rangeLabel: signedDollarLabel(current), lowerBound: current, upperBound: next, count: count))
             current = next
         }
 
         return buckets
+    }
+
+    /// Smallest of baseWidth times 1, 2, 5, 10, 20, 50... that covers min...max in at most maxBuckets buckets.
+    static func plBucketWidth(min: Double, max: Double, baseWidth: Double = 100, maxBuckets: Int = maxPLBuckets) -> Double {
+        guard baseWidth > 0, min.isFinite, max.isFinite else { return baseWidth }
+        let multipliers: [Double] = [1, 2, 5]
+        var scale: Double = 1
+        while true {
+            for m in multipliers {
+                let width = baseWidth * m * scale
+                let count = floor(max / width) - floor(min / width) + 1
+                if count <= Double(Swift.max(maxBuckets, 1)) { return width }
+            }
+            scale *= 10
+        }
+    }
+
+    /// Signed whole-dollar label: "+$100", "+$0" for zero, "-$200" below zero.
+    static func signedDollarLabel(_ value: Double) -> String {
+        value >= 0 ? "+$\(Int(value))" : "-$\(Int(abs(value)))"
+    }
+
+    /// Chart subtitle naming the bucket width, for example "Sessions per $100 range, labelled by the low end".
+    static func plDistributionSubtitle(_ buckets: [PLBucket]) -> String? {
+        guard let first = buckets.first else { return nil }
+        return "Sessions per $\(Int(first.upperBound - first.lowerBound)) range, labelled by the low end"
     }
 
     // MARK: - Mental Correlation

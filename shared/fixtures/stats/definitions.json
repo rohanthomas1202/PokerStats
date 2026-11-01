@@ -255,7 +255,7 @@
       "formula": "completed sessions sorted by start_time; a first point (start_time of the first, 0, index 0), then one point per session (end_time ?? start_time, running net_profit total, index i+1)",
       "null_when": "no completed sessions: empty list",
       "display": "currency",
-      "source": "PokerStats/Services/TrendCalculator.swift:48-70"
+      "source": "PokerStats/Services/TrendCalculator.swift:56-78"
     },
     "rolling_vpip_pfr": {
       "paths": [
@@ -265,7 +265,7 @@
       "formula": "hands sorted by played_at; for each window of 20 consecutive hands ending at hand i (1-based): vpip and pfr over the window",
       "null_when": "fewer than 20 hands: empty list",
       "display": "percent",
-      "source": "PokerStats/Services/TrendCalculator.swift:75-89"
+      "source": "PokerStats/Services/TrendCalculator.swift:83-97"
     },
     "profit_by_day_of_week": {
       "paths": [
@@ -275,17 +275,17 @@
       "formula": "always 7 entries Sun..Sat (day_number 1..7); completed sessions grouped by the weekday of start_time in the device time zone (dataset time_zone)",
       "null_when": null,
       "display": "currency",
-      "source": "PokerStats/Services/TrendCalculator.swift:94-117"
+      "source": "PokerStats/Services/TrendCalculator.swift:102-125"
     },
     "pl_distribution": {
       "paths": [
         "trends.*.pl_distribution"
       ],
       "inputs": "live sessions in the window",
-      "formula": "completed net_profit values in buckets of 100 from floor(min/100)*100 up to floor(max/100)*100 + 100, each [lower, lower+100), so the maximum is always in the last bucket. Labels +$N for N >= 0, -$N below",
+      "formula": "completed net_profit values in buckets of width w, where w is the smallest of 100 x 1, 2, 5, 10, 20, 50... with floor(max/w) - floor(min/w) + 1 <= 20 (at most 20 bars, #288). Buckets run from floor(min/w)*w up to floor(max/w)*w + w, each [lower_bound, upper_bound) with upper_bound = lower_bound + w, so the maximum is always in the last bucket. Labels +$N for N >= 0, -$N below",
       "null_when": "no completed sessions: empty list",
       "display": "label",
-      "source": "PokerStats/Services/TrendCalculator.swift:122-153"
+      "source": "PokerStats/Services/TrendCalculator.swift:135-185"
     },
     "mental_correlation": {
       "paths": [
@@ -295,7 +295,7 @@
       "formula": "for each metric (energy, focus, tilt) and level: average of session hourly_rate over completed sessions with that level and a non-null hourly_rate; sorted by metric name, then level",
       "null_when": "no qualifying sessions: empty list",
       "display": "hourly_rate",
-      "source": "PokerStats/Services/TrendCalculator.swift:161-192"
+      "source": "PokerStats/Services/TrendCalculator.swift:197-228"
     },
     "mental_insight": {
       "paths": [
@@ -305,7 +305,7 @@
       "formula": "calm = tilt level 1 point; tilted = average hourly_rate over every session at tilt level 4 or 5 (the level 4 and 5 points weighted by session_count); calm and the pooled tilted group each need 2 or more sessions",
       "null_when": "no tilt level 1 point, or calm or the pooled level 4 and 5 group below 2 sessions",
       "display": "hourly_rate",
-      "source": "PokerStats/Services/TrendCalculator.swift:192-203"
+      "source": "PokerStats/Services/TrendCalculator.swift:233-241"
     },
     "leak_finder": {
       "paths": [
