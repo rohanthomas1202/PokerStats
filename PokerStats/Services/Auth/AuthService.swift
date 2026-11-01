@@ -246,11 +246,14 @@ final class AuthService {
         }
     }
 
-    /// At sign-in, before the owner check adopts anything: when the account
-    /// that signed in already owned the local data and changes are unsent,
-    /// runs one backup (#293). Not while account deletion runs (#61).
+    /// At sign-in, after the owner check: when the signed-in account owns
+    /// the local data and changes are unsent, runs one backup (#293). Not
+    /// while account deletion runs (#61). An empty store is skipped so the
+    /// sign-in backup never races the auto-restore with an empty backup; its
+    /// changes stay unsent for the next session's backup (#311).
     func backUpUnsentChangesAtSignIn(modelContext: ModelContext) {
-        guard canBackUpUnsentChangesAtSignIn else { return }
+        guard canBackUpUnsentChangesAtSignIn,
+              (try? LocalDataRestorer(modelContext: modelContext).isStoreEmpty()) == false else { return }
         scheduleBackup(modelContext: modelContext)
     }
 
@@ -261,11 +264,12 @@ final class AuthService {
         scheduleBackup(backup)
     }
 
-    /// Only the account that already owned the data backs up here. Data
-    /// with no owner (after Delete All Data, or never signed in) is not
-    /// uploaded at sign-in: the owner check adopts it, `hasUnsentChanges`
-    /// stays set, and the next session's backup sends the whole store, as
-    /// before #293. Sign-in only uploads data the account already owned (#300).
+    /// Runs after the owner check, so the signed-in account owns the data
+    /// when it already did, or when the check adopted data with no owner
+    /// (after Delete All Data, or never signed in) (#311). Data owned by
+    /// another account is never uploaded: its owner stays, and an empty store
+    /// taken from another account had its flag cleared on adoption.
+    /// Scheduling clears the flag, so a repeated sign-in event runs nothing.
     private var canBackUpUnsentChangesAtSignIn: Bool {
         guard hasUnsentChanges, !isCloudWorkSuspended, isAuthenticated, let userId else { return false }
         return localDataOwner.ownerId == userId

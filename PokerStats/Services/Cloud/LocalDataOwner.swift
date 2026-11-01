@@ -60,8 +60,13 @@ struct LocalDataOwner {
         }
     }
 
-    /// `userId` now owns the local data.
+    /// `userId` now owns the local data. When it took the data from another
+    /// account, that account's unsent changes are no longer owed to anyone,
+    /// so the flag is cleared (#311). Data with no owner keeps its flag.
     func adopt(_ userId: UUID) {
+        if let ownerId, ownerId != userId {
+            hasUnsentChanges = false
+        }
         defaults.set(userId.uuidString, forKey: Self.ownerKey)
         defaults.removeObject(forKey: Self.localOnlyKey)
     }
