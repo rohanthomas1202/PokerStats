@@ -12,7 +12,7 @@ private func metadata() -> BackupMetadata {
 
 @MainActor
 private final class Log {
-    let log = Log()
+    var events: [String] = []
     func count(_ event: String) -> Int { events.filter { $0 == event }.count }
 }
 
@@ -108,6 +108,50 @@ struct SignInBackupTests {
         for _ in 0..<20 { await Task.yield() }
         #expect(log.events.isEmpty)
         #expect(auth.backupStatus == nil)
+    }
+
+    /// The app's path: `backUpUnsentChangesAtSignIn(modelContext:)` uploads
+    /// the whole store once, to the returning owner's folder.
+    @Test func sameOwner_appPath_uploadsTheStoreOnceAtSignIn() async throws {
+        owner.adopt(TestUser.id)
+        let server = FakeServer()
+        let client = testClient(storage, server: server) { request, _ in
+            switch (request.method, request.path) {
+            case ("POST", let path) where path.hasPrefix("/storage/v1/object/backups/"):
+                return .status(200, #"{"Key":"backups/x","Id":"1"}"#)
+            case ("POST", "/rest/v1/backup_metadata"):
+                return .status(201, """
+                [{"id":"\(UUID().uuidString)","user_id":"\(TestUser.id.uuidString)","storage_path":"p",
+                  "file_size_bytes":1,"schema_version":1,"session_count":1,"hand_count":0,
+                  "created_at":"2026-11-01T10:00:00+00:00"}]
+                """)
+            case ("GET", "/rest/v1/backup_metadata"):
+                return .status(200, "[]")
+            default:
+                return .status(204, "")
+            }
+        }
+        let auth = AuthService(client: client)
+        auth.localDataOwner = owner
+        let container = try TestHelpers.createContainer()
+        let context = container.mainContext
+        context.insert(Session(location: "Played while signed out"))
+        try context.save()
+        auth.scheduleBackup(modelContext: context) // signed out: the session's backup can't run
+        #expect(auth.hasUnsentChanges)
+        #expect(server.requests.isEmpty)
+
+        signIn(auth)
+        auth.backUpUnsentChangesAtSignIn(modelContext: context)
+        await waitUntil("sign-in backup finished") { auth.backupStatus?.hasPrefix("Backed up") == true }
+        auth.backUpUnsentChangesAtSignIn(modelContext: context)
+        for _ in 0..<20 { await Task.yield() }
+
+        let uploads = server.requests.filter { $0.path.hasPrefix("/storage/v1/object/backups/") }
+        #expect(uploads.count == 1)
+        let path = try #require(uploads.first).path.removingPercentEncoding ?? ""
+        #expect(path.hasPrefix("/storage/v1/object/backups/\(TestUser.id.uuidString.lowercased())/"))
+        #expect(!auth.hasUnsentChanges)
     }
 
     // MARK: - Mismatch: no backup
