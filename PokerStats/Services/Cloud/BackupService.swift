@@ -199,7 +199,10 @@ final class BackupService {
         return try modelContext.fetch(descriptor).first
     }
 
-    private func enforceRetention(userId: UUID, keep: Int = 5) async throws {
+    /// Backups kept per account; older ones are deleted after each upload.
+    nonisolated static let keptBackupCount = 5
+
+    private func enforceRetention(userId: UUID, keep: Int = BackupService.keptBackupCount) async throws {
         let backups = try await listBackups()
 
         guard backups.count > keep else { return }

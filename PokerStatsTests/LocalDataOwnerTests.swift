@@ -39,6 +39,7 @@ struct LocalDataOwnerTests {
     private func viewModel() -> LocalDataOwnershipViewModel {
         let viewModel = LocalDataOwnershipViewModel()
         viewModel.owner = owner
+        viewModel.afterAlertDismisses = { $0() }
         return viewModel
     }
 
@@ -270,6 +271,76 @@ struct LocalDataOwnerTests {
 
         viewModel.resumePrompt()
         #expect(viewModel.isShowingChoice)
+    }
+
+    /// "Delete from This iPhone" closes the choice; the confirmation waits
+    /// until that alert has dismissed, so SwiftUI doesn't drop it (#262).
+    @Test func deleteConfirmation_waitsForTheChoiceToDismiss() throws {
+        let viewModel = try accountBSignsInOverAccountAData()
+        var pending: [@MainActor @Sendable () -> Void] = []
+        viewModel.afterAlertDismisses = { pending.append($0) }
+
+        viewModel.requestDelete()
+        #expect(!viewModel.isShowingChoice)
+        #expect(!viewModel.isShowingDeleteConfirmation)
+        #expect(pending.count == 1)
+
+        pending.removeFirst()()
+        #expect(viewModel.isShowingDeleteConfirmation)
+        #expect(!viewModel.isShowingChoice)
+
+        // Cancel waits the same way before asking again.
+        viewModel.cancelDelete()
+        #expect(!viewModel.isShowingDeleteConfirmation)
+        #expect(!viewModel.isShowingChoice)
+        pending.removeFirst()()
+        #expect(viewModel.isShowingChoice)
+        #expect(try storedLocations() == ["A's session"])
+    }
+
+    @Test func deleteConfirmation_isDropped_whenSignedOutBeforeTheChoiceDismisses() throws {
+        let viewModel = try accountBSignsInOverAccountAData()
+        var pending: [@MainActor @Sendable () -> Void] = []
+        viewModel.afterAlertDismisses = { pending.append($0) }
+
+        viewModel.requestDelete()
+        viewModel.signedOut()
+        pending.removeFirst()()
+
+        #expect(!viewModel.isShowingDeleteConfirmation)
+        #expect(!viewModel.isShowingChoice)
+    }
+
+    // MARK: - Copy and accessibility
+
+    @Test func choiceMessage_namesTheSignedInAccount_andTheKeptBackups() {
+        let named = LocalDataOwnershipViewModel.choiceMessage(signedInAs: "b@example.com")
+        #expect(named.contains("a different account than b@example.com."))
+        #expect(named.contains("only the \(BackupService.keptBackupCount) newest are kept"))
+        #expect(named.hasSuffix("Nothing is backed up until you choose."))
+
+        // Sign in with Apple can leave the email unknown.
+        for email in [nil, ""] as [String?] {
+            let unnamed = LocalDataOwnershipViewModel.choiceMessage(signedInAs: email)
+            #expect(unnamed.hasPrefix("The stats on this iPhone were saved with a different account. "))
+            #expect(unnamed.contains("only the \(BackupService.keptBackupCount) newest are kept"))
+        }
+    }
+
+    @Test func deleteMessage_mentionsSettings() {
+        #expect(LocalDataOwnershipViewModel.deleteMessage == "This permanently deletes the sessions, hands and settings on this iPhone. Cloud backups aren't changed.")
+    }
+
+    /// While blocked, VoiceOver hears the reason with Back Up Now (#262).
+    @Test func backUpNowHint_givesTheReasonOnlyWhileBlocked() throws {
+        let viewModel = try accountBSignsInOverAccountAData()
+        #expect(viewModel.backUpNowHint == LocalDataOwnershipViewModel.blockedMessage)
+
+        viewModel.backUpToThisAccount {}
+        #expect(viewModel.backUpNowHint.isEmpty)
+
+        viewModel.signedOut()
+        #expect(viewModel.backUpNowHint.isEmpty)
     }
 
     @Test func signingOut_hidesTheChoice() throws {
