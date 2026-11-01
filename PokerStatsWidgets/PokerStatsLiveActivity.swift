@@ -35,6 +35,7 @@ struct PokerStatsLiveActivity: Widget {
                         Text("$\(Int(context.state.totalInvested))")
                             .font(.subheadline)
                             .fontWeight(.semibold)
+                            .privacySensitive()
                     }
                     .padding(.horizontal, 4)
                 }
@@ -64,6 +65,7 @@ struct PokerStatsLiveActivity: Widget {
                     Text(context.attributes.location)
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .privacySensitive()
                 }
             }
 
@@ -87,6 +89,7 @@ struct PokerStatsLiveActivity: Widget {
                 Text("$\(Int(context.state.totalInvested)) in")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .privacySensitive()
             }
         }
         .padding()

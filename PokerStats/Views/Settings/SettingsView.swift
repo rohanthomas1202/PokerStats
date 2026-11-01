@@ -10,6 +10,7 @@ struct SettingsView: View {
     @State private var isShowingDeleteAccountFinal = false
     @State private var isSeeding = false
     @State private var seedComplete = false
+    @AppStorage(LiveActivityPreference.key) private var showOnLockScreen = LiveActivityPreference.defaultValue
 
     var body: some View {
         Form {
@@ -84,6 +85,20 @@ struct SettingsView: View {
                         Text(type.displayName).tag(type)
                     }
                 }
+            }
+
+            // MARK: - Live Activity Section
+            Section {
+                Toggle("Show Live Activity", isOn: $showOnLockScreen)
+                    .onChange(of: showOnLockScreen) { _, newValue in
+                        LiveActivityPreference.handleToggleChange(to: newValue) {
+                            LocalDataWiper.endLiveActivities()
+                        }
+                    }
+            } header: {
+                Text("Live Activity")
+            } footer: {
+                Text("Shows your session timer and hand count on the Lock Screen and in the Dynamic Island. Amount invested and location appear only when iPhone is unlocked.")
             }
 
             // MARK: - Data Section
