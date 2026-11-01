@@ -5,6 +5,7 @@ import Charts
 struct TrendsView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel = TrendsViewModel()
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         NavigationStack {
@@ -264,13 +265,13 @@ struct TrendsView: View {
                 }
             }
             .chartXAxis {
-                AxisMarks { value in
-                    AxisValueLabel {
-                        if let v = value.as(String.self) {
-                            Text(v)
-                                .font(.caption2)
-                                .foregroundStyle(Color.pokerTextSecondary)
-                        }
+                if let maxLabels = TrendCalculator.plAxisMaxLabels(for: dynamicTypeSize) {
+                    AxisMarks(values: TrendCalculator.plAxisLabels(viewModel.plDistribution, maxLabels: maxLabels)) { value in
+                        plAxisLabel(value)
+                    }
+                } else {
+                    AxisMarks { value in
+                        plAxisLabel(value)
                     }
                 }
             }
@@ -278,5 +279,30 @@ struct TrendsView: View {
         }
         .padding()
         .pokerCard(cornerRadius: 16)
+    }
+
+    @AxisContentBuilder
+    private func plAxisLabel(_ value: AxisValue) -> some AxisContent {
+        AxisValueLabel {
+            if let v = value.as(String.self) {
+                Text(v)
+                    .font(.caption2)
+                    .foregroundStyle(Color.pokerTextSecondary)
+            }
+        }
+    }
+}
+
+extension TrendCalculator {
+    /// Most P&L x-axis labels that fit at a Dynamic Type size, or nil to leave
+    /// the axis as it is at default sizes. Larger text gets fewer labels so
+    /// they don't overlap; VoiceOver still reads each bar's full range.
+    static func plAxisMaxLabels(for size: DynamicTypeSize) -> Int? {
+        switch size {
+        case ...DynamicTypeSize.large: nil
+        case .xLarge, .xxLarge, .xxxLarge: 6
+        case .accessibility1, .accessibility2: 4
+        default: 2
+        }
     }
 }
