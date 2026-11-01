@@ -52,7 +52,11 @@ final class AppleReauthenticator: NSObject {
     /// nonce. Cancelling throws `ASAuthorizationError.canceled`.
     func authorize(configure: (ASAuthorizationAppleIDRequest) -> Void) async throws -> AppleAuthorization {
         // One request at a time; a second caller must not replace (and leak)
-        // the pending continuation.
+        // the pending continuation. Not reachable from the app today: every
+        // caller (Try Again on the sign-in sheet, account deletion) makes a
+        // new AppleReauthenticator, and Try Again is disabled while a sign-in
+        // runs. If it ever fires, the generic sign-in copy is shown, which is
+        // acceptable for a double tap, so it has no dedicated error (#260).
         guard continuation == nil else {
             throw AuthServiceError.appleSignInFailed("Sign in with Apple is already in progress")
         }
