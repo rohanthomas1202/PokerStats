@@ -324,9 +324,22 @@ struct TrendCalculatorTests {
                     let context = "\(bars) bars, plot \(plotWidth), label \(labelWidth): \(shown)"
                     #expect(shown.first == 0, "\(context)")
                     #expect(zip(shown, shown.dropFirst()).allSatisfy { $0 < $1 }, "\(context)")
-                    guard shown.count > 1 else { continue }
-                    #expect(shown.last == bars - 1, "\(context)")
                     let barWidth = plotWidth / Double(bars)
+                    guard shown.count > 1 else {
+                        // A lone label sits inside whenever some placement on bar 0 fits:
+                        // centered on a single bar (the whole plot), otherwise starting
+                        // at bar 0's center and running right.
+                        let span = TrendCalculator.plAxisLabelSpans(layout, barWidth: barWidth, labelWidth: labelWidth)[0]
+                        let fits = bars == 1 ? labelWidth <= plotWidth : labelWidth <= plotWidth - barWidth / 2
+                        if fits {
+                            #expect(span.lower >= 0 && span.upper <= plotWidth, "\(context)")
+                        }
+                        if bars == 1 {
+                            #expect(span.lower - 0 == plotWidth - span.upper, "centered: \(context)")
+                        }
+                        continue
+                    }
+                    #expect(shown.last == bars - 1, "\(context)")
                     let pullIn = labelWidth > barWidth
                     let spans = shown.enumerated().map { position, index -> (Double, Double) in
                         let center = (Double(index) + 0.5) * barWidth
@@ -341,6 +354,38 @@ struct TrendCalculatorTests {
                 }
             }
         }
+    }
+
+    @Test func plAxisLayout_singleBucketCentersItsLabel() {
+        // One bucket: its bar spans the whole 280pt plot, centered at 140.
+        // A 179pt label used to start at 140 and end at 319, past the trailing edge.
+        let one = TrendCalculator.plAxisLayout(bucketCount: 1, plotWidth: 280, labelWidth: 179)
+        #expect(one.indices == [0])
+        #expect(one.alignment(at: 0, of: 1) == .center)
+        let span = TrendCalculator.plAxisLabelSpans(one, barWidth: 280, labelWidth: 179)[0]
+        #expect(span.lower == 50.5 && span.upper == 229.5)
+        // Wider than the plot: overflows evenly on both sides instead of all on the right.
+        let tooWide = TrendCalculator.plAxisLayout(bucketCount: 1, plotWidth: 120, labelWidth: 179)
+        let overflow = TrendCalculator.plAxisLabelSpans(tooWide, barWidth: 120, labelWidth: 179)[0]
+        #expect(overflow.lower == -29.5 && overflow.upper == 149.5)
+        // Before the plot is measured, still centered.
+        #expect(TrendCalculator.plAxisLayout(bucketCount: 1, plotWidth: 0, labelWidth: 40).alignment(at: 0, of: 1) == .center)
+    }
+
+    @Test @MainActor func plAxisLabelWidth_boldTextIsWider() {
+        let labels = ["+$0", "+$20,000", "-$2,000"]
+        let regular = TrendCalculator.plAxisLabelWidth(labels, at: .accessibility5, legibilityWeight: .regular)
+        let bold = TrendCalculator.plAxisLabelWidth(labels, at: .accessibility5, legibilityWeight: .bold)
+        let large = TrendCalculator.plAxisLabelWidth(labels, at: .large, legibilityWeight: .regular)
+        #expect(regular > large)
+        #expect(bold > regular)
+        // Widest label wins, whole points, and no labels measures 0.
+        let each = labels.map { TrendCalculator.plAxisLabelWidth([$0], at: .accessibility5, legibilityWeight: .regular) }
+        #expect(regular == each.max())
+        #expect(regular == regular.rounded(.up))
+        #expect(TrendCalculator.plAxisLabelWidth([], at: .accessibility5, legibilityWeight: .bold) == 0)
+        // nil (unknown) measures as regular.
+        #expect(TrendCalculator.plAxisLabelWidth(labels, at: .accessibility5, legibilityWeight: nil) == regular)
     }
 
     @Test func plAxisLayout_emptyOrUnmeasured() {

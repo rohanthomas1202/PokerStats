@@ -7,6 +7,7 @@ struct TrendsView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel = TrendsViewModel()
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.legibilityWeight) private var legibilityWeight
     @State private var plPlotWidth: Double = 0
 
     var body: some View {
@@ -299,19 +300,16 @@ struct TrendsView: View {
         .pokerCard(cornerRadius: 16)
     }
 
-    /// Which bars get an x-axis label at the current plot width and text size.
+    /// Which bars get an x-axis label at the current plot width, text size and Bold Text setting.
     private var plAxisLayout: TrendCalculator.PLAxisLayout {
-        let font = UIFont.preferredFont(
-            forTextStyle: .caption2,
-            compatibleWith: UITraitCollection(preferredContentSizeCategory: UIContentSizeCategory(dynamicTypeSize))
-        )
-        let labelWidth = viewModel.plDistribution
-            .map { Double(($0.rangeLabel as NSString).size(withAttributes: [.font: font]).width) }
-            .max() ?? 0
-        return TrendCalculator.plAxisLayout(
+        TrendCalculator.plAxisLayout(
             bucketCount: viewModel.plDistribution.count,
             plotWidth: plPlotWidth,
-            labelWidth: labelWidth.rounded(.up)
+            labelWidth: TrendCalculator.plAxisLabelWidth(
+                viewModel.plDistribution.map(\.rangeLabel),
+                at: dynamicTypeSize,
+                legibilityWeight: legibilityWeight
+            )
         )
     }
 
@@ -330,5 +328,20 @@ extension TrendCalculator {
     /// `plAxisLayout` picks labels by measured width so they don't overlap or clip.
     static func plAxisThinsLabels(at size: DynamicTypeSize) -> Bool {
         size > .large
+    }
+
+    /// Width in points, rounded up, of the widest label in caption2 at `size`,
+    /// in bold when Bold Text is on, as the axis draws it. 0 with no labels.
+    @MainActor
+    static func plAxisLabelWidth(_ labels: [String], at size: DynamicTypeSize, legibilityWeight: LegibilityWeight?) -> Double {
+        let traits = UITraitCollection { traits in
+            traits.preferredContentSizeCategory = UIContentSizeCategory(size)
+            traits.legibilityWeight = legibilityWeight == .bold ? .bold : .regular
+        }
+        let font = UIFont.preferredFont(forTextStyle: .caption2, compatibleWith: traits)
+        let widest = labels
+            .map { Double(($0 as NSString).size(withAttributes: [.font: font]).width) }
+            .max() ?? 0
+        return widest.rounded(.up)
     }
 }
