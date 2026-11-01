@@ -140,31 +140,34 @@ enum TrendCalculator {
         let completed = sessions.filter { $0.status == .completed }
         guard !completed.isEmpty else { return [] }
 
-        // A non-finite profit (corrupt data) can't go in a bucket, and an infinite
-        // bound would never end the loop below.
+        // A non-finite profit (corrupt data) can't go in a bucket.
         let profits = completed.map(\.netProfit).filter(\.isFinite)
         guard !profits.isEmpty else { return [] }
         let minProfit = (profits.min() ?? 0)
         let maxProfit = (profits.max() ?? 0)
         let width = plBucketWidth(min: minProfit, max: maxProfit, baseWidth: bucketWidth, maxBuckets: maxBuckets)
 
+        guard width > 0, width.isFinite else { return [] }
+
         // Buckets are [lower, lower + width). The last one starts at
         // floor(max / width) * width, so the maximum always lands in a bucket
         // and a single value or narrow range still gets its real bucket.
-        let lowerBound = floor(minProfit / width) * width
-        let upperBound = floor(maxProfit / width) * width + width
-
-        var buckets: [PLBucket] = []
-        var current = lowerBound
-
-        while current < upperBound {
-            let next = current + width
-            let count = profits.filter { $0 >= current && $0 < next }.count
-            buckets.append(PLBucket(rangeLabel: signedDollarLabel(current), lowerBound: current, upperBound: next, count: count))
-            current = next
+        // Each profit goes to bucket floor(profit / width) - first, found by
+        // division rather than by stepping lower += width: at huge magnitudes
+        // width can be below the Double spacing, where stepping drops sessions
+        // or never ends. plBucketWidth keeps bucketCount at most maxBuckets.
+        let first = floor(minProfit / width)
+        let bucketCount = Int(floor(maxProfit / width) - first) + 1
+        var counts = Array(repeating: 0, count: bucketCount)
+        for profit in profits {
+            let index = Swift.min(Swift.max(floor(profit / width) - first, 0), Double(bucketCount - 1))
+            counts[Int(index)] += 1
         }
 
-        return buckets
+        return counts.indices.map { i in
+            let lower = (first + Double(i)) * width
+            return PLBucket(rangeLabel: signedDollarLabel(lower), lowerBound: lower, upperBound: lower + width, count: counts[i])
+        }
     }
 
     /// Smallest of baseWidth times 1, 2, 5, 10, 20, 50... that covers min...max in at most maxBuckets buckets.
@@ -186,8 +189,10 @@ enum TrendCalculator {
     /// Uses CurrencyFormatter rather than Int(value), which traps on a non-finite
     /// or out-of-range Double. Zero keeps its "+" because the +$0 bar starts a
     /// range that runs up into profit.
+    /// A non-finite value (never a bucket bound) reads "+$∞", "-$∞", or "$0" for NaN.
     static func signedDollarLabel(_ value: Double) -> String {
-        (value < 0 ? "-" : "+") + CurrencyFormatter.format(abs(value))
+        guard value.isFinite else { return value.isNaN ? "$0" : (value < 0 ? "-$∞" : "+$∞") }
+        return (value < 0 ? "-" : "+") + CurrencyFormatter.format(abs(value))
     }
 
     /// Chart subtitle naming the bucket width, for example "Sessions per $2,000 range, labeled by the low end".

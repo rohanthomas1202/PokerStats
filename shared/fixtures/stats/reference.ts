@@ -252,19 +252,27 @@ export function plDistribution(
   const min = Math.min(...profits);
   const max = Math.max(...profits);
   const width = plBucketWidth(min, max, bucketWidth, maxBuckets);
-  const lower = Math.floor(min / width) * width;
-  const upper = Math.floor(max / width) * width + width;
+  // Bucket index by division, not by stepping lower += width, so huge
+  // magnitudes can't drop a session or loop forever.
+  const first = Math.floor(min / width);
+  const n = Math.floor(max / width) - first + 1;
+  const counts = new Array<number>(n).fill(0);
+  for (const p of profits) {
+    const i = Math.min(Math.max(Math.floor(p / width) - first, 0), n - 1);
+    counts[i] += 1;
+  }
   const buckets = [];
-  for (let current = lower; current < upper; current += width) {
-    const next = current + width;
-    const label = current >= 0
-      ? `+$${Math.trunc(current)}`
-      : `-$${Math.trunc(Math.abs(current))}`;
+  for (let i = 0; i < n; i++) {
+    const current = (first + i) * width;
+    // TrendCalculator.signedDollarLabel: "+$0", "+$2,000", "-$6,000".
+    const label = `${current < 0 ? "-" : "+"}$${
+      group(String(Math.trunc(Math.abs(current))))
+    }`;
     buckets.push({
       range_label: label,
       lower_bound: current,
-      upper_bound: next,
-      count: profits.filter((p) => p >= current && p < next).length,
+      upper_bound: current + width,
+      count: counts[i],
     });
   }
   return buckets;
