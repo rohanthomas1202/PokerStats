@@ -19,6 +19,12 @@ struct DashboardView: View {
         CurrencyFormatter.formatSigned(rate, fractionDigits: 2) + "/hr"
     }
 
+    /// The single VoiceOver label for a Calm or Tilted rate block:
+    /// "Calm, +$12.50 per hour", read as "Calm, plus 12 dollars 50 per hour" (#313).
+    nonisolated static func mentalRateAccessibilityLabel(_ name: String, _ rate: Double) -> String {
+        "\(name), " + CurrencyFormatter.formatSigned(rate, fractionDigits: 2) + " per hour"
+    }
+
     var body: some View {
         NavigationStack(path: $navigationPath) {
             ScrollView {
@@ -324,11 +330,12 @@ struct DashboardView: View {
                             .font(.subheadline)
                             .fontWeight(.bold)
                             .foregroundStyle(Color.pokerResult(insight.calmRate, fractionDigits: 2))
-                        Text("/hr")
-                            .font(.caption2)
-                            .foregroundStyle(Color.pokerTextSecondary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
                     }
                     .frame(maxWidth: .infinity)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(Text(Self.mentalRateAccessibilityLabel("Calm", insight.calmRate)))
                     .padding(.vertical, 10)
                     .pokerCard()
 
@@ -346,11 +353,12 @@ struct DashboardView: View {
                             .font(.subheadline)
                             .fontWeight(.bold)
                             .foregroundStyle(Color.pokerResult(insight.tiltedRate, fractionDigits: 2))
-                        Text("/hr")
-                            .font(.caption2)
-                            .foregroundStyle(Color.pokerTextSecondary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.7)
                     }
                     .frame(maxWidth: .infinity)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(Text(Self.mentalRateAccessibilityLabel("Tilted", insight.tiltedRate)))
                     .padding(.vertical, 10)
                     .pokerCard()
                 }
