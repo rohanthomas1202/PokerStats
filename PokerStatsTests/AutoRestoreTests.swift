@@ -129,6 +129,56 @@ struct AutoRestoreTests {
         #expect(try ModelContext(container).fetchCount(FetchDescriptor<Hand>()) == 2)
     }
 
+    /// #326: the restored store matches a backup, so its unsent flag is cleared
+    /// and the next sign-in doesn't upload the restored data again.
+    @Test func restore_clearsUnsentChanges() async throws {
+        let container = try TestHelpers.createContainer()
+        let owner = LocalDataOwner(defaults: ThrowawayDefaults("AutoRestoreTests"))
+        owner.hasUnsentChanges = true
+        let autoRestore = AutoRestore(
+            modelContext: container.mainContext,
+            listBackups: { [metadata] in [metadata] },
+            downloadBackup: { _ in backupPayload() },
+            flag: freshFlag(),
+            owner: owner
+        )
+
+        #expect(try await autoRestore.run() == .restored(sessionCount: 1))
+        #expect(!owner.hasUnsentChanges)
+    }
+
+    /// #326: when the restore doesn't write, the flag stays: the local data
+    /// it tracks is still unsent.
+    @Test func skippedOrFailedRestore_keepsUnsentChanges() async throws {
+        let owner = LocalDataOwner(defaults: ThrowawayDefaults("AutoRestoreTests"))
+        owner.hasUnsentChanges = true
+
+        let empty = try TestHelpers.createContainer()
+        let noBackups = AutoRestore(
+            modelContext: empty.mainContext, listBackups: { [] },
+            downloadBackup: { _ in backupPayload() }, flag: freshFlag(), owner: owner
+        )
+        #expect(try await noBackups.run() == .noBackups)
+        #expect(owner.hasUnsentChanges)
+
+        let failing = AutoRestore(
+            modelContext: empty.mainContext, listBackups: { [metadata] in [metadata] },
+            downloadBackup: { _ in throw DownloadFailed() }, flag: freshFlag(), owner: owner
+        )
+        await #expect(throws: DownloadFailed.self) { try await failing.run() }
+        #expect(owner.hasUnsentChanges)
+
+        let withData = try TestHelpers.createContainer()
+        withData.mainContext.insert(Session(location: "Unsent"))
+        try withData.mainContext.save()
+        let skipped = AutoRestore(
+            modelContext: withData.mainContext, listBackups: { [metadata] in [metadata] },
+            downloadBackup: { _ in backupPayload() }, flag: freshFlag(), owner: owner
+        )
+        #expect(try await skipped.run() == .skippedLocalDataExists)
+        #expect(owner.hasUnsentChanges)
+    }
+
     @Test func downloadFailure_changesNothing() async throws {
         let container = try TestHelpers.createContainer()
         let context = container.mainContext

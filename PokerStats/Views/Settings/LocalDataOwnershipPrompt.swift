@@ -20,10 +20,7 @@ struct LocalDataOwnershipPrompt: ViewModifier {
         content
             .onChange(of: authService.userId) { _, userId in
                 if let userId {
-                    // After the owner check, so data it adopted (no owner
-                    // before) is backed up too, but never another account's (#311).
-                    ownership.signedIn(userId, modelContext: modelContext)
-                    authService.backUpUnsentChangesAtSignIn(modelContext: modelContext)
+                    ownership.signedIn(userId, modelContext: modelContext, authService: authService)
                 } else {
                     ownership.signedOut()
                 }

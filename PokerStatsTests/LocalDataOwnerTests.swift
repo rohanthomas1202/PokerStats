@@ -333,6 +333,34 @@ struct LocalDataOwnerTests {
         #expect(!owner.hasUnsentChanges)
     }
 
+    /// #326: a backup that was already running when a manual restore wrote,
+    /// and then failed, sets the flag again. Kept on purpose: the app can't
+    /// tell whether that backup's snapshot is still covered by the restore, so a
+    /// failed backup always leaves the data owed. The cost is at most one
+    /// redundant upload at the next sign-in, never lost changes.
+    @Test func backupFailingAfterManualRestore_leavesUnsentChangesSet() async throws {
+        owner.adopt(accountB)
+        try addSession("B's session")
+        let (auth, client) = signedInAuthService(server: FakeServer())
+        let gate = AsyncStream<Void>.makeStream()
+        auth.scheduleBackup {
+            for await _ in gate.stream {}
+            throw URLError(.notConnectedToInternet)
+        }
+        #expect(!owner.hasUnsentChanges) // scheduling cleared it
+        let service = BackupService(authService: auth, modelContext: context, client: client, owner: owner)
+        try service.restoreBackup(BackupPayload(
+            schemaVersion: BackupPayload.currentSchemaVersion, createdAt: .now,
+            appVersion: "1.0.0", sessions: [], settings: nil
+        ))
+        #expect(!owner.hasUnsentChanges)
+
+        gate.continuation.finish()
+        await waitUntil("backup failed") { !auth.isBackupPending }
+
+        #expect(owner.hasUnsentChanges)
+    }
+
     /// #311: when another account takes the data, the old owner's unsent
     /// changes are dropped. The same owner, or data with no owner, keeps them.
     @Test func ownerChange_clearsUnsentChanges() {

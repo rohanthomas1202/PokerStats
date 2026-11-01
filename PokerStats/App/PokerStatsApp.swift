@@ -69,7 +69,8 @@ struct PokerStatsApp: App {
             listBackups: { try await backupService.listBackups() },
             downloadBackup: { try await backupService.downloadBackup(metadata: $0) },
             flag: .standard,
-            checkCanWrite: { try authService.checkRestoreCanWrite() }
+            checkCanWrite: { try authService.checkRestoreCanWrite() },
+            owner: authService.localDataOwner
         )
         guard !restore.flag.isSet,
               (try? LocalDataRestorer(modelContext: context).isStoreEmpty()) == true else { return }

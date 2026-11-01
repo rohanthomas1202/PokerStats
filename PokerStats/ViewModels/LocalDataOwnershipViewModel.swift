@@ -57,6 +57,14 @@ final class LocalDataOwnershipViewModel {
         isShowingDeleteConfirmation = false
     }
 
+    /// The sign-in sequence (#326): the owner check, then the sign-in backup.
+    /// In this order, data the check adopted (no owner before) is backed up,
+    /// and another account's data never is (#311).
+    func signedIn(_ userId: UUID, modelContext: ModelContext, authService: AuthService) {
+        signedIn(userId, modelContext: modelContext)
+        authService.backUpUnsentChangesAtSignIn(modelContext: modelContext)
+    }
+
     func signedOut() {
         userId = nil
         isChoicePending = false

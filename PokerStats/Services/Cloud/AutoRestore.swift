@@ -32,6 +32,10 @@ struct AutoRestore {
     /// Runs right before the restore writes; throws to stop it (account
     /// deletion running, or signed out). See `AuthService.checkRestoreCanWrite`.
     var checkCanWrite: @MainActor () throws -> Void = {}
+    /// Whose unsent-changes flag to clear once the restore writes: the store
+    /// then matches a backup, so nothing is unsent (#326). The app passes
+    /// `AuthService.localDataOwner`; nil skips it.
+    var owner: LocalDataOwner?
 
     private static let logger = Logger(subsystem: "com.rohanthomas.PokerStats", category: "AutoRestore")
 
@@ -69,6 +73,7 @@ struct AutoRestore {
             Self.logger.notice("Auto-restore skipped: local data appeared during the backup download")
             return .skippedDataAppearedDuringDownload
         }
+        owner?.hasUnsentChanges = false
         return .restored(sessionCount: payload.sessions.count)
     }
 }
