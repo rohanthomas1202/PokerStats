@@ -180,18 +180,66 @@ enum TrendCalculator {
         }
     }
 
-    /// Every how many bars an x-axis label is shown so at most `maxLabels` appear.
-    /// 1 means every bar gets a label. The first bar is always labeled.
-    static func plAxisLabelStride(bucketCount: Int, maxLabels: Int) -> Int {
-        guard bucketCount > 0, maxLabels > 0 else { return 1 }
-        return Swift.max(1, (bucketCount + maxLabels - 1) / maxLabels)
+    /// Which bars get an x-axis label, and whether the end labels sit inside the plot.
+    struct PLAxisLayout: Equatable {
+        /// Bar indices to label, in order. With two or more, the first and last bar are included.
+        let indices: [Int]
+        /// True when a label is wider than a bar. The first label then starts at its
+        /// bar's center and runs right, and the last ends at its bar's center, so
+        /// neither runs off the edge of the plot. Labels in between stay centered.
+        let insetsEnds: Bool
+
+        enum Alignment: Equatable { case leading, center, trailing }
+
+        /// How the label at `position` of `count` shown labels lines up with its bar.
+        func alignment(at position: Int, of count: Int) -> Alignment {
+            guard insetsEnds else { return .center }
+            if position == 0 { return .leading }
+            if position == count - 1 { return .trailing }
+            return .center
+        }
     }
 
-    /// The bar labels to show on the x-axis: every `plAxisLabelStride`th bar,
-    /// starting with the first. Each bar keeps its full range in VoiceOver.
-    static func plAxisLabels(_ buckets: [PLBucket], maxLabels: Int) -> [String] {
-        let stride = plAxisLabelStride(bucketCount: buckets.count, maxLabels: maxLabels)
-        return buckets.indices.filter { $0 % stride == 0 }.map { buckets[$0].rangeLabel }
+    /// Smallest gap, in points, between two x-axis labels.
+    static let plAxisLabelSpacing: Double = 8
+
+    /// The most x-axis labels that fit in `plotWidth` when each is `labelWidth`
+    /// wide (the widest label): evenly spread from the first bar to the last,
+    /// at least `plAxisLabelSpacing` apart, and none past either end of the plot.
+    /// Wider plots (landscape, iPad) get more labels. Falls back to one label on
+    /// the first bar when not even two fit, or before the plot is measured.
+    /// Each bar keeps its full range in VoiceOver whether or not it is labeled.
+    static func plAxisLayout(bucketCount: Int, plotWidth: Double, labelWidth: Double) -> PLAxisLayout {
+        guard bucketCount > 0 else { return PLAxisLayout(indices: [], insetsEnds: false) }
+        let barWidth = plotWidth / Double(bucketCount)
+        guard plotWidth > 0, plotWidth.isFinite, labelWidth.isFinite else {
+            return PLAxisLayout(indices: [0], insetsEnds: true)
+        }
+        let insetsEnds = labelWidth > barWidth
+        for count in Swift.stride(from: bucketCount, through: 2, by: -1) {
+            let step = Double(bucketCount - 1) / Double(count - 1)
+            let layout = PLAxisLayout(
+                indices: (0..<count).map { Int((Double($0) * step).rounded()) },
+                insetsEnds: insetsEnds
+            )
+            let spans = plAxisLabelSpans(layout, barWidth: barWidth, labelWidth: labelWidth)
+            let inside = spans[0].lower >= 0 && spans[spans.count - 1].upper <= plotWidth
+            let apart = zip(spans, spans.dropFirst()).allSatisfy { $1.lower - $0.upper >= plAxisLabelSpacing }
+            if inside && apart { return layout }
+        }
+        return PLAxisLayout(indices: [0], insetsEnds: insetsEnds)
+    }
+
+    /// Where each shown label starts and ends along the x-axis, in points.
+    static func plAxisLabelSpans(_ layout: PLAxisLayout, barWidth: Double, labelWidth: Double) -> [(lower: Double, upper: Double)] {
+        layout.indices.enumerated().map { position, index in
+            let center = (Double(index) + 0.5) * barWidth
+            switch layout.alignment(at: position, of: layout.indices.count) {
+            case .leading: return (center, center + labelWidth)
+            case .center: return (center - labelWidth / 2, center + labelWidth / 2)
+            case .trailing: return (center - labelWidth, center)
+            }
+        }
     }
 
     /// Smallest of baseWidth times 1, 2, 5, 10, 20, 50... that covers min...max in at most maxBuckets buckets.
