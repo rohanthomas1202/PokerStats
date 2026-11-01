@@ -34,6 +34,7 @@ struct BackupSettingsView: View {
                     }
                 }
                 .disabled(!viewModel.canBackup || ownership.backupsBlocked)
+                .accessibilityHint(ownership.backUpNowHint)
 
                 if ownership.backupsBlocked {
                     // Another account's stats are on this iPhone (#69).

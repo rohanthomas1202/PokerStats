@@ -38,7 +38,7 @@ struct LocalDataOwnershipPrompt: ViewModifier {
                     ownership.requestDelete()
                 }
             } message: {
-                Text(LocalDataOwnershipViewModel.choiceMessage)
+                Text(LocalDataOwnershipViewModel.choiceMessage(signedInAs: authService.userEmail))
             }
             .alert(LocalDataOwnershipViewModel.deleteTitle, isPresented: isShowingDeleteConfirmation) {
                 Button("Delete", role: .destructive) {

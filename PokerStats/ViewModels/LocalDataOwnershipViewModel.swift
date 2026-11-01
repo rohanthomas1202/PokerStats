@@ -28,14 +28,37 @@ final class LocalDataOwnershipViewModel {
     private static let logger = Logger(subsystem: "com.rohanthomas.PokerStats", category: "LocalDataOwnership")
 
     static let choiceTitle = "Stats From Another Account"
-    static let choiceMessage = "The stats on this iPhone were saved with a different account. Choose what to do with them. Nothing is backed up until you choose."
+    /// Names the signed-in account, so a person on a shared iPhone knows
+    /// which account "This Account" is (#262), and says that backing up
+    /// counts toward its kept backups (#264).
+    static func choiceMessage(signedInAs email: String?) -> String {
+        let saved = if let email, !email.isEmpty {
+            "The stats on this iPhone were saved with a different account than \(email)."
+        } else {
+            "The stats on this iPhone were saved with a different account."
+        }
+        return "\(saved) Backing them up to this account replaces its older backups over time, since only the \(BackupService.keptBackupCount) newest are kept. Nothing is backed up until you choose."
+    }
     static let backUpButton = "Back Up to This Account"
     static let keepLocalButton = "Keep on This iPhone Only"
     static let deleteButton = "Delete from This iPhone"
     static let deleteTitle = "Delete Stats from This iPhone?"
-    static let deleteMessage = "This permanently deletes the sessions and hands on this iPhone. Cloud backups aren't changed."
+    static let deleteMessage = "This permanently deletes the sessions, hands and settings on this iPhone. Cloud backups aren't changed."
     static let blockedMessage = UserFacingError.dataFromAnotherAccountMessage
     static let chooseButton = "Choose What to Do"
+
+    /// Presents the next alert once the current one has finished dismissing.
+    /// SwiftUI can drop an alert requested while another is still
+    /// dismissing (#262, as in #270). Tests run it at once.
+    @ObservationIgnored var afterAlertDismisses: @MainActor (@escaping @MainActor @Sendable () -> Void) -> Void = { present in
+        Task { @MainActor in
+            try? await Task.sleep(for: SettingsViewModel.alertDismissalDelay)
+            present()
+        }
+    }
+    /// Bumped on each sign-in, sign-out and alert change, so a late
+    /// presentation from an earlier state is dropped.
+    @ObservationIgnored private var presentation = 0
 
     /// True when backups are off for the signed-in account. Read from the
     /// stored owner, so a manual restore (which adopts the data) counts too.
@@ -45,9 +68,16 @@ final class LocalDataOwnershipViewModel {
         return !owner.allowsUpload(for: userId)
     }
 
+    /// VoiceOver hint on the dimmed Back Up Now, so the reason is heard
+    /// with the button rather than after it (#262). Empty when not blocked.
+    var backUpNowHint: String {
+        backupsBlocked ? Self.blockedMessage : ""
+    }
+
     /// Call when an account signs in, or is found signed in at launch.
     func signedIn(_ userId: UUID, modelContext: ModelContext) {
         self.userId = userId
+        presentation += 1
         // An unreadable store counts as not empty, so it is never adopted silently.
         let isEmpty = (try? LocalDataRestorer(modelContext: modelContext).isStoreEmpty()) ?? false
         let status = owner.resolve(signedIn: userId, storeIsEmpty: isEmpty)
@@ -67,6 +97,7 @@ final class LocalDataOwnershipViewModel {
 
     func signedOut() {
         userId = nil
+        presentation += 1
         isChoicePending = false
         isShowingChoice = false
         isShowingDeleteConfirmation = false
@@ -111,16 +142,28 @@ final class LocalDataOwnershipViewModel {
         isShowingChoice = false
     }
 
-    /// "Delete from This iPhone": asks to confirm.
+    /// "Delete from This iPhone": asks to confirm once the choice has closed.
     func requestDelete() {
         isShowingChoice = false
-        isShowingDeleteConfirmation = true
+        presentAfterDismissal { $0.isShowingDeleteConfirmation = true }
     }
 
     /// Cancel on the delete confirmation: back to the choice.
     func cancelDelete() {
         isShowingDeleteConfirmation = false
-        isShowingChoice = backupsBlocked
+        presentAfterDismissal { $0.isShowingChoice = true }
+    }
+
+    /// Runs `present` after the closing alert is gone, unless the account
+    /// changed, the data no longer needs a choice, or another alert change
+    /// came first.
+    private func presentAfterDismissal(_ present: @escaping @MainActor @Sendable (LocalDataOwnershipViewModel) -> Void) {
+        presentation += 1
+        let current = presentation
+        afterAlertDismisses {
+            guard self.presentation == current, self.backupsBlocked else { return }
+            present(self)
+        }
     }
 
     /// Deletes every local model, then the signed-in account owns the empty
@@ -132,7 +175,7 @@ final class LocalDataOwnershipViewModel {
             try LocalDataWiper(modelContext: modelContext).wipe()
         } catch {
             Self.logger.error("Deleting another account's local data failed: \(error.localizedDescription, privacy: .private)")
-            isShowingChoice = backupsBlocked
+            presentAfterDismissal { $0.isShowingChoice = true }
             return
         }
         owner.adopt(userId)
