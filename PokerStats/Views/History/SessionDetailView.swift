@@ -16,13 +16,15 @@ struct SessionDetailView: View {
     /// when it rounds to zero. An ROI that can't be calculated (not finite) is
     /// the not-available case: it shows "--" and reads "Not available". The row
     /// is one VoiceOver element, so the label starts with the title.
+    nonisolated static let roiTitle = "Session ROI"
+
     nonisolated static func roiDisplay(netProfit: Double, totalInvested: Double) -> (text: String, result: CurrencyFormatter.Result, accessibilityLabel: String) {
         let roi = (netProfit / totalInvested) * 100
         guard roi.isFinite else {
-            return ("--", .breakEven, "Session ROI, Not available")
+            return (CurrencyFormatter.formatSignedPercent(roi), .breakEven, "\(roiTitle), Not available")
         }
         let text = CurrencyFormatter.formatSignedPercent(roi)
-        return (text, CurrencyFormatter.percentResult(roi), "Session ROI, \(text)")
+        return (text, CurrencyFormatter.percentResult(roi), "\(roiTitle), \(text)")
     }
 
     var body: some View {
@@ -210,7 +212,7 @@ struct SessionDetailView: View {
                 if session.status == .completed && session.totalInvested > 0 {
                     let roi = Self.roiDisplay(netProfit: session.netProfit, totalInvested: session.totalInvested)
                     HStack {
-                        Text("Session ROI")
+                        Text(Self.roiTitle)
                             .font(.caption)
                             .foregroundStyle(Color.pokerTextSecondary)
                         Spacer()
