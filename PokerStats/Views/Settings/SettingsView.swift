@@ -4,6 +4,7 @@ import SwiftData
 struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(AuthService.self) private var authService
+    @Environment(LocalDataOwnershipViewModel.self) private var ownership
     @State private var viewModel = SettingsViewModel()
     @State private var authViewModel: AuthViewModel?
     @State private var isShowingDeleteAccount = false
@@ -172,6 +173,10 @@ struct SettingsView: View {
             if authViewModel == nil {
                 authViewModel = AuthViewModel(authService: authService)
             }
+        }
+        .onChange(of: ownership.localDataDeletions) { _, _ in
+            // "Delete from This iPhone" wiped the settings too (#264).
+            viewModel.loadSettings(from: modelContext)
         }
         .onChange(of: viewModel.defaultBuyIn) { _, _ in
             viewModel.saveSettings(to: modelContext)

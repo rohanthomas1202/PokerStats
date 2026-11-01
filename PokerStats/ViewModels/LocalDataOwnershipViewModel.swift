@@ -17,8 +17,13 @@ final class LocalDataOwnershipViewModel {
     @ObservationIgnored var owner = LocalDataOwner.standard
     /// The signed-in account; nil while signed out.
     private(set) var userId: UUID?
-    /// Bumped on each change to `owner`, which isn't observable itself.
-    private var ownerRevision = 0
+    /// Bumped on each change to `owner`, which isn't observable itself,
+    /// including changes made elsewhere: Delete All Data, a manual restore,
+    /// a backup (#264).
+    private(set) var ownerRevision = 0
+    /// Bumped when "Delete from This iPhone" wiped the store, so Settings
+    /// shows the default buy-in, stakes and game again (#264).
+    private(set) var localDataDeletions = 0
     /// The signed-in account still has to choose.
     @ObservationIgnored private var isChoicePending = false
     /// True while the sign-in sheet is up; the choice shows once it closes,
@@ -46,6 +51,30 @@ final class LocalDataOwnershipViewModel {
     static let deleteMessage = "This permanently deletes the sessions, hands and settings on this iPhone. Cloud backups aren't changed."
     static let blockedMessage = UserFacingError.dataFromAnotherAccountMessage
     static let chooseButton = "Choose What to Do"
+
+    init() {
+        // Not removed: the block holds self weakly, and the app's instance
+        // lives as long as the app, as AuthService's observer does.
+        NotificationCenter.default.addObserver(
+            forName: LocalDataOwner.didChangeNotification,
+            object: nil,
+            queue: nil
+        ) { [weak self] notification in
+            guard let defaults = notification.object as AnyObject? else { return }
+            let changed = ObjectIdentifier(defaults)
+            if Thread.isMainThread {
+                MainActor.assumeIsolated { self?.ownerDidChange(in: changed) }
+            } else {
+                Task { @MainActor in self?.ownerDidChange(in: changed) }
+            }
+        }
+    }
+
+    /// Only this view model's store counts; tests each use their own.
+    private func ownerDidChange(in defaults: ObjectIdentifier) {
+        guard defaults == ObjectIdentifier(owner.defaults) else { return }
+        ownerRevision += 1
+    }
 
     /// Presents the next alert once the current one has finished dismissing.
     /// SwiftUI can drop an alert requested while another is still
@@ -81,6 +110,7 @@ final class LocalDataOwnershipViewModel {
         // An unreadable store counts as not empty, so it is never adopted silently.
         let isEmpty = (try? LocalDataRestorer(modelContext: modelContext).isStoreEmpty()) ?? false
         let status = owner.resolve(signedIn: userId, storeIsEmpty: isEmpty)
+        // resolve may not change the owner; userId changed either way.
         ownerRevision += 1
         isChoicePending = status == .needsChoice
         isShowingChoice = isChoicePending && !isPromptDeferred
@@ -127,7 +157,6 @@ final class LocalDataOwnershipViewModel {
     func backUpToThisAccount(backUp: () -> Void) {
         guard let userId else { return }
         owner.adopt(userId)
-        ownerRevision += 1
         isChoicePending = false
         isShowingChoice = false
         backUp()
@@ -137,7 +166,6 @@ final class LocalDataOwnershipViewModel {
     func keepOnThisDeviceOnly() {
         guard let userId else { return }
         owner.keepLocalOnly(for: userId)
-        ownerRevision += 1
         isChoicePending = false
         isShowingChoice = false
     }
@@ -179,8 +207,8 @@ final class LocalDataOwnershipViewModel {
             return
         }
         owner.adopt(userId)
-        ownerRevision += 1
         isChoicePending = false
+        localDataDeletions += 1
         LocalDataWiper.endLiveActivities()
         WidgetCenter.shared.reloadAllTimelines()
     }

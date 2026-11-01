@@ -10,6 +10,10 @@ struct LocalDataOwner {
     static let ownerKey = "localData.ownerUserId"
     static let localOnlyKey = "localData.localOnlyUserId"
     static let unsentChangesKey = "localData.hasUnsentChanges"
+    /// Posted after the owner or the keep-local choice changes, with the
+    /// `UserDefaults` it was stored in as the object, so
+    /// `LocalDataOwnershipViewModel` re-reads it after every change (#264).
+    static let didChangeNotification = Notification.Name("LocalDataOwner.didChange")
 
     /// What a sign-in found.
     enum Status: Equatable {
@@ -38,6 +42,12 @@ struct LocalDataOwner {
     /// Runs when `userId` signs in, or is found signed in at launch. The same
     /// account, a device whose data has no owner yet, and an empty store all
     /// keep today's behavior: the account owns the data.
+    ///
+    /// A device updated from a build without an owner key has no owner, so
+    /// the first account to sign in after the update takes the data without
+    /// being asked, even if another account used it before. This happens once
+    /// per device and can't be detected, since the earlier build stored no
+    /// owner (#264); the release notes say so.
     @discardableResult
     func resolve(signedIn userId: UUID, storeIsEmpty: Bool) -> Status {
         if ownerId == nil || ownerId == userId || storeIsEmpty {
@@ -69,11 +79,13 @@ struct LocalDataOwner {
         }
         defaults.set(userId.uuidString, forKey: Self.ownerKey)
         defaults.removeObject(forKey: Self.localOnlyKey)
+        postChange()
     }
 
     /// Keeps the current owner and blocks uploads while `userId` is signed in.
     func keepLocalOnly(for userId: UUID) {
         defaults.set(userId.uuidString, forKey: Self.localOnlyKey)
+        postChange()
     }
 
     /// No local data left, so no owner and nothing unsent.
@@ -81,6 +93,11 @@ struct LocalDataOwner {
         defaults.removeObject(forKey: Self.ownerKey)
         defaults.removeObject(forKey: Self.localOnlyKey)
         defaults.removeObject(forKey: Self.unsentChangesKey)
+        postChange()
+    }
+
+    private func postChange() {
+        NotificationCenter.default.post(name: Self.didChangeNotification, object: defaults)
     }
 
     private func uuid(forKey key: String) -> UUID? {

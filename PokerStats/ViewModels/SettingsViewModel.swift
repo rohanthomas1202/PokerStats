@@ -51,12 +51,17 @@ final class SettingsViewModel {
     /// Bumped on each Delete All Data, so a late result from an earlier try is ignored.
     @ObservationIgnored private var deleteAllDataAttempt = 0
 
+    /// With no saved Settings (a new install, or after "Delete from This
+    /// iPhone" wiped them), shows the defaults instead of keeping the
+    /// previous values, which the next edit would save back (#264).
     func loadSettings(from context: ModelContext) {
         let descriptor = FetchDescriptor<Settings>()
         if let settings = try? context.fetch(descriptor).first {
             defaultBuyIn = String(Int(settings.defaultBuyIn))
             defaultStakes = settings.defaultStakes
             defaultGameType = settings.defaultGameType
+        } else {
+            resetToDefaults()
         }
     }
 
