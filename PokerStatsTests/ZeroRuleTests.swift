@@ -146,14 +146,24 @@ struct ZeroRuleTests {
         #expect(SessionDetailView.roiDisplay(netProfit: 12.5, totalInvested: 200).text == "+6.2%")
     }
 
-    /// VoiceOver says "Not available" instead of "--" for an ROI that can't be
-    /// calculated, and the visible text otherwise (#313).
+    /// The Session ROI row is one VoiceOver element: the title, then the visible
+    /// value, or "Not available" for an ROI that can't be calculated (#313, #322).
     @Test func sessionROI_accessibilityLabel() {
-        let notFinite = SessionDetailView.roiDisplay(netProfit: .infinity, totalInvested: 100)
-        #expect(notFinite.text == "--")
-        #expect(SessionDetailView.roiAccessibilityLabel(notFinite.text) == "Not available")
         let profit = SessionDetailView.roiDisplay(netProfit: 50, totalInvested: 200)
-        #expect(SessionDetailView.roiAccessibilityLabel(profit.text) == "+25.0%")
+        #expect(profit.text == "+25.0%")
+        #expect(profit.accessibilityLabel == "Session ROI, +25.0%")
+        let loss = SessionDetailView.roiDisplay(netProfit: -300, totalInvested: 200)
+        #expect(loss.accessibilityLabel == "Session ROI, -150.0%")
+        let zero = SessionDetailView.roiDisplay(netProfit: 0, totalInvested: 100)
+        #expect(zero.text == "0.0%")
+        #expect(zero.result == .breakEven)
+        #expect(zero.accessibilityLabel == "Session ROI, 0.0%")
+        for netProfit in [Double.infinity, -.infinity, .nan] {
+            let notAvailable = SessionDetailView.roiDisplay(netProfit: netProfit, totalInvested: 100)
+            #expect(notAvailable.text == "--", "\(netProfit)")
+            #expect(notAvailable.result == .breakEven, "\(netProfit)")
+            #expect(notAvailable.accessibilityLabel == "Session ROI, Not available", "\(netProfit)")
+        }
     }
 
     // MARK: - Hourly rates and ROI (#308)

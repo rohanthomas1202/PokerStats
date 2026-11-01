@@ -11,17 +11,18 @@ struct SessionDetailView: View {
         viewModel ?? SessionDetailViewModel(session: session, modelContext: modelContext)
     }
 
-    /// The Session ROI row's text and result (#308): net profit over amount
-    /// invested, one decimal, "0.0%" in the secondary color when it rounds to zero.
-    nonisolated static func roiDisplay(netProfit: Double, totalInvested: Double) -> (text: String, result: CurrencyFormatter.Result) {
+    /// The Session ROI row's text, result and VoiceOver label (#308, #322): net
+    /// profit over amount invested, one decimal, "0.0%" in the secondary color
+    /// when it rounds to zero. An ROI that can't be calculated (not finite) is
+    /// the not-available case: it shows "--" and reads "Not available". The row
+    /// is one VoiceOver element, so the label starts with the title.
+    nonisolated static func roiDisplay(netProfit: Double, totalInvested: Double) -> (text: String, result: CurrencyFormatter.Result, accessibilityLabel: String) {
         let roi = (netProfit / totalInvested) * 100
-        return (CurrencyFormatter.formatSignedPercent(roi), CurrencyFormatter.percentResult(roi))
-    }
-
-    /// What VoiceOver says for the Session ROI value: "Not available" when the
-    /// row shows "--", otherwise the visible text (#313).
-    nonisolated static func roiAccessibilityLabel(_ text: String) -> String {
-        text == "--" ? "Not available" : text
+        guard roi.isFinite else {
+            return ("--", .breakEven, "Session ROI, Not available")
+        }
+        let text = CurrencyFormatter.formatSignedPercent(roi)
+        return (text, CurrencyFormatter.percentResult(roi), "Session ROI, \(text)")
     }
 
     var body: some View {
@@ -217,8 +218,9 @@ struct SessionDetailView: View {
                             .font(.subheadline)
                             .fontWeight(.bold)
                             .foregroundStyle(Color.pokerResult(roi.result))
-                            .accessibilityLabel(Text(Self.roiAccessibilityLabel(roi.text)))
                     }
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(Text(roi.accessibilityLabel))
                     .padding(.top, 4)
                 }
             } else {
