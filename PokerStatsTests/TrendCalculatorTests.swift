@@ -266,46 +266,96 @@ struct TrendCalculatorTests {
 
     // MARK: - P&L x-axis labels
 
-    @Test func plAxisLabelStride_fitsWithinMaxLabels() {
-        #expect(TrendCalculator.plAxisLabelStride(bucketCount: 20, maxLabels: 6) == 4)  // 5 labels
-        #expect(TrendCalculator.plAxisLabelStride(bucketCount: 20, maxLabels: 4) == 5)  // 4 labels
-        #expect(TrendCalculator.plAxisLabelStride(bucketCount: 20, maxLabels: 2) == 10) // 2 labels
-        #expect(TrendCalculator.plAxisLabelStride(bucketCount: 7, maxLabels: 6) == 2)   // 4 labels
-        #expect(TrendCalculator.plAxisLabelStride(bucketCount: 4, maxLabels: 6) == 1)
-        #expect(TrendCalculator.plAxisLabelStride(bucketCount: 0, maxLabels: 6) == 1)
-        #expect(TrendCalculator.plAxisLabelStride(bucketCount: 5, maxLabels: 0) == 1)
-        for count in 1...TrendCalculator.maxPLBuckets {
-            for maxLabels in 1...8 {
-                let stride = TrendCalculator.plAxisLabelStride(bucketCount: count, maxLabels: maxLabels)
-                let shown = (count + stride - 1) / stride
-                #expect(shown <= maxLabels, "\(count) bars, max \(maxLabels): \(shown) labels")
-            }
-        }
+    private func axisLabels(_ buckets: [TrendCalculator.PLBucket], plotWidth: Double, labelWidth: Double) -> [String] {
+        TrendCalculator.plAxisLayout(bucketCount: buckets.count, plotWidth: plotWidth, labelWidth: labelWidth)
+            .indices.map { buckets[$0].rangeLabel }
     }
 
-    @Test func plAxisLabels_keepsFirstAndEveryStrideth() {
+    @Test func plAxisLayout_labelsFirstAndLastBar() {
         let s1 = TestHelpers.completedSession(buyIn: 100, cashOut: 100)  // +$0 bar
         let s2 = TestHelpers.completedSession(buyIn: 100, cashOut: 2050) // +$1,950, +$1,900 bar
         let result = TrendCalculator.sessionPLDistribution(sessions: [s1, s2])
         #expect(result.count == 20)
-        #expect(TrendCalculator.plAxisLabels(result, maxLabels: 4)
-            == ["+$0", "+$500", "+$1,000", "+$1,500"])
-        #expect(TrendCalculator.plAxisLabels(result, maxLabels: 2) == ["+$0", "+$1,000"])
-        #expect(TrendCalculator.plAxisLabels(result, maxLabels: 20) == result.map(\.rangeLabel))
-        #expect(TrendCalculator.plAxisLabels([], maxLabels: 4).isEmpty)
+        // Room for two labels: both ends of the range, not +$0 and +$1,000.
+        #expect(axisLabels(result, plotWidth: 280, labelWidth: 89) == ["+$0", "+$1,900"])
+        #expect(axisLabels(result, plotWidth: 280, labelWidth: 60) == ["+$0", "+$1,000", "+$1,900"])
+        #expect(axisLabels(result, plotWidth: 280, labelWidth: 40)
+            == ["+$0", "+$500", "+$1,000", "+$1,400", "+$1,900"])
+        // Plenty of room: every bar is labeled.
+        #expect(axisLabels(result, plotWidth: 2000, labelWidth: 40) == result.map(\.rangeLabel))
         // Thinning the axis leaves every bar's VoiceOver range in place.
         #expect(result[1].accessibilityLabel == "+$100 to under +$200, 0 sessions")
     }
 
-    @Test func plAxisMaxLabels_thinsOnlyAboveDefaultSizes() {
-        #expect(TrendCalculator.plAxisMaxLabels(for: .xSmall) == nil)
-        #expect(TrendCalculator.plAxisMaxLabels(for: .large) == nil)
-        #expect(TrendCalculator.plAxisMaxLabels(for: .xLarge) == 6)
-        #expect(TrendCalculator.plAxisMaxLabels(for: .xxxLarge) == 6)
-        #expect(TrendCalculator.plAxisMaxLabels(for: .accessibility1) == 4)
-        #expect(TrendCalculator.plAxisMaxLabels(for: .accessibility2) == 4)
-        #expect(TrendCalculator.plAxisMaxLabels(for: .accessibility3) == 2)
-        #expect(TrendCalculator.plAxisMaxLabels(for: .accessibility5) == 2)
+    @Test func plAxisLayout_widerPlotShowsMoreLabels() {
+        // Same text size on a phone in portrait, then landscape or iPad.
+        let phone = TrendCalculator.plAxisLayout(bucketCount: 20, plotWidth: 280, labelWidth: 60)
+        let wide = TrendCalculator.plAxisLayout(bucketCount: 20, plotWidth: 700, labelWidth: 60)
+        #expect(phone.indices == [0, 10, 19])
+        #expect(wide.indices == [0, 3, 5, 8, 11, 14, 16, 19])
+    }
+
+    @Test func plAxisLayout_fiveDigitLabelsAtAX5DropToOneLabel() {
+        // "+$20,000" in caption2 at AX5 (40pt) is about 179pt wide; an iPhone
+        // plot is about 280pt. Two such labels can't sit apart inside the plot,
+        // so only the first bar is labeled, starting at its center and running right.
+        let ax5 = TrendCalculator.plAxisLayout(bucketCount: 20, plotWidth: 280, labelWidth: 179)
+        #expect(ax5.indices == [0])
+        #expect(ax5.insetsEnds)
+        #expect(ax5.alignment(at: 0, of: 1) == .leading)
+        let span = TrendCalculator.plAxisLabelSpans(ax5, barWidth: 14, labelWidth: 179)
+        #expect(span[0].lower == 7 && span[0].upper == 186)
+        // Wider plot at the same size: both ends again, pulled inside the plot.
+        let wide = TrendCalculator.plAxisLayout(bucketCount: 20, plotWidth: 700, labelWidth: 179)
+        #expect(wide.indices == [0, 10, 19])
+        #expect(wide.alignment(at: 0, of: 3) == .leading)
+        #expect(wide.alignment(at: 1, of: 3) == .center)
+        #expect(wide.alignment(at: 2, of: 3) == .trailing)
+    }
+
+    @Test func plAxisLayout_shownLabelsNeverOverlapOrLeaveThePlot() {
+        // Counts the real output and checks its geometry from first principles:
+        // bar i is centered at (i + 0.5) * plotWidth / bars.
+        for bars in 1...TrendCalculator.maxPLBuckets {
+            for plotWidth in [120.0, 280, 340, 700, 1000] {
+                for labelWidth in [10.0, 40, 89, 130, 179, 400] {
+                    let layout = TrendCalculator.plAxisLayout(bucketCount: bars, plotWidth: plotWidth, labelWidth: labelWidth)
+                    let shown = layout.indices
+                    let context = "\(bars) bars, plot \(plotWidth), label \(labelWidth): \(shown)"
+                    #expect(shown.first == 0, "\(context)")
+                    #expect(zip(shown, shown.dropFirst()).allSatisfy { $0 < $1 }, "\(context)")
+                    guard shown.count > 1 else { continue }
+                    #expect(shown.last == bars - 1, "\(context)")
+                    let barWidth = plotWidth / Double(bars)
+                    let pullIn = labelWidth > barWidth
+                    let spans = shown.enumerated().map { position, index -> (Double, Double) in
+                        let center = (Double(index) + 0.5) * barWidth
+                        if pullIn && position == 0 { return (center, center + labelWidth) }
+                        if pullIn && position == shown.count - 1 { return (center - labelWidth, center) }
+                        return (center - labelWidth / 2, center + labelWidth / 2)
+                    }
+                    #expect(spans[0].0 >= 0 && spans[spans.count - 1].1 <= plotWidth, "\(context)")
+                    for (left, right) in zip(spans, spans.dropFirst()) {
+                        #expect(right.0 - left.1 >= TrendCalculator.plAxisLabelSpacing, "\(context)")
+                    }
+                }
+            }
+        }
+    }
+
+    @Test func plAxisLayout_emptyOrUnmeasured() {
+        #expect(TrendCalculator.plAxisLayout(bucketCount: 0, plotWidth: 280, labelWidth: 40).indices.isEmpty)
+        // Before the plot has a width, show only the first bar's label.
+        #expect(TrendCalculator.plAxisLayout(bucketCount: 20, plotWidth: 0, labelWidth: 40).indices == [0])
+        #expect(TrendCalculator.plAxisLayout(bucketCount: 1, plotWidth: 280, labelWidth: 40).indices == [0])
+        #expect(TrendCalculator.plAxisLayout(bucketCount: 20, plotWidth: 280, labelWidth: .infinity).indices == [0])
+    }
+
+    @Test func plAxisThinsLabels_onlyAboveDefaultSizes() {
+        #expect(!TrendCalculator.plAxisThinsLabels(at: .xSmall))
+        #expect(!TrendCalculator.plAxisThinsLabels(at: .large))
+        #expect(TrendCalculator.plAxisThinsLabels(at: .xLarge))
+        #expect(TrendCalculator.plAxisThinsLabels(at: .accessibility5))
     }
 
     @Test func plDistribution_onlyActiveSessions_returnsEmpty() {

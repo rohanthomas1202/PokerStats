@@ -1,11 +1,13 @@
 import SwiftUI
 import SwiftData
 import Charts
+import UIKit
 
 struct TrendsView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel = TrendsViewModel()
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @State private var plPlotWidth: Double = 0
 
     var body: some View {
         NavigationStack {
@@ -231,7 +233,8 @@ struct TrendsView: View {
     // MARK: - P&L Distribution Chart
 
     private var plDistributionChart: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        let axisLayout = plAxisLayout
+        return VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Session P&L Distribution")
                     .font(.headline)
@@ -265,9 +268,9 @@ struct TrendsView: View {
                 }
             }
             .chartXAxis {
-                if let maxLabels = TrendCalculator.plAxisMaxLabels(for: dynamicTypeSize) {
-                    AxisMarks(values: TrendCalculator.plAxisLabels(viewModel.plDistribution, maxLabels: maxLabels)) { value in
-                        AxisValueLabel {
+                if TrendCalculator.plAxisThinsLabels(at: dynamicTypeSize) {
+                    AxisMarks(values: axisLayout.indices.map { viewModel.plDistribution[$0].rangeLabel }) { value in
+                        AxisValueLabel(anchor: Self.anchor(axisLayout.alignment(at: value.index, of: value.count))) {
                             if let v = value.as(String.self) {
                                 Text(v)
                                     .font(.caption2)
@@ -287,23 +290,45 @@ struct TrendsView: View {
                     }
                 }
             }
+            .chartPlotStyle { plot in
+                plot.onGeometryChange(for: Double.self) { Double($0.size.width) } action: { plPlotWidth = $0 }
+            }
             .frame(height: 200)
         }
         .padding()
         .pokerCard(cornerRadius: 16)
     }
+
+    /// Which bars get an x-axis label at the current plot width and text size.
+    private var plAxisLayout: TrendCalculator.PLAxisLayout {
+        let font = UIFont.preferredFont(
+            forTextStyle: .caption2,
+            compatibleWith: UITraitCollection(preferredContentSizeCategory: UIContentSizeCategory(dynamicTypeSize))
+        )
+        let labelWidth = viewModel.plDistribution
+            .map { Double(($0.rangeLabel as NSString).size(withAttributes: [.font: font]).width) }
+            .max() ?? 0
+        return TrendCalculator.plAxisLayout(
+            bucketCount: viewModel.plDistribution.count,
+            plotWidth: plPlotWidth,
+            labelWidth: labelWidth.rounded(.up)
+        )
+    }
+
+    private static func anchor(_ alignment: TrendCalculator.PLAxisLayout.Alignment) -> UnitPoint? {
+        switch alignment {
+        case .leading: .topLeading
+        case .center: nil
+        case .trailing: .topTrailing
+        }
+    }
 }
 
 extension TrendCalculator {
-    /// Most P&L x-axis labels that fit at a Dynamic Type size, or nil to leave
-    /// the axis as it is at default sizes. Larger text gets fewer labels so
-    /// they don't overlap; VoiceOver still reads each bar's full range.
-    static func plAxisMaxLabels(for size: DynamicTypeSize) -> Int? {
-        switch size {
-        case ...DynamicTypeSize.large: nil
-        case .xLarge, .xxLarge, .xxxLarge: 6
-        case .accessibility1, .accessibility2: 4
-        default: 2
-        }
+    /// Whether the P&L x-axis shows only the labels that fit. At default sizes
+    /// (Large and below) the axis is left to Swift Charts as before; above that,
+    /// `plAxisLayout` picks labels by measured width so they don't overlap or clip.
+    static func plAxisThinsLabels(at size: DynamicTypeSize) -> Bool {
+        size > .large
     }
 }
