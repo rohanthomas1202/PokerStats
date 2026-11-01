@@ -452,6 +452,48 @@ struct SessionRefreshTests {
         #expect(auth.isAuthenticated)
         #expect(auth.userEmail == "b@example.com")
     }
+
+    /// A request's refresh for the old session is refused with `user_banned`
+    /// after a new sign-in has landed. `accessToken` signs out locally for
+    /// that code only while the stored session is still the one the request
+    /// started with, so the new session is kept (#223).
+    @Test func signInDuringBannedRequestRefresh_keepsTheNewSession() async throws {
+        let storage = signedInStorage(expired: false)
+        let server = FakeServer()
+        let gate = TransportGate()
+        let sut = testClient(storage, server: server) { request, _ in
+            if request.isRefresh {
+                await gate.wait()
+                return .status(403, #"{"code":"user_banned","message":"User is banned"}"#)
+            }
+            return .status(200, sessionResponseBody(refreshToken: "b-refresh", email: "b@example.com"))
+        }
+        let auth = AuthService(client: sut)
+        await observe(auth)
+
+        // The old access token expires, so the request refreshes it.
+        storage.seed(testSession(expired: true))
+        let request = Task { try await SupabaseClient.accessToken(sut.auth) }
+        await waitUntil("refresh sent") { server.refreshCount == 1 }
+
+        try await auth.signInWithApple(identityToken: Data("id.token".utf8), rawNonce: "raw-nonce")
+        #expect(storage.storedSession?.refreshToken == "b-refresh")
+        gate.open()
+
+        do {
+            _ = try await request.value
+            Issue.record("expected a throw")
+        } catch {
+            guard case SupabaseError.sessionExpired = error else {
+                Issue.record("expected sessionExpired, got \(error)")
+                return
+            }
+        }
+        #expect(server.refreshCount == 1)
+        #expect(storage.storedSession?.refreshToken == "b-refresh", "the banned refresh does not sign out the new session")
+        #expect(auth.isAuthenticated)
+        #expect(auth.userEmail == "b@example.com")
+    }
 }
 
 struct RefreshCase: Sendable, CustomTestStringConvertible {

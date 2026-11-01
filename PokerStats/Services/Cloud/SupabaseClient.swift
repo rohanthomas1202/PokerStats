@@ -119,6 +119,11 @@ final class SupabaseClient: Sendable {
         } catch let error as AuthError where isAccountRejected(error) {
             // The SDK keeps the session for these codes. Sign out locally, but
             // only if no one signed in since this request started.
+            //
+            // This guard is check-then-act across one actor hop (into the
+            // SDK's sign-out), so a sign-in finishing inside that window could
+            // be removed. Theoretical; revisit if sign-out ever moves behind a
+            // real await.
             if let storedAtStart, auth.currentSession?.refreshToken == storedAtStart.refreshToken {
                 try? await auth.signOut(scope: .local)
             }
@@ -133,6 +138,10 @@ final class SupabaseClient: Sendable {
     private static func isAccountRejected(_ error: AuthError) -> Bool {
         guard case .api(_, let code, let data, _) = error else { return false }
         if code == .userBanned || code == .userNotFound { return true }
+        // A bare 400 `invalid_grant` with no Supabase error code also counts,
+        // so the user is signed out on their next request. That matches OAuth
+        // semantics (the refresh grant is invalid); noted in case a proxy ever
+        // returns it for another reason.
         struct OAuthError: Decodable { let error: String? }
         return (try? JSONDecoder().decode(OAuthError.self, from: data))?.error == "invalid_grant"
     }
