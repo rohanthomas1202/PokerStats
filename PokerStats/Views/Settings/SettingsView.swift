@@ -90,10 +90,15 @@ struct SettingsView: View {
             // MARK: - Live Activity Section
             Section {
                 Toggle("Show on Lock Screen", isOn: $showOnLockScreen)
+                    .onChange(of: showOnLockScreen) { _, newValue in
+                        LiveActivityPreference.handleToggleChange(to: newValue) {
+                            LocalDataWiper.endLiveActivities()
+                        }
+                    }
             } header: {
                 Text("Live Activity")
             } footer: {
-                Text("Shows the session timer, hands, and amount invested on the Lock Screen and in the Dynamic Island. Applies to the next session you start.")
+                Text("Shows the session timer, hands, and amount invested on the Lock Screen and in the Dynamic Island.")
             }
 
             // MARK: - Data Section

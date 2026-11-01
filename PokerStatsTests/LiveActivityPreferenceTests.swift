@@ -36,4 +36,16 @@ struct LiveActivityPreferenceTests {
         #expect(LiveActivityPreference.shouldStart(showOnLockScreen: true, activitiesEnabled: true))
         #expect(!LiveActivityPreference.shouldStart(showOnLockScreen: true, activitiesEnabled: false))
     }
+
+    @Test func toggleOff_endsRunningActivity() {
+        var endCalls = 0
+        LiveActivityPreference.handleToggleChange(to: false) { endCalls += 1 }
+        #expect(endCalls == 1)
+    }
+
+    @Test func toggleOn_doesNotEndActivity() {
+        var endCalls = 0
+        LiveActivityPreference.handleToggleChange(to: true) { endCalls += 1 }
+        #expect(endCalls == 0)
+    }
 }

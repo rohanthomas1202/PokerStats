@@ -21,4 +21,12 @@ struct LiveActivityPreference {
     static func shouldStart(showOnLockScreen: Bool, activitiesEnabled: Bool) -> Bool {
         showOnLockScreen && activitiesEnabled
     }
+
+    /// Turning the toggle off ends any running Live Activity right away.
+    /// Turning it back on does nothing until the next session starts.
+    static func handleToggleChange(to showOnLockScreen: Bool, endLiveActivities: () -> Void) {
+        if !showOnLockScreen {
+            endLiveActivities()
+        }
+    }
 }
