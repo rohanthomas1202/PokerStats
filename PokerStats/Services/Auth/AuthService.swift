@@ -248,19 +248,18 @@ final class AuthService {
 
     /// At sign-in, after the owner check: when the signed-in account owns
     /// the local data and changes are unsent, runs one backup (#293). Not
-    /// while account deletion runs (#61). An empty store is skipped so the
-    /// sign-in backup never races the auto-restore with an empty backup; its
-    /// changes stay unsent for the next session's backup (#311).
+    /// while account deletion runs (#61). Use
+    /// `LocalDataOwnershipViewModel.signedIn(_:modelContext:authService:)`,
+    /// which runs the owner check first (#326).
     func backUpUnsentChangesAtSignIn(modelContext: ModelContext) {
-        guard canBackUpUnsentChangesAtSignIn,
-              (try? LocalDataRestorer(modelContext: modelContext).isStoreEmpty()) == false else { return }
+        guard canBackUpUnsentChangesAtSignIn(modelContext: modelContext) else { return }
         scheduleBackup(modelContext: modelContext)
     }
 
     /// `backUpUnsentChangesAtSignIn(modelContext:)` with the backup work
-    /// supplied, for tests.
-    func backUpUnsentChangesAtSignIn(_ backup: @escaping @MainActor () async throws -> BackupMetadata) {
-        guard canBackUpUnsentChangesAtSignIn else { return }
+    /// supplied, for tests. Same checks, including the empty store.
+    func backUpUnsentChangesAtSignIn(modelContext: ModelContext, _ backup: @escaping @MainActor () async throws -> BackupMetadata) {
+        guard canBackUpUnsentChangesAtSignIn(modelContext: modelContext) else { return }
         scheduleBackup(backup)
     }
 
@@ -270,9 +269,13 @@ final class AuthService {
     /// another account is never uploaded: its owner stays, and an empty store
     /// taken from another account had its flag cleared on adoption.
     /// Scheduling clears the flag, so a repeated sign-in event runs nothing.
-    private var canBackUpUnsentChangesAtSignIn: Bool {
-        guard hasUnsentChanges, !isCloudWorkSuspended, isAuthenticated, let userId else { return false }
-        return localDataOwner.ownerId == userId
+    /// An empty (or unreadable) store is skipped so the sign-in backup never
+    /// races the auto-restore with an empty backup; its changes stay unsent
+    /// for the next session's backup (#311).
+    private func canBackUpUnsentChangesAtSignIn(modelContext: ModelContext) -> Bool {
+        guard hasUnsentChanges, !isCloudWorkSuspended, isAuthenticated, let userId,
+              localDataOwner.ownerId == userId else { return false }
+        return (try? LocalDataRestorer(modelContext: modelContext).isStoreEmpty()) == false
     }
 
     /// Runs a manual backup, a manual restore, or the auto-restore so that

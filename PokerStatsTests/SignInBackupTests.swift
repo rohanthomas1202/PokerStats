@@ -27,6 +27,23 @@ private final class Log {
 @MainActor
 struct SignInBackupTests {
     private let storage = InMemoryAuthStorage()
+    /// A store with one session, so the sign-in backup has something to send.
+    private let container: ModelContainer
+
+    init() throws {
+        container = try TestHelpers.createContainer()
+        container.mainContext.insert(Session(location: "Local session"))
+        try container.mainContext.save()
+    }
+
+    private var context: ModelContext { container.mainContext }
+
+    /// The ownership view model on the test's owner store.
+    private func ownershipModel(_ owner: LocalDataOwner) -> LocalDataOwnershipViewModel {
+        let ownership = LocalDataOwnershipViewModel()
+        ownership.owner = owner
+        return ownership
+    }
 
     private func freshOwner() -> LocalDataOwner {
         LocalDataOwner(defaults: ThrowawayDefaults("SignInBackupTests"))
@@ -97,7 +114,7 @@ struct SignInBackupTests {
         #expect(auth.hasUnsentChanges)
 
         signIn(auth)
-        auth.backUpUnsentChangesAtSignIn {
+        auth.backUpUnsentChangesAtSignIn(modelContext: context) {
             log.events.append("sign-in backup")
             return metadata()
         }
@@ -105,7 +122,7 @@ struct SignInBackupTests {
         #expect(!auth.hasUnsentChanges)
 
         // A second sign-in event with nothing new to send runs nothing.
-        auth.backUpUnsentChangesAtSignIn {
+        auth.backUpUnsentChangesAtSignIn(modelContext: context) {
             log.events.append("sign-in backup")
             return metadata()
         }
@@ -121,7 +138,7 @@ struct SignInBackupTests {
 
         signIn(auth)
         let log = Log()
-        auth.backUpUnsentChangesAtSignIn {
+        auth.backUpUnsentChangesAtSignIn(modelContext: context) {
             log.events.append("sign-in backup")
             return metadata()
         }
@@ -141,7 +158,7 @@ struct SignInBackupTests {
         #expect(relaunched.hasUnsentChanges)
         signIn(relaunched)
         let log = Log()
-        relaunched.backUpUnsentChangesAtSignIn {
+        relaunched.backUpUnsentChangesAtSignIn(modelContext: context) {
             log.events.append("sign-in backup")
             return metadata()
         }
@@ -171,7 +188,7 @@ struct SignInBackupTests {
         let auth = signedOutAuth(owner)
         signIn(auth)
         let log = Log()
-        auth.backUpUnsentChangesAtSignIn {
+        auth.backUpUnsentChangesAtSignIn(modelContext: context) {
             log.events.append("sign-in backup")
             return metadata()
         }
@@ -220,7 +237,7 @@ struct SignInBackupTests {
         signIn(auth)
         #expect(owner.resolve(signedIn: TestUser.id, storeIsEmpty: false) == .needsChoice) // the owner check
         let log = Log()
-        auth.backUpUnsentChangesAtSignIn {
+        auth.backUpUnsentChangesAtSignIn(modelContext: context) {
             log.events.append("sign-in backup")
             return metadata()
         }
@@ -233,7 +250,7 @@ struct SignInBackupTests {
 
     /// #311: the app's path never uploads another account's data at
     /// sign-in, even with changes unsent and a store full of its sessions.
-    @Test func anotherAccountOwnsTheData_appPath_uploadsNothing() async throws {
+    @Test func anotherAccountOwnsTheData_signInSequence_uploadsNothing() async throws {
         let otherAccount = UUID()
         let owner = freshOwner()
         owner.adopt(otherAccount)
@@ -247,10 +264,11 @@ struct SignInBackupTests {
         #expect(auth.hasUnsentChanges)
 
         signIn(auth)
-        #expect(owner.resolve(signedIn: TestUser.id, storeIsEmpty: false) == .needsChoice)
-        auth.backUpUnsentChangesAtSignIn(modelContext: context)
+        let ownership = ownershipModel(owner)
+        ownership.signedIn(TestUser.id, modelContext: context, authService: auth)
         for _ in 0..<20 { await Task.yield() }
 
+        #expect(ownership.isShowingChoice)
         #expect(!auth.isBackupPending)
         #expect(uploads(server).isEmpty)
         #expect(owner.ownerId == otherAccount)
@@ -267,7 +285,7 @@ struct SignInBackupTests {
         signIn(auth)
         let log = Log()
         // Before the owner check nothing runs: the data isn't this account's yet.
-        auth.backUpUnsentChangesAtSignIn {
+        auth.backUpUnsentChangesAtSignIn(modelContext: context) {
             log.events.append("sign-in backup")
             return metadata()
         }
@@ -275,7 +293,7 @@ struct SignInBackupTests {
         #expect(log.events.isEmpty)
 
         #expect(owner.resolve(signedIn: TestUser.id, storeIsEmpty: false) == .owned) // the owner check adopts it
-        auth.backUpUnsentChangesAtSignIn {
+        auth.backUpUnsentChangesAtSignIn(modelContext: context) {
             log.events.append("sign-in backup")
             return metadata()
         }
@@ -283,7 +301,7 @@ struct SignInBackupTests {
         #expect(!auth.hasUnsentChanges)
 
         // A repeated sign-in event runs nothing more.
-        auth.backUpUnsentChangesAtSignIn {
+        auth.backUpUnsentChangesAtSignIn(modelContext: context) {
             log.events.append("sign-in backup")
             return metadata()
         }
@@ -291,8 +309,10 @@ struct SignInBackupTests {
         #expect(log.count("sign-in backup") == 1)
     }
 
-    /// #311, the app's path: the adopted store uploads once, to the signed-in account's folder.
-    @Test func noOwner_appPath_uploadsTheAdoptedStoreOnce() async throws {
+    /// #311, the app's path: the adopted store uploads once, to the signed-in
+    /// account's folder. #326: through the sign-in sequence, so it fails if the
+    /// backup runs before the owner check (no owner yet, so nothing would upload).
+    @Test func noOwner_signInSequence_uploadsTheAdoptedStoreOnce() async throws {
         let owner = freshOwner()
         let server = FakeServer()
         let auth = appPathAuth(owner, server: server)
@@ -303,10 +323,11 @@ struct SignInBackupTests {
         auth.scheduleBackup(modelContext: context) // signed out
 
         signIn(auth)
-        owner.resolve(signedIn: TestUser.id, storeIsEmpty: false)
-        auth.backUpUnsentChangesAtSignIn(modelContext: context)
+        let ownership = ownershipModel(owner)
+        ownership.signedIn(TestUser.id, modelContext: context, authService: auth)
+        #expect(auth.isBackupPending)
         await waitUntil("sign-in backup finished") { !auth.isBackupPending }
-        auth.backUpUnsentChangesAtSignIn(modelContext: context)
+        ownership.signedIn(TestUser.id, modelContext: context, authService: auth) // a repeated sign-in event
         for _ in 0..<20 { await Task.yield() }
 
         let paths = uploads(server)
@@ -319,7 +340,7 @@ struct SignInBackupTests {
 
     /// An empty store isn't uploaded at sign-in, so the auto-restore that
     /// runs for an empty store never races an empty backup (#311).
-    @Test func emptyStore_appPath_noBackupAtSignIn() async throws {
+    @Test func emptyStore_signInSequence_noBackupAtSignIn() async throws {
         let owner = freshOwner()
         let server = FakeServer()
         let auth = appPathAuth(owner, server: server)
@@ -329,12 +350,34 @@ struct SignInBackupTests {
         #expect(auth.hasUnsentChanges)
 
         signIn(auth)
-        owner.resolve(signedIn: TestUser.id, storeIsEmpty: true)
-        auth.backUpUnsentChangesAtSignIn(modelContext: context)
+        ownershipModel(owner).signedIn(TestUser.id, modelContext: context, authService: auth)
         for _ in 0..<20 { await Task.yield() }
 
+        #expect(owner.ownerId == TestUser.id)
         #expect(!auth.isBackupPending)
         #expect(uploads(server).isEmpty)
+        #expect(auth.hasUnsentChanges)
+    }
+
+    /// #326: the test overload checks the store too, so an empty store
+    /// skips the supplied backup and keeps the flag.
+    @Test func emptyStore_suppliedBackup_doesNotRun() async throws {
+        let owner = freshOwner()
+        owner.adopt(TestUser.id)
+        let auth = signedOutAuth(owner)
+        try endSessionWhileSignedOut(auth)
+        let empty = try TestHelpers.createContainer()
+
+        signIn(auth)
+        let log = Log()
+        auth.backUpUnsentChangesAtSignIn(modelContext: empty.mainContext) {
+            log.events.append("sign-in backup")
+            return metadata()
+        }
+        for _ in 0..<20 { await Task.yield() }
+
+        #expect(log.events.isEmpty)
+        #expect(!auth.isBackupPending)
         #expect(auth.hasUnsentChanges)
     }
 
@@ -349,7 +392,7 @@ struct SignInBackupTests {
 
         await auth.suspendBackups()
         let log = Log()
-        auth.backUpUnsentChangesAtSignIn {
+        auth.backUpUnsentChangesAtSignIn(modelContext: context) {
             log.events.append("sign-in backup")
             return metadata()
         }
