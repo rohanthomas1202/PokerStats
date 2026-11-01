@@ -455,8 +455,8 @@ const dollars = (x: number, decimals: number) => {
   return `${neg ? "-" : ""}$${group(i)}${f !== undefined ? "." + f : ""}`;
 };
 
-// The widget's signed money: "+" or "-" unless the rounded value is zero, which
-// shows as "$0" (never "+$0" or "-$0").
+// Signed money (app and widget): "+" or "-" unless the rounded value is zero,
+// which shows as "$0" (never "+$0" or "-$0").
 const signedRounded = (x: number, decimals: number) => {
   const formatted = dollars(Math.abs(x), decimals);
   if (!/[1-9]/.test(formatted)) return formatted;
@@ -469,19 +469,17 @@ export function display(format: string, value: number | null): string {
       return value === null ? "--" : `${roundHalfEven(value * 100, 1)}%`;
     case "currency": // ComputedStats.formatCurrency, CurrencyFormatter.format
       return dollars(value!, 0);
-    case "currency_signed": { // CurrencyFormatter.formatSigned
-      const formatted = dollars(Math.abs(value!), 0);
-      return value! >= 0 ? `+${formatted}` : `-${formatted}`;
-    }
+    case "currency_signed": // CurrencyFormatter.formatSigned: half even, no sign on zero
+      return signedRounded(value!, 0);
     case "hourly_rate": // ComputedStats.formatHourlyRate
       return value === null ? "--" : `${dollars(value, 2)}/hr`;
     case "roi": { // SessionDetailView: String(format: "%+.1f%%", roi * 100)
       const r = roundHalfEven(value! * 100, 1);
       return `${r.startsWith("-") ? "" : "+"}${r}%`;
     }
-    case "widget_currency": // CurrencyFormatter.formatSignedRounded: half even, no sign on zero
+    case "widget_currency": // CurrencyFormatter.formatSigned, as currency_signed
       return signedRounded(value!, 0);
-    case "widget_hourly": // CurrencyFormatter.formatSignedRounded(_, fractionDigits: 2)
+    case "widget_hourly": // CurrencyFormatter.formatSigned(_, fractionDigits: 2)
       return signedRounded(value!, 2);
     default:
       throw new Error(`unknown display format ${format}`);

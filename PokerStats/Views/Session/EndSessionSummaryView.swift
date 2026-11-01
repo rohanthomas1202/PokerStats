@@ -13,13 +13,13 @@ struct EndSessionSummaryView: View {
             VStack(spacing: 24) {
                 // Headline result
                 VStack(spacing: 8) {
-                    Text(session.netProfit >= 0 ? "Profit" : "Loss")
+                    Text(CurrencyFormatter.isLoss(session.netProfit) ? "Loss" : "Profit")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
 
                     Text(CurrencyFormatter.formatSigned(session.netProfit))
                         .font(.system(size: 48, weight: .bold, design: .rounded))
-                        .foregroundStyle(session.netProfit >= 0 ? Color.pokerProfit : Color.pokerLoss)
+                        .foregroundStyle(CurrencyFormatter.isLoss(session.netProfit) ? Color.pokerLoss : Color.pokerProfit)
 
                     Text("\(DateFormatting.formatFull(session.startTime)) - \(DurationFormatter.format(session.duration))")
                         .font(.caption)
@@ -44,7 +44,7 @@ struct EndSessionSummaryView: View {
                     financialRow("Cash Out", CurrencyFormatter.format(session.cashOut))
                     Divider()
                     financialRow("Net P/L", CurrencyFormatter.formatSigned(session.netProfit),
-                                 valueColor: session.netProfit >= 0 ? .pokerProfit : .pokerLoss)
+                                 valueColor: CurrencyFormatter.isLoss(session.netProfit) ? .pokerLoss : .pokerProfit)
 
                     if let hourlyRate = session.hourlyRate {
                         financialRow("Hourly Rate", ComputedStats.formatHourlyRate(hourlyRate))
