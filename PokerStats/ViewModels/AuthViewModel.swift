@@ -1,6 +1,7 @@
 import Foundation
 import AuthenticationServices
 import os
+import SwiftUI
 
 @Observable
 @MainActor
@@ -62,6 +63,12 @@ final class AuthViewModel {
     static let signInFailedMessage = "Couldn't sign in with Apple. Please try again."
     /// Shown when Apple's response is incomplete or no attempt is in progress.
     static let signInIncompleteMessage = "Sign-in didn't finish. Please try again."
+    /// Spoken by VoiceOver when the Supabase sign-in starts. Focus stays on
+    /// the disabled button, so the visible "Signing in…" label isn't read (#228).
+    static let signingInAnnouncement = "Signing in"
+
+    /// Tests record the announcement instead of posting it.
+    @ObservationIgnored var announce: @MainActor (String) -> Void = { AccessibilityNotification.Announcement($0).post() }
 
     private static let logger = Logger(subsystem: "com.rohanthomas.PokerStats", category: "AuthViewModel")
 
@@ -167,6 +174,9 @@ final class AuthViewModel {
         )
         isProcessing = true
         errorMessage = nil
+        // Once per attempt: the nonce above is single use. Try Again's Apple
+        // step doesn't announce, so a retry is also announced once.
+        announce(Self.signingInAnnouncement)
 
         return Task {
             do {
