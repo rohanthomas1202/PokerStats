@@ -4,6 +4,13 @@ import AuthenticationServices
 struct SignInView: View {
     @Environment(AuthService.self) private var authService
     let authViewModel: AuthViewModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// Fades the error and the progress row in and out instead of popping
+    /// (#332); off with Reduce Motion, since the rows below them move.
+    private var rowAnimation: Animation? {
+        reduceMotion ? nil : .easeInOut(duration: 0.25)
+    }
 
     var body: some View {
         NavigationStack {
@@ -72,6 +79,8 @@ struct SignInView: View {
                 Spacer()
                     .frame(height: 40)
             }
+            .animation(rowAnimation, value: authViewModel.errorMessage)
+            .animation(rowAnimation, value: authViewModel.isProcessing)
             .background(Color.pokerBackground)
             .onChange(of: authViewModel.errorMessage) { _, message in
                 guard let message else { return }

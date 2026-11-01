@@ -26,6 +26,14 @@ private final class RestoreGate {
     }
 }
 
+/// Lets a fake Apple sheet look at the view model mid-attempt.
+@MainActor
+private final class AttemptObserver {
+    weak var viewModel: AuthViewModel?
+    var authorizations = 0
+    var errorDuringAttempt: String? = "not read"
+}
+
 @MainActor
 private final class Nonces {
     var sentToSupabase: [String] = []
@@ -204,7 +212,7 @@ struct RetryAndSignOutTests {
             try await gate.wait()
             return .restored(sessionCount: 1)
         }
-        while !gate.started { await Task.yield() }
+        await waitUntil("the restore to start") { gate.started }
         #expect(vm.message == "Restoring from cloud...")
 
         vm.dismiss()
@@ -281,6 +289,37 @@ struct RetryAndSignOutTests {
         #expect(vm.errorMessage == nil)
         #expect(!vm.isProcessing)
         #expect(supabase.count == 0)
+    }
+
+    /// #260 item 4 and #258 item 4: Try Again clears the earlier error while
+    /// the new attempt runs, and cancelling Apple's sheet doesn't bring it back.
+    @Test func signInTryAgain_afterAnError_cancelled_clearsTheError() async {
+        let seen = AttemptObserver()
+        let vm = AuthViewModel(
+            authService: AuthService(),
+            performAppleSignIn: { _ in throw URLError(.notConnectedToInternet) },
+            performAppleAuthorization: { _ in
+                seen.errorDuringAttempt = seen.viewModel?.errorMessage
+                seen.authorizations += 1
+                throw ASAuthorizationError(.canceled)
+            }
+        )
+        seen.viewModel = vm
+
+        _ = vm.startAppleSignInAttempt()
+        await vm.completeAppleSignIn(
+            identityToken: Data("id-token".utf8),
+            authorizationCode: Data("code".utf8),
+            fullName: nil,
+            appleUserId: "001234.abc"
+        )?.value
+        #expect(vm.errorMessage == UserFacingError.offlineMessage)
+
+        await vm.retrySignIn().value
+        #expect(seen.authorizations == 1)
+        #expect(seen.errorDuringAttempt == nil)
+        #expect(vm.errorMessage == nil)
+        #expect(!vm.isProcessing)
     }
 
     @Test func signInServerError_showsServerCopy() async {
