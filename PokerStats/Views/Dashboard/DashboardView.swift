@@ -154,10 +154,10 @@ struct DashboardView: View {
     private var financialSummary: some View {
         VStack(spacing: 12) {
             // Total P/L
-            Text(ComputedStats.formatCurrency(viewModel.lifetimeStats.totalProfit))
+            Text(CurrencyFormatter.formatSigned(viewModel.lifetimeStats.totalProfit))
                 .font(.system(.largeTitle, design: .rounded))
                 .fontWeight(.bold)
-                .foregroundStyle(viewModel.lifetimeStats.totalProfit >= 0 ? Color.pokerProfit : Color.pokerLoss)
+                .foregroundStyle(Color.pokerResult(viewModel.lifetimeStats.totalProfit))
 
             Text("Total Profit/Loss")
                 .font(.caption)

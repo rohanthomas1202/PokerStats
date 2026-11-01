@@ -103,6 +103,16 @@ struct LifetimeWidgetView: View {
         }
     }
 
+    /// Green for a profit, red for a loss, and the secondary text color when the
+    /// total rounds to $0, as the app does (#299).
+    private var totalColor: Color {
+        switch CurrencyFormatter.result(entry.totalProfit) {
+        case .profit: return .green
+        case .loss: return .red
+        case .breakEven: return .white.opacity(0.6)
+        }
+    }
+
     private var smallView: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
@@ -118,7 +128,7 @@ struct LifetimeWidgetView: View {
             Text(CurrencyFormatter.formatSigned(entry.totalProfit))
                 .font(.title2)
                 .fontWeight(.bold)
-                .foregroundStyle(CurrencyFormatter.isLoss(entry.totalProfit) ? .red : .green)
+                .foregroundStyle(totalColor)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
 
@@ -147,7 +157,7 @@ struct LifetimeWidgetView: View {
                 Text(CurrencyFormatter.formatSigned(entry.totalProfit))
                     .font(.title)
                     .fontWeight(.bold)
-                    .foregroundStyle(CurrencyFormatter.isLoss(entry.totalProfit) ? .red : .green)
+                    .foregroundStyle(totalColor)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
 
