@@ -9,6 +9,7 @@ import Foundation
 struct LocalDataOwner {
     static let ownerKey = "localData.ownerUserId"
     static let localOnlyKey = "localData.localOnlyUserId"
+    static let unsentChangesKey = "localData.hasUnsentChanges"
 
     /// What a sign-in found.
     enum Status: Equatable {
@@ -46,6 +47,19 @@ struct LocalDataOwner {
         return localOnlyUserId == userId ? .localOnly : .needsChoice
     }
 
+    /// Local changes no backup has sent yet (#293). Stored here so they are
+    /// still sent at the next sign-in after the app is relaunched (#300).
+    var hasUnsentChanges: Bool {
+        get { defaults.bool(forKey: Self.unsentChangesKey) }
+        nonmutating set {
+            if newValue {
+                defaults.set(true, forKey: Self.unsentChangesKey)
+            } else {
+                defaults.removeObject(forKey: Self.unsentChangesKey)
+            }
+        }
+    }
+
     /// `userId` now owns the local data.
     func adopt(_ userId: UUID) {
         defaults.set(userId.uuidString, forKey: Self.ownerKey)
@@ -57,10 +71,11 @@ struct LocalDataOwner {
         defaults.set(userId.uuidString, forKey: Self.localOnlyKey)
     }
 
-    /// No local data left, so no owner.
+    /// No local data left, so no owner and nothing unsent.
     func clear() {
         defaults.removeObject(forKey: Self.ownerKey)
         defaults.removeObject(forKey: Self.localOnlyKey)
+        defaults.removeObject(forKey: Self.unsentChangesKey)
     }
 
     private func uuid(forKey key: String) -> UUID? {

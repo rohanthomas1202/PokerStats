@@ -317,6 +317,7 @@ struct LocalDataOwnerTests {
 
     @Test func deleteAllData_clearsTheOwner_butKeepsTheAutoRestoreFlag() throws {
         owner.adopt(accountA)
+        owner.hasUnsentChanges = true
         try addSession("A's session") // has a hand (#263)
         let settings = SettingsViewModel()
         settings.localDataOwner = owner
@@ -327,12 +328,14 @@ struct LocalDataOwnerTests {
         #expect(try storedLocations().isEmpty)
         #expect(try ModelContext(container).fetchCount(FetchDescriptor<Hand>()) == 0)
         #expect(owner.ownerId == nil)
+        #expect(!owner.hasUnsentChanges) // nothing left to send (#300)
         #expect(settings.autoRestoreFlag.isSet)
         #expect(settings.deleteAllDataFailure == nil)
     }
 
     @Test func accountDeletionWipe_clearsTheOwner_andTheAutoRestoreFlag() throws {
         owner.adopt(accountA)
+        owner.hasUnsentChanges = true
         try addSession("A's session")
         let settings = SettingsViewModel()
         settings.localDataOwner = owner
@@ -343,6 +346,7 @@ struct LocalDataOwnerTests {
         settings.wipeAfterAccountDeletion(from: context)
 
         #expect(owner.ownerId == nil)
+        #expect(!owner.hasUnsentChanges) // the account and its backups are gone (#300)
         #expect(!flag.isSet)
         #expect(try storedLocations().isEmpty)
     }

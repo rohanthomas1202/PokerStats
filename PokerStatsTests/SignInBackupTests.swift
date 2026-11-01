@@ -19,14 +19,21 @@ private final class Log {
 /// #293: when the account that owns the local data signs back in with
 /// changes no backup sent, one backup runs at sign-in. Nothing runs for
 /// another account's data or while account deletion runs (#61).
-@Suite("Sign-in Backup Tests", .timeLimit(.minutes(1)))
+///
+/// The unsent-changes flag lives in the owner's UserDefaults (#300). Each
+/// test makes its own owner on a ThrowawayDefaults, which the owner holds for
+/// the whole test; the suite stores none and runs serialized.
+@Suite("Sign-in Backup Tests", .serialized, .timeLimit(.minutes(1)))
 @MainActor
 struct SignInBackupTests {
     private let storage = InMemoryAuthStorage()
-    private let owner = LocalDataOwner(defaults: UserDefaults(suiteName: "SignInBackupTests.\(UUID().uuidString)")!)
 
-    /// Signed out, with the isolated owner store.
-    private func signedOutAuth() -> AuthService {
+    private func freshOwner() -> LocalDataOwner {
+        LocalDataOwner(defaults: ThrowawayDefaults("SignInBackupTests"))
+    }
+
+    /// Signed out, with the test's own owner store.
+    private func signedOutAuth(_ owner: LocalDataOwner) -> AuthService {
         let auth = AuthService(client: testClient(storage) { _, _ in .status(204, "") })
         auth.localDataOwner = owner
         return auth
@@ -48,8 +55,9 @@ struct SignInBackupTests {
     // MARK: - Same owner: one backup
 
     @Test func sameOwner_backupDroppedBySignOut_backsUpOnceAtSignIn() async {
+        let owner = freshOwner()
         owner.adopt(TestUser.id)
-        let auth = signedOutAuth()
+        let auth = signedOutAuth(owner)
         signIn(auth)
         let log = Log()
         auth.scheduleBackup {
@@ -66,7 +74,7 @@ struct SignInBackupTests {
             log.events.append("sign-in backup")
             return metadata()
         }
-        await waitUntil("sign-in backup finished") { auth.backupStatus?.hasPrefix("Backed up") == true }
+        await waitUntil("sign-in backup finished") { !auth.isBackupPending }
         #expect(!auth.hasUnsentChanges)
 
         // A second sign-in event with nothing new to send runs nothing.
@@ -79,8 +87,9 @@ struct SignInBackupTests {
     }
 
     @Test func sameOwner_sessionEndedWhileSignedOut_backsUpOnceAtSignIn() async throws {
+        let owner = freshOwner()
         owner.adopt(TestUser.id)
-        let auth = signedOutAuth()
+        let auth = signedOutAuth(owner)
         try endSessionWhileSignedOut(auth)
 
         signIn(auth)
@@ -89,16 +98,50 @@ struct SignInBackupTests {
             log.events.append("sign-in backup")
             return metadata()
         }
-        await waitUntil("sign-in backup finished") { auth.backupStatus?.hasPrefix("Backed up") == true }
+        await waitUntil("sign-in backup finished") { !auth.isBackupPending }
         #expect(log.count("sign-in backup") == 1)
         #expect(!auth.hasUnsentChanges)
+    }
+
+    /// #300: the app is killed after a session ended while signed out. A new
+    /// AuthService on the same device (the relaunch) still backs up at sign-in.
+    @Test func sameOwner_relaunchBeforeSignIn_stillBacksUpAtSignIn() async throws {
+        let owner = freshOwner()
+        owner.adopt(TestUser.id)
+        try endSessionWhileSignedOut(signedOutAuth(owner))
+
+        let relaunched = signedOutAuth(owner)
+        #expect(relaunched.hasUnsentChanges)
+        signIn(relaunched)
+        let log = Log()
+        relaunched.backUpUnsentChangesAtSignIn {
+            log.events.append("sign-in backup")
+            return metadata()
+        }
+        await waitUntil("sign-in backup finished") { !relaunched.isBackupPending }
+        #expect(log.count("sign-in backup") == 1)
+        #expect(!relaunched.hasUnsentChanges)
+        #expect(!owner.hasUnsentChanges)
+    }
+
+    /// A failed backup leaves the changes unsent across a relaunch too.
+    @Test func failedBackup_staysUnsentAfterRelaunch() async {
+        let owner = freshOwner()
+        owner.adopt(TestUser.id)
+        let auth = signedOutAuth(owner)
+        signIn(auth)
+        auth.scheduleBackup { throw URLError(.notConnectedToInternet) }
+        await waitUntil("backup failed") { !auth.isBackupPending }
+
+        #expect(signedOutAuth(owner).hasUnsentChanges)
     }
 
     /// Without this change nothing backed up at sign-in; with nothing
     /// unsent, that stays true.
     @Test func sameOwner_nothingUnsent_noBackupAtSignIn() async {
+        let owner = freshOwner()
         owner.adopt(TestUser.id)
-        let auth = signedOutAuth()
+        let auth = signedOutAuth(owner)
         signIn(auth)
         let log = Log()
         auth.backUpUnsentChangesAtSignIn {
@@ -113,6 +156,7 @@ struct SignInBackupTests {
     /// The app's path: `backUpUnsentChangesAtSignIn(modelContext:)` uploads
     /// the whole store once, to the returning owner's folder.
     @Test func sameOwner_appPath_uploadsTheStoreOnceAtSignIn() async throws {
+        let owner = freshOwner()
         owner.adopt(TestUser.id)
         let server = FakeServer()
         let client = testClient(storage, server: server) { request, _ in
@@ -143,7 +187,7 @@ struct SignInBackupTests {
 
         signIn(auth)
         auth.backUpUnsentChangesAtSignIn(modelContext: context)
-        await waitUntil("sign-in backup finished") { auth.backupStatus?.hasPrefix("Backed up") == true }
+        await waitUntil("sign-in backup finished") { !auth.isBackupPending }
         auth.backUpUnsentChangesAtSignIn(modelContext: context)
         for _ in 0..<20 { await Task.yield() }
 
@@ -158,8 +202,9 @@ struct SignInBackupTests {
 
     @Test func anotherAccountOwnsTheData_noBackupAtSignIn() async throws {
         let otherAccount = UUID()
+        let owner = freshOwner()
         owner.adopt(otherAccount)
-        let auth = signedOutAuth()
+        let auth = signedOutAuth(owner)
         try endSessionWhileSignedOut(auth)
 
         signIn(auth)
@@ -175,9 +220,12 @@ struct SignInBackupTests {
         #expect(auth.hasUnsentChanges) // still owed to the owner
     }
 
-    /// Data with no owner (Delete All Data cleared it) isn't a returning owner.
+    /// Data with no owner (Delete All Data cleared it) isn't a returning
+    /// owner, so nothing uploads at sign-in. The changes stay marked unsent
+    /// for the next session's backup once the owner check adopts the data (#300).
     @Test func noOwner_noBackupAtSignIn() async throws {
-        let auth = signedOutAuth()
+        let owner = freshOwner()
+        let auth = signedOutAuth(owner)
         try endSessionWhileSignedOut(auth)
 
         signIn(auth)
@@ -189,13 +237,15 @@ struct SignInBackupTests {
         for _ in 0..<20 { await Task.yield() }
         #expect(log.events.isEmpty)
         #expect(auth.backupStatus == nil)
+        #expect(auth.hasUnsentChanges)
     }
 
     // MARK: - Deletion pending: no backup
 
     @Test func accountDeletionRunning_noBackupAtSignIn_norAfterItStops() async throws {
+        let owner = freshOwner()
         owner.adopt(TestUser.id)
-        let auth = signedOutAuth()
+        let auth = signedOutAuth(owner)
         try endSessionWhileSignedOut(auth)
         signIn(auth)
 
@@ -212,8 +262,9 @@ struct SignInBackupTests {
     }
 
     @Test func finishedAccountDeletion_leavesNothingUnsent() async {
+        let owner = freshOwner()
         owner.adopt(TestUser.id)
-        let auth = signedOutAuth()
+        let auth = signedOutAuth(owner)
         signIn(auth)
         auth.scheduleBackup {
             try await Task.sleep(for: .seconds(60))

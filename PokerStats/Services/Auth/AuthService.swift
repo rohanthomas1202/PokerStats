@@ -189,8 +189,17 @@ final class AuthService {
 
     /// Local changes no backup has sent: sign-out dropped the scheduled
     /// backup, it failed, or a session ended while signed out. Cleared when a backup
-    /// is scheduled, which snapshots the whole store (#293).
-    @ObservationIgnored private(set) var hasUnsentChanges = false
+    /// is scheduled, which snapshots the whole store (#293). Kept in
+    /// `localDataOwner`'s UserDefaults so a relaunch keeps it (#300); Delete
+    /// All Data and the wipe after account deletion clear it with the owner.
+    private(set) var hasUnsentChanges: Bool {
+        get { localDataOwner.hasUnsentChanges }
+        set { localDataOwner.hasUnsentChanges = newValue }
+    }
+
+    /// A scheduled automatic backup hasn't finished yet. False again once
+    /// it succeeds or fails; stays true while account deletion holds it back.
+    var isBackupPending: Bool { unfinishedBackup != nil }
 
     /// The automatic backup after a session ends. Skipped while the local
     /// data belongs to another account and the user hasn't chosen (#69).
@@ -252,6 +261,11 @@ final class AuthService {
         scheduleBackup(backup)
     }
 
+    /// Only the account that already owned the data backs up here. Data
+    /// with no owner (after Delete All Data, or never signed in) is not
+    /// uploaded at sign-in: the owner check adopts it, `hasUnsentChanges`
+    /// stays set, and the next session's backup sends the whole store, as
+    /// before #293. Sign-in only uploads data the account already owned (#300).
     private var canBackUpUnsentChangesAtSignIn: Bool {
         guard hasUnsentChanges, !isCloudWorkSuspended, isAuthenticated, let userId else { return false }
         return localDataOwner.ownerId == userId
