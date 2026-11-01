@@ -200,10 +200,10 @@ struct SessionDetailView: View {
                             .font(.caption)
                             .foregroundStyle(Color.pokerTextSecondary)
                         Spacer()
-                        Text(String(format: "%+.1f%%", roi))
+                        Text(CurrencyFormatter.formatSignedPercent(roi))
                             .font(.subheadline)
                             .fontWeight(.bold)
-                            .foregroundStyle(roi >= 0 ? Color.pokerProfit : Color.pokerLoss)
+                            .foregroundStyle(Color.pokerResult(CurrencyFormatter.percentResult(roi)))
                     }
                     .padding(.top, 4)
                 }

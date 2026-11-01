@@ -77,4 +77,28 @@ enum CurrencyFormatter {
         NSDecimalRound(&rounded, &value, fractionDigits > 0 ? 2 : 0, .bankers)
         return rounded
     }
+
+    // MARK: - Signed percent
+
+    /// Signed percent with one decimal, as the session ROI shows it: "+12.5%",
+    /// "-3.0%". A value that rounds to 0.0 shows as "0.0%", never "+0.0%" or "-0.0%".
+    static func formatSignedPercent(_ percent: Double) -> String {
+        guard percent.isFinite else { return String(format: "%+.1f%%", percent) }
+        let magnitude = String(format: "%.1f%%", abs(percent))
+        switch percentResult(percent) {
+        case .breakEven: return magnitude
+        case .loss: return "-\(magnitude)"
+        case .profit: return "+\(magnitude)"
+        }
+    }
+
+    /// Profit, loss or break even for a percent shown with one decimal. Reads the
+    /// same "%.1f" rounding `formatSignedPercent` shows, so the two always agree.
+    static func percentResult(_ percent: Double) -> Result {
+        guard percent.isFinite else {
+            return percent.isNaN ? .breakEven : (percent < 0 ? .loss : .profit)
+        }
+        if String(format: "%.1f", abs(percent)) == "0.0" { return .breakEven }
+        return percent < 0 ? .loss : .profit
+    }
 }
