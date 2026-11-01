@@ -149,8 +149,10 @@ enum TrendCalculator {
 
         guard width > 0, width.isFinite else { return [] }
 
-        // Buckets are [lower, lower + width). The last one starts at
-        // floor(max / width) * width, so the maximum always lands in a bucket
+        // Bar i covers [(first + i) * width, (first + i + 1) * width). Both
+        // bounds are computed from the index, not as lower + width (see the
+        // note below). The last bar starts at floor(max / width) * width, so
+        // the maximum always lands in a bucket
         // and a single value or narrow range still gets its real bucket.
         // Each profit goes to bucket floor(profit / width) - first, found by
         // division rather than by stepping lower += width: at huge magnitudes
@@ -176,6 +178,20 @@ enum TrendCalculator {
             let upper = (first + Double(i + 1)) * width
             return PLBucket(rangeLabel: signedDollarLabel(lower), lowerBound: lower, upperBound: upper, count: counts[i])
         }
+    }
+
+    /// Every how many bars an x-axis label is shown so at most `maxLabels` appear.
+    /// 1 means every bar gets a label. The first bar is always labeled.
+    static func plAxisLabelStride(bucketCount: Int, maxLabels: Int) -> Int {
+        guard bucketCount > 0, maxLabels > 0 else { return 1 }
+        return Swift.max(1, (bucketCount + maxLabels - 1) / maxLabels)
+    }
+
+    /// The bar labels to show on the x-axis: every `plAxisLabelStride`th bar,
+    /// starting with the first. Each bar keeps its full range in VoiceOver.
+    static func plAxisLabels(_ buckets: [PLBucket], maxLabels: Int) -> [String] {
+        let stride = plAxisLabelStride(bucketCount: buckets.count, maxLabels: maxLabels)
+        return buckets.indices.filter { $0 % stride == 0 }.map { buckets[$0].rangeLabel }
     }
 
     /// Smallest of baseWidth times 1, 2, 5, 10, 20, 50... that covers min...max in at most maxBuckets buckets.

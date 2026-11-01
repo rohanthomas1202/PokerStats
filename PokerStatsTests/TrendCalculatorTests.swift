@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import Testing
 @testable import PokerStats
 
@@ -261,6 +262,50 @@ struct TrendCalculatorTests {
         #expect(TrendCalculator.plBucketWidth(min: -5000, max: 20000) == 2000)
         #expect(TrendCalculator.plBucketWidth(min: -1_000_000, max: 1_000_000) == 200_000)
         #expect(TrendCalculator.plBucketWidth(min: 50, max: 50) == 100)
+    }
+
+    // MARK: - P&L x-axis labels
+
+    @Test func plAxisLabelStride_fitsWithinMaxLabels() {
+        #expect(TrendCalculator.plAxisLabelStride(bucketCount: 20, maxLabels: 6) == 4)  // 5 labels
+        #expect(TrendCalculator.plAxisLabelStride(bucketCount: 20, maxLabels: 4) == 5)  // 4 labels
+        #expect(TrendCalculator.plAxisLabelStride(bucketCount: 20, maxLabels: 2) == 10) // 2 labels
+        #expect(TrendCalculator.plAxisLabelStride(bucketCount: 7, maxLabels: 6) == 2)   // 4 labels
+        #expect(TrendCalculator.plAxisLabelStride(bucketCount: 4, maxLabels: 6) == 1)
+        #expect(TrendCalculator.plAxisLabelStride(bucketCount: 0, maxLabels: 6) == 1)
+        #expect(TrendCalculator.plAxisLabelStride(bucketCount: 5, maxLabels: 0) == 1)
+        for count in 1...TrendCalculator.maxPLBuckets {
+            for maxLabels in 1...8 {
+                let stride = TrendCalculator.plAxisLabelStride(bucketCount: count, maxLabels: maxLabels)
+                let shown = (count + stride - 1) / stride
+                #expect(shown <= maxLabels, "\(count) bars, max \(maxLabels): \(shown) labels")
+            }
+        }
+    }
+
+    @Test func plAxisLabels_keepsFirstAndEveryStrideth() {
+        let s1 = TestHelpers.completedSession(buyIn: 100, cashOut: 100)  // +$0 bar
+        let s2 = TestHelpers.completedSession(buyIn: 100, cashOut: 2050) // +$1,950, +$1,900 bar
+        let result = TrendCalculator.sessionPLDistribution(sessions: [s1, s2])
+        #expect(result.count == 20)
+        #expect(TrendCalculator.plAxisLabels(result, maxLabels: 4)
+            == ["+$0", "+$500", "+$1,000", "+$1,500"])
+        #expect(TrendCalculator.plAxisLabels(result, maxLabels: 2) == ["+$0", "+$1,000"])
+        #expect(TrendCalculator.plAxisLabels(result, maxLabels: 20) == result.map(\.rangeLabel))
+        #expect(TrendCalculator.plAxisLabels([], maxLabels: 4).isEmpty)
+        // Thinning the axis leaves every bar's VoiceOver range in place.
+        #expect(result[1].accessibilityLabel == "+$100 to under +$200, 0 sessions")
+    }
+
+    @Test func plAxisMaxLabels_thinsOnlyAboveDefaultSizes() {
+        #expect(TrendCalculator.plAxisMaxLabels(for: .xSmall) == nil)
+        #expect(TrendCalculator.plAxisMaxLabels(for: .large) == nil)
+        #expect(TrendCalculator.plAxisMaxLabels(for: .xLarge) == 6)
+        #expect(TrendCalculator.plAxisMaxLabels(for: .xxxLarge) == 6)
+        #expect(TrendCalculator.plAxisMaxLabels(for: .accessibility1) == 4)
+        #expect(TrendCalculator.plAxisMaxLabels(for: .accessibility2) == 4)
+        #expect(TrendCalculator.plAxisMaxLabels(for: .accessibility3) == 2)
+        #expect(TrendCalculator.plAxisMaxLabels(for: .accessibility5) == 2)
     }
 
     @Test func plDistribution_onlyActiveSessions_returnsEmpty() {
