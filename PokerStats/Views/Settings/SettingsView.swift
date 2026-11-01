@@ -199,7 +199,8 @@ struct SettingsView: View {
                 viewModel.showDeleteAllSecondConfirmation = true
             }
         } message: {
-            Text("This will permanently delete all sessions and hand data. This cannot be undone.")
+            // Cloud backups aren't mentioned until the owner decides #77.
+            Text("This will permanently delete all sessions and hand data, and reset your default buy-in, stakes and game. This cannot be undone.")
         }
         .alert("Are you absolutely sure?", isPresented: $viewModel.showDeleteAllSecondConfirmation) {
             Button("Cancel", role: .cancel) { }
