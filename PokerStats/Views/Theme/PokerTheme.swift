@@ -54,3 +54,17 @@ extension View {
         modifier(PokerCardModifier(cornerRadius: cornerRadius))
     }
 }
+
+// MARK: - Result Colors
+
+extension Color {
+    /// Color for a signed amount as `CurrencyFormatter.formatSigned` shows it:
+    /// profit green, loss red, and secondary text for an amount that rounds to $0.
+    static func pokerResult(_ amount: Double, fractionDigits: Int = 0) -> Color {
+        switch CurrencyFormatter.result(amount, fractionDigits: fractionDigits) {
+        case .profit: return .pokerProfit
+        case .loss: return .pokerLoss
+        case .breakEven: return .pokerTextSecondary
+        }
+    }
+}

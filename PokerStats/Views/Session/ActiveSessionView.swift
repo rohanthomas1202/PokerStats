@@ -370,7 +370,7 @@ struct ActiveSessionView: View {
                         Spacer()
                         Text(CurrencyFormatter.formatSigned(profit))
                             .fontWeight(.bold)
-                            .foregroundStyle(CurrencyFormatter.isLoss(profit) ? Color.pokerLoss : Color.pokerProfit)
+                            .foregroundStyle(Color.pokerResult(profit))
                     }
                     .font(.headline)
                 }

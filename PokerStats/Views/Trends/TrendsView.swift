@@ -194,7 +194,7 @@ struct TrendsView: View {
                     x: .value("Day", day.dayName),
                     y: .value("Profit", day.totalProfit)
                 )
-                .foregroundStyle(day.totalProfit >= 0 ? Color.pokerProfit : Color.pokerLoss)
+                .foregroundStyle(Color.pokerResult(day.totalProfit))
                 .cornerRadius(4)
             }
             .chartYAxis {

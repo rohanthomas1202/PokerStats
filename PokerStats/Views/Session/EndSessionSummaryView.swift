@@ -8,18 +8,27 @@ struct EndSessionSummaryView: View {
         StatCalculator.computeSessionStats(session: session)
     }
 
+    /// "Profit", "Loss", or "Break Even" when the amount shown rounds to $0 (#299).
+    nonisolated static func headline(for netProfit: Double) -> String {
+        switch CurrencyFormatter.result(netProfit) {
+        case .profit: return "Profit"
+        case .loss: return "Loss"
+        case .breakEven: return "Break Even"
+        }
+    }
+
     var body: some View {
         ScrollView {
             VStack(spacing: 24) {
                 // Headline result
                 VStack(spacing: 8) {
-                    Text(CurrencyFormatter.isLoss(session.netProfit) ? "Loss" : "Profit")
+                    Text(Self.headline(for: session.netProfit))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
 
                     Text(CurrencyFormatter.formatSigned(session.netProfit))
                         .font(.system(size: 48, weight: .bold, design: .rounded))
-                        .foregroundStyle(CurrencyFormatter.isLoss(session.netProfit) ? Color.pokerLoss : Color.pokerProfit)
+                        .foregroundStyle(Color.pokerResult(session.netProfit))
 
                     Text("\(DateFormatting.formatFull(session.startTime)) - \(DurationFormatter.format(session.duration))")
                         .font(.caption)
@@ -44,7 +53,7 @@ struct EndSessionSummaryView: View {
                     financialRow("Cash Out", CurrencyFormatter.format(session.cashOut))
                     Divider()
                     financialRow("Net P/L", CurrencyFormatter.formatSigned(session.netProfit),
-                                 valueColor: CurrencyFormatter.isLoss(session.netProfit) ? .pokerLoss : .pokerProfit)
+                                 valueColor: .pokerResult(session.netProfit))
 
                     if let hourlyRate = session.hourlyRate {
                         financialRow("Hourly Rate", ComputedStats.formatHourlyRate(hourlyRate))

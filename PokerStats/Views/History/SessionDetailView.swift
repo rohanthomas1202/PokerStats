@@ -93,7 +93,7 @@ struct SessionDetailView: View {
             Text(CurrencyFormatter.formatSigned(session.netProfit))
                 .font(.system(.title, design: .rounded))
                 .fontWeight(.bold)
-                .foregroundStyle(CurrencyFormatter.isLoss(session.netProfit) ? Color.pokerLoss : Color.pokerProfit)
+                .foregroundStyle(Color.pokerResult(session.netProfit))
 
             Text("\(DateFormatting.formatFull(session.startTime)) - \(DurationFormatter.format(session.duration))")
                 .font(.caption)

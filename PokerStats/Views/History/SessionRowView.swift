@@ -7,7 +7,7 @@ struct SessionRowView: View {
         HStack(spacing: 8) {
             // Profit/Loss indicator bar
             RoundedRectangle(cornerRadius: 2)
-                .fill(CurrencyFormatter.isLoss(session.netProfit) ? Color.pokerLoss : Color.pokerProfit)
+                .fill(Color.pokerResult(session.netProfit))
                 .frame(width: 4)
 
             // Date
@@ -41,7 +41,7 @@ struct SessionRowView: View {
                 Text(CurrencyFormatter.formatSigned(session.netProfit))
                     .font(.subheadline)
                     .fontWeight(.bold)
-                    .foregroundStyle(CurrencyFormatter.isLoss(session.netProfit) ? Color.pokerLoss : Color.pokerProfit)
+                    .foregroundStyle(Color.pokerResult(session.netProfit))
 
                 HStack(spacing: 4) {
                     Text(DurationFormatter.format(session.duration))
