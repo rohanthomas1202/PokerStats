@@ -267,11 +267,23 @@ struct TrendsView: View {
             .chartXAxis {
                 if let maxLabels = TrendCalculator.plAxisMaxLabels(for: dynamicTypeSize) {
                     AxisMarks(values: TrendCalculator.plAxisLabels(viewModel.plDistribution, maxLabels: maxLabels)) { value in
-                        plAxisLabel(value)
+                        AxisValueLabel {
+                            if let v = value.as(String.self) {
+                                Text(v)
+                                    .font(.caption2)
+                                    .foregroundStyle(Color.pokerTextSecondary)
+                            }
+                        }
                     }
                 } else {
                     AxisMarks { value in
-                        plAxisLabel(value)
+                        AxisValueLabel {
+                            if let v = value.as(String.self) {
+                                Text(v)
+                                    .font(.caption2)
+                                    .foregroundStyle(Color.pokerTextSecondary)
+                            }
+                        }
                     }
                 }
             }
@@ -279,17 +291,6 @@ struct TrendsView: View {
         }
         .padding()
         .pokerCard(cornerRadius: 16)
-    }
-
-    @AxisContentBuilder
-    private func plAxisLabel(_ value: AxisValue) -> some AxisContent {
-        AxisValueLabel {
-            if let v = value.as(String.self) {
-                Text(v)
-                    .font(.caption2)
-                    .foregroundStyle(Color.pokerTextSecondary)
-            }
-        }
     }
 }
 
