@@ -2,7 +2,6 @@ import Foundation
 import SwiftData
 import Observation
 import WidgetKit
-import ActivityKit
 import os
 
 @Observable
@@ -31,6 +30,8 @@ final class SettingsViewModel {
     @ObservationIgnored var localDataOwner = LocalDataOwner.standard
     /// Tests inject a failing save.
     @ObservationIgnored var makeWiper: @MainActor (ModelContext) -> LocalDataWiper = { LocalDataWiper(modelContext: $0) }
+    /// Tests record the call instead of ending real Live Activities.
+    @ObservationIgnored var endLiveActivities: @MainActor () -> Void = { LocalDataWiper.endLiveActivities() }
 
     func loadSettings(from context: ModelContext) {
         let descriptor = FetchDescriptor<Settings>()
@@ -75,6 +76,8 @@ final class SettingsViewModel {
         // No stats left, so they belong to no account (#69).
         localDataOwner.clear()
         resetToDefaults()
+        // The active session is gone, so its Live Activity must go too (#269).
+        endLiveActivities()
         WidgetCenter.shared.reloadAllTimelines()
     }
 
@@ -95,11 +98,7 @@ final class SettingsViewModel {
             localWipeFailed = true
         }
         resetToDefaults()
-        Task {
-            for activity in Activity<SessionActivityAttributes>.activities {
-                await activity.end(nil, dismissalPolicy: .immediate)
-            }
-        }
+        endLiveActivities()
         WidgetCenter.shared.reloadAllTimelines()
     }
 

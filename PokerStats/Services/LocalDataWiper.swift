@@ -1,9 +1,11 @@
 import Foundation
 import SwiftData
+import ActivityKit
 
 /// Removes every local SwiftData model (hands, sessions, settings) in one
-/// save. Used after the server confirms account deletion. On error the
-/// context is rolled back, so nothing is half-deleted.
+/// save. Used by Delete All Data, after the server confirms account
+/// deletion, and by "Delete from This iPhone". On error the context is
+/// rolled back, so nothing is half-deleted.
 @MainActor
 struct LocalDataWiper {
     let modelContext: ModelContext
@@ -26,6 +28,16 @@ struct LocalDataWiper {
         } catch {
             modelContext.rollback()
             throw error
+        }
+    }
+
+    /// Ends every running Live Activity right away. Callers run it after a
+    /// wipe so the Lock Screen doesn't show a deleted session (#269).
+    static func endLiveActivities() {
+        Task {
+            for activity in Activity<SessionActivityAttributes>.activities {
+                await activity.end(nil, dismissalPolicy: .immediate)
+            }
         }
     }
 }

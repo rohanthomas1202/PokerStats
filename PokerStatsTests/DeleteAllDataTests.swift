@@ -110,4 +110,36 @@ struct DeleteAllDataTests {
         #expect(owner.ownerId == nil)
         #expect(vm.deleteAllDataFailure == nil)
     }
+
+    /// #269: like account deletion, Delete All Data ends the Live Activity,
+    /// so the Lock Screen doesn't keep showing a deleted session.
+    @Test func successfulWipe_endsLiveActivities() throws {
+        try seed()
+        let vm = viewModel()
+        var endCalls = 0
+        vm.endLiveActivities = { endCalls += 1 }
+
+        vm.deleteAllData(from: context)
+
+        #expect(try counts() == [0, 0, 0])
+        #expect(endCalls == 1)
+    }
+
+    /// Nothing was deleted, so the running session's Live Activity stays.
+    @Test func failedWipe_keepsLiveActivities() throws {
+        try seed()
+        let vm = viewModel()
+        var endCalls = 0
+        vm.endLiveActivities = { endCalls += 1 }
+        vm.makeWiper = { context in
+            var wiper = LocalDataWiper(modelContext: context)
+            wiper.save = { _ in throw InjectedSaveFailure() }
+            return wiper
+        }
+
+        vm.deleteAllData(from: context)
+
+        #expect(try counts() == [2, 3, 1])
+        #expect(endCalls == 0)
+    }
 }

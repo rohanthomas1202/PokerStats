@@ -1,7 +1,6 @@
 import Foundation
 import SwiftData
 import WidgetKit
-import ActivityKit
 import os
 
 /// Asks what to do when an account signs in and the stats on this device
@@ -131,11 +130,7 @@ final class LocalDataOwnershipViewModel {
         owner.adopt(userId)
         ownerRevision += 1
         isChoicePending = false
-        Task {
-            for activity in Activity<SessionActivityAttributes>.activities {
-                await activity.end(nil, dismissalPolicy: .immediate)
-            }
-        }
+        LocalDataWiper.endLiveActivities()
         WidgetCenter.shared.reloadAllTimelines()
     }
 }
