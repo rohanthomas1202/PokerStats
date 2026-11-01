@@ -18,6 +18,12 @@ struct SessionDetailView: View {
         return (CurrencyFormatter.formatSignedPercent(roi), CurrencyFormatter.percentResult(roi))
     }
 
+    /// What VoiceOver says for the Session ROI value: "Not available" when the
+    /// row shows "--", otherwise the visible text (#313).
+    nonisolated static func roiAccessibilityLabel(_ text: String) -> String {
+        text == "--" ? "Not available" : text
+    }
+
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
@@ -211,6 +217,7 @@ struct SessionDetailView: View {
                             .font(.subheadline)
                             .fontWeight(.bold)
                             .foregroundStyle(Color.pokerResult(roi.result))
+                            .accessibilityLabel(Text(Self.roiAccessibilityLabel(roi.text)))
                     }
                     .padding(.top, 4)
                 }

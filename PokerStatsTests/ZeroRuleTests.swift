@@ -146,6 +146,16 @@ struct ZeroRuleTests {
         #expect(SessionDetailView.roiDisplay(netProfit: 12.5, totalInvested: 200).text == "+6.2%")
     }
 
+    /// VoiceOver says "Not available" instead of "--" for an ROI that can't be
+    /// calculated, and the visible text otherwise (#313).
+    @Test func sessionROI_accessibilityLabel() {
+        let notFinite = SessionDetailView.roiDisplay(netProfit: .infinity, totalInvested: 100)
+        #expect(notFinite.text == "--")
+        #expect(SessionDetailView.roiAccessibilityLabel(notFinite.text) == "Not available")
+        let profit = SessionDetailView.roiDisplay(netProfit: 50, totalInvested: 200)
+        #expect(SessionDetailView.roiAccessibilityLabel(profit.text) == "+25.0%")
+    }
+
     // MARK: - Hourly rates and ROI (#308)
 
     /// Calm vs Tilted hourly rates show cents, so a rate under half a cent
