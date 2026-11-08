@@ -7,6 +7,7 @@ import Testing
 @MainActor
 struct BackupListStateTests {
 
+    @MainActor
     private final class FakeBackupList {
         var results: [Result<[BackupMetadata], any Error>]
         var calls = 0
