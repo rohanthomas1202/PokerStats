@@ -100,6 +100,10 @@ final class BackupViewModel {
     // MARK: - Load Backups
 
     func loadBackups() async {
+        await loadBackups(preservingListState: false)
+    }
+
+    private func loadBackups(preservingListState: Bool) async {
         guard let actions, actions.isSignedIn() else {
             backups = []
             listState = .empty
@@ -107,7 +111,7 @@ final class BackupViewModel {
             return
         }
 
-        listState = .loading
+        if !preservingListState { listState = .loading }
         isLoadingBackups = true
         clearError()
         defer { isLoadingBackups = false }
@@ -123,16 +127,17 @@ final class BackupViewModel {
         }
     }
 
-    /// Pull to refresh: reloads the list unless a backup or restore is running.
+    /// Pull to refresh keeps the current list and status; the system shows progress.
     func refresh() async {
         guard !isBackingUp, !isRestoring, !isLoadingBackups else { return }
-        await loadBackups()
+        await loadBackups(preservingListState: true)
     }
 
     /// True when the current error is the list's load failure, shown in the
     /// history section with its own Try Again row instead of the error section.
+    /// With retained rows, use the existing error section above history instead.
     var showsLoadFailureInList: Bool {
-        guard case .failed(let message) = listState else { return false }
+        guard backups.isEmpty, case .failed(let message) = listState else { return false }
         return errorMessage == message
     }
 
