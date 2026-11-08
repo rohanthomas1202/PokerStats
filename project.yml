@@ -10,7 +10,7 @@ packages:
   # Pinned exactly; see README "Dependencies". Realtime is not used.
   Supabase:
     url: https://github.com/supabase/supabase-swift
-    exactVersion: 2.55.5
+    exactVersion: 2.55.6
 
 settings:
   base:
