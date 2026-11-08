@@ -2,17 +2,13 @@ import Foundation
 import SwiftData
 @testable import PokerStats
 
-/// A UserDefaults suite that deletes itself once the test releases it (#68).
+/// Isolated UserDefaults suite with a unique name so tests cannot collide (#68).
+/// Does not call removePersistentDomain in deinit: that correlated with
+/// test-host hangs when this type was adopted in wipe and ownership suites
+/// (#345, #348). Unique names already isolate tests.
 final class ThrowawayDefaults: UserDefaults {
-    private let name: String
-
     init(_ prefix: String) {
-        name = "\(prefix).\(UUID().uuidString)"
-        super.init(suiteName: name)!
-    }
-
-    deinit {
-        removePersistentDomain(forName: name)
+        super.init(suiteName: "\(prefix).\(UUID().uuidString)")!
     }
 }
 
