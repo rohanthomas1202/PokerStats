@@ -11,6 +11,9 @@ struct SettingsView: View {
     @State private var isShowingDeleteAccountFinal = false
     @State private var isSeeding = false
     @State private var seedComplete = false
+    /// onAppear also runs when popping back from a subview; ask about a
+    /// failed wipe once per Settings visit, not on every return (#273).
+    @State private var checkedPendingLocalWipe = false
     @AppStorage(LiveActivityPreference.key) private var showOnLockScreen = LiveActivityPreference.defaultValue
 
     var body: some View {
@@ -170,6 +173,10 @@ struct SettingsView: View {
         .navigationBarBackButtonHidden(authViewModel?.isDeletingAccount == true)
         .onAppear {
             viewModel.loadSettings(from: modelContext)
+            if !checkedPendingLocalWipe {
+                checkedPendingLocalWipe = true
+                viewModel.showPendingLocalWipe(isSignedIn: authService.isAuthenticated)
+            }
             if authViewModel == nil {
                 authViewModel = AuthViewModel(authService: authService)
             }
@@ -177,6 +184,9 @@ struct SettingsView: View {
         .onChange(of: ownership.localDataDeletions) { _, _ in
             // "Delete from This iPhone" wiped the settings too (#264).
             viewModel.loadSettings(from: modelContext)
+        }
+        .onChange(of: authService.isAuthenticated) { _, signedIn in
+            if signedIn { viewModel.clearPendingLocalWipe() }
         }
         .onChange(of: viewModel.defaultBuyIn) { _, _ in
             viewModel.saveSettings(to: modelContext)
@@ -191,9 +201,10 @@ struct SettingsView: View {
         .modifier(SignOutConfirmation(authViewModel: authViewModel))
         .modifier(DeleteAllDataFailureAlert(viewModel: viewModel))
         .alert(SettingsViewModel.localWipeFailedTitle, isPresented: $viewModel.localWipeFailed) {
-            Button("Cancel", role: .cancel) { }
+            // Not Now keeps the pending flag, so the alert returns (#273).
+            Button("Not Now", role: .cancel) { }
             Button("Delete Local Data", role: .destructive) {
-                viewModel.wipeAfterAccountDeletion(from: modelContext)
+                viewModel.retryLocalWipe(from: modelContext)
             }
         } message: {
             Text(SettingsViewModel.localWipeFailedMessage)

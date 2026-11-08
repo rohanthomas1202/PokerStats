@@ -26,6 +26,10 @@ final class ActiveSessionViewModel {
     var energyLevel: Int = 3
     var focusLevel: Int = 3
 
+    /// Delete All Data, account deletion and the Settings toggle end every
+    /// activity through LocalDataWiper.endLiveActivities() without telling
+    /// this view model, so this can point at an ended activity. Updating an
+    /// ended activity does nothing; don't restart it from here (#273).
     private var liveActivity: Activity<SessionActivityAttributes>?
 
     init(
