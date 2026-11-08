@@ -74,7 +74,7 @@ struct SessionRefreshTests {
         let storage = signedInStorage()
         let server = FakeServer()
         let log = AuthLog()
-        let auth = AuthService(client: client(storage, reply: testCase.reply, server: server, log: log))
+        let auth = TestHelpers.authService(client: client(storage, reply: testCase.reply, server: server, log: log))
         #expect(auth.restoreSession()) // expired, needs refresh
         #expect(auth.isAuthenticated)
 
@@ -98,7 +98,7 @@ struct SessionRefreshTests {
     @Test func expiredSessionAtLaunch_isRefreshed_andStaysSignedIn() async {
         let storage = signedInStorage()
         let server = FakeServer()
-        let auth = AuthService(client: client(storage, reply: .status(200, sessionResponseBody()), server: server))
+        let auth = TestHelpers.authService(client: client(storage, reply: .status(200, sessionResponseBody()), server: server))
         #expect(auth.restoreSession())
 
         auth.observeAuthChanges()
@@ -118,7 +118,7 @@ struct SessionRefreshTests {
         let storage = signedInStorage(expired: false)
         let server = FakeServer()
         let sut = client(storage, reply: .status(200, sessionResponseBody()), server: server)
-        let auth = AuthService(client: sut)
+        let auth = TestHelpers.authService(client: sut)
         await observe(auth)
 
         let session = try await sut.auth.refreshSession()
@@ -136,7 +136,7 @@ struct SessionRefreshTests {
     @Test func noStoredSession_restoresSignedOut_andSendsNothing() async {
         let server = FakeServer()
         let sut = client(InMemoryAuthStorage(), reply: .status(200, sessionResponseBody()), server: server)
-        let auth = AuthService(client: sut)
+        let auth = TestHelpers.authService(client: sut)
         #expect(!auth.restoreSession())
         #expect(!auth.isAuthenticated)
 
@@ -159,7 +159,7 @@ struct SessionRefreshTests {
         storage.seed(testSession(accessToken: "fresh-access", expired: false))
         let server = FakeServer()
         let sut = testClient(storage, server: server) { _, _ in .status(200, "[]") }
-        let auth = AuthService(client: sut)
+        let auth = TestHelpers.authService(client: sut)
         #expect(!auth.restoreSession())
         #expect(auth.isAuthenticated)
 
@@ -177,7 +177,7 @@ struct SessionRefreshTests {
         let storage = signedInStorage()
         let server = FakeServer()
         let sut = client(storage, reply: .status(500, #"{"message":"db down at 10.0.0.3"}"#), server: server)
-        let auth = AuthService(client: sut)
+        let auth = TestHelpers.authService(client: sut)
         auth.restoreSession()
 
         do {
@@ -202,7 +202,7 @@ struct SessionRefreshTests {
     @Test func definitiveRefreshDuringRequest_clearsSession_andFlipsUI() async {
         let storage = signedInStorage(expired: false)
         let sut = client(storage, reply: .status(400, refreshTokenNotFound))
-        let auth = AuthService(client: sut)
+        let auth = TestHelpers.authService(client: sut)
         await observe(auth)
 
         // The access token expires while the app is running.
@@ -223,7 +223,7 @@ struct SessionRefreshTests {
     @Test func otherClientsInvalidation_doesNotSignThisServiceOut() async throws {
         let mine = signedInStorage(expired: false)
         let mineClient = client(mine, reply: .status(200, sessionResponseBody()))
-        let auth = AuthService(client: mineClient)
+        let auth = TestHelpers.authService(client: mineClient)
         await observe(auth)
         let events = EventLog()
         let probe = Task {
@@ -258,7 +258,7 @@ struct SessionRefreshTests {
         let storage = signedInStorage(expired: false)
         let server = FakeServer()
         let sut = client(storage, reply: .status(status, body), server: server)
-        let auth = AuthService(client: sut)
+        let auth = TestHelpers.authService(client: sut)
         await observe(auth)
 
         // The access token expires while the app is running.
@@ -282,7 +282,7 @@ struct SessionRefreshTests {
     @Test func otherCodesDuringRequest_keepSession() async {
         let storage = signedInStorage()
         let sut = client(storage, reply: .status(400, #"{"code":"validation_failed","message":"bad"}"#))
-        let auth = AuthService(client: sut)
+        let auth = TestHelpers.authService(client: sut)
         auth.restoreSession()
 
         do {
@@ -309,7 +309,7 @@ struct SessionRefreshTests {
             if index == 0 { await gate.wait() }
             return .status(200, sessionResponseBody())
         }
-        let auth = AuthService(client: sut)
+        let auth = TestHelpers.authService(client: sut)
         auth.restoreSession()
 
         let first = Task { try await SupabaseClient.accessToken(sut.auth) }
@@ -337,7 +337,7 @@ struct SessionRefreshTests {
             if index == 0 { await gate.wait() }
             return index < 2 ? .status(503, "upstream") : .status(200, sessionResponseBody())
         }
-        let auth = AuthService(client: sut)
+        let auth = TestHelpers.authService(client: sut)
         auth.restoreSession()
 
         let first = Task { try await SupabaseClient.accessToken(sut.auth) }
@@ -381,7 +381,7 @@ struct SessionRefreshTests {
             await gate.wait()
             return .status(200, sessionResponseBody())
         }
-        let auth = AuthService(client: sut)
+        let auth = TestHelpers.authService(client: sut)
         auth.restoreSession()
         auth.observeAuthChanges() // starts the launch refresh
         await waitUntil("refresh sent") { server.refreshCount == 1 }
@@ -405,7 +405,7 @@ struct SessionRefreshTests {
             await gate.wait()
             return .status(200, sessionResponseBody())
         }
-        let auth = AuthService(client: sut)
+        let auth = TestHelpers.authService(client: sut)
         auth.restoreSession()
 
         let request = Task { try await SupabaseClient.accessToken(sut.auth) }
@@ -439,7 +439,7 @@ struct SessionRefreshTests {
             }
             return .status(200, sessionResponseBody(refreshToken: "b-refresh", email: "b@example.com"))
         }
-        let auth = AuthService(client: sut)
+        let auth = TestHelpers.authService(client: sut)
         auth.restoreSession()
         auth.observeAuthChanges() // starts the launch refresh for the old session
         await waitUntil("refresh sent") { server.refreshCount == 1 }
@@ -468,7 +468,7 @@ struct SessionRefreshTests {
             }
             return .status(200, sessionResponseBody(refreshToken: "b-refresh", email: "b@example.com"))
         }
-        let auth = AuthService(client: sut)
+        let auth = TestHelpers.authService(client: sut)
         await observe(auth)
 
         // The old access token expires, so the request refreshes it.

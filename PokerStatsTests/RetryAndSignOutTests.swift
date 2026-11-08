@@ -240,7 +240,7 @@ struct RetryAndSignOutTests {
     @Test func signInTryAgain_runsAppleAndSupabaseAgain_withAFreshNonce() async throws {
         let nonces = Nonces()
         let vm = AuthViewModel(
-            authService: AuthService(),
+            authService: TestHelpers.authService(),
             performAppleSignIn: { credential in
                 nonces.sentToSupabase.append(credential.rawNonce)
                 if nonces.sentToSupabase.count == 1 { throw URLError(.notConnectedToInternet) }
@@ -281,7 +281,7 @@ struct RetryAndSignOutTests {
     @Test func signInTryAgain_cancelledByUser_showsNoError() async {
         let supabase = Calls()
         let vm = AuthViewModel(
-            authService: AuthService(),
+            authService: TestHelpers.authService(),
             performAppleSignIn: { _ in supabase.count += 1 },
             performAppleAuthorization: { _ in throw ASAuthorizationError(.canceled) }
         )
@@ -296,7 +296,7 @@ struct RetryAndSignOutTests {
     @Test func signInTryAgain_afterAnError_cancelled_clearsTheError() async {
         let seen = AttemptObserver()
         let vm = AuthViewModel(
-            authService: AuthService(),
+            authService: TestHelpers.authService(),
             performAppleSignIn: { _ in throw URLError(.notConnectedToInternet) },
             performAppleAuthorization: { _ in
                 seen.errorDuringAttempt = seen.viewModel?.errorMessage
@@ -324,7 +324,7 @@ struct RetryAndSignOutTests {
 
     @Test func signInServerError_showsServerCopy() async {
         let vm = AuthViewModel(
-            authService: AuthService(),
+            authService: TestHelpers.authService(),
             performAppleSignIn: { _ in throw SupabaseError.httpError(statusCode: 502, message: "raw") }
         )
         _ = vm.startAppleSignInAttempt()
@@ -341,7 +341,7 @@ struct RetryAndSignOutTests {
 
     @Test func signOut_asksFirst_thenSignsOutAndShowsFeedback() async {
         let signOuts = Calls()
-        let vm = AuthViewModel(authService: AuthService(), performSignOut: { signOuts.count += 1 })
+        let vm = AuthViewModel(authService: TestHelpers.authService(), performSignOut: { signOuts.count += 1 })
 
         vm.requestSignOut()
         #expect(vm.isShowingSignOutConfirmation)
@@ -356,7 +356,7 @@ struct RetryAndSignOutTests {
 
     @Test func signOut_cancelled_staysSignedIn() {
         let signOuts = Calls()
-        let vm = AuthViewModel(authService: AuthService(), performSignOut: { signOuts.count += 1 })
+        let vm = AuthViewModel(authService: TestHelpers.authService(), performSignOut: { signOuts.count += 1 })
         vm.requestSignOut()
         vm.isShowingSignOutConfirmation = false // Cancel
         #expect(signOuts.count == 0)
@@ -364,7 +364,7 @@ struct RetryAndSignOutTests {
     }
 
     @Test func signOutFeedback_hidesAfterAWhile() async {
-        let vm = AuthViewModel(authService: AuthService(), performSignOut: {})
+        let vm = AuthViewModel(authService: TestHelpers.authService(), performSignOut: {})
         await vm.confirmSignOut(feedbackDuration: .milliseconds(10)).value
         #expect(vm.signOutFeedback != nil)
         let deadline = ContinuousClock.now + .seconds(5)

@@ -54,7 +54,7 @@ struct SignInNonceTests {
         let server = FakeServer()
         let storage = InMemoryAuthStorage()
         let client = testClient(storage, server: server) { _, _ in .status(200, sessionResponseBody()) }
-        let auth = AuthService(client: client)
+        let auth = TestHelpers.authService(client: client)
 
         try await auth.signInWithApple(identityToken: Data("id.token.jwt".utf8), rawNonce: "raw-nonce")
 
@@ -82,7 +82,7 @@ struct SignInNonceTests {
         perform: @escaping @MainActor () async throws -> Void = {}
     ) -> AuthViewModel {
         AuthViewModel(
-            authService: AuthService(),
+            authService: TestHelpers.authService(),
             performDeleteAccount: {},
             performAppleSignIn: { credential in
                 recorder.credentials.append(credential)

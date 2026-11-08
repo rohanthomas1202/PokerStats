@@ -13,8 +13,10 @@ struct AppLinksTests {
 
     /// Send Feedback must open the same support page as the App Store
     /// Connect support URL, not the github.com placeholder (#282).
-    @Test func feedback_isTheSupportURL() {
-        #expect(AppLinks.feedback.absoluteString == "https://github.com/rohanthomas1202/PokerStats/issues")
+    @Test func feedback_isTheSupportURL() throws {
+        let supportURL = try TestHelpers.repositoryFile("fastlane/metadata/en-US/support_url.txt")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        #expect(AppLinks.feedback.absoluteString == supportURL)
     }
 
     /// The needs-support alert reads the one shared constant, so filling in

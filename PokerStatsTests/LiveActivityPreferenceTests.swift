@@ -13,6 +13,12 @@ import Testing
 @MainActor
 struct LiveActivityPreferenceTests {
 
+    @Test func settingsFooter_describesTheLockScreenFields() throws {
+        let view = try TestHelpers.repositoryFile("PokerStats/Views/Settings/SettingsView.swift")
+        let footer = "Shows your stakes, session timer and hand count on the Lock Screen and in the Dynamic Island. Amount invested and location appear only when iPhone is unlocked."
+        #expect(view.contains("Text(\"\(footer)\")"))
+    }
+
     @Test func unset_defaultsToOn() {
         let defaults = ThrowawayDefaults("LiveActivityPreferenceTests")
         #expect(LiveActivityPreference(defaults: defaults).showOnLockScreen)

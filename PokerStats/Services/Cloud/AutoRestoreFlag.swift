@@ -4,6 +4,7 @@ import Foundation
 /// user deliberately deleted local data. Once set, auto-restore does not run
 /// again on this device, so a wipe is never undone silently. Manual restore
 /// in Settings > Cloud Backup ignores it. A reinstall clears it.
+@MainActor
 struct AutoRestoreFlag {
     static let key = "autoRestore.firstRestoreDone"
 

@@ -10,13 +10,14 @@ private struct InjectedSaveFailure: Error {}
 @Suite("Local Wipe After Account Deletion Tests", .serialized)
 @MainActor
 struct LocalWipeAfterAccountDeletionTests {
-    private let owner = LocalDataOwner(defaults: UserDefaults(suiteName: "LocalWipeAfterAccountDeletionTests.\(UUID().uuidString)")!)
+    private let owner = LocalDataOwner(defaults: ThrowawayDefaults("LocalWipeAfterAccountDeletionTests"))
     private let container: ModelContainer
 
     init() throws {
-        // Plain suites, like `owner`: a ThrowawayDefaults released when the
-        // suite tears down hung the test host here.
-        let defaults = UserDefaults(suiteName: "LocalWipeAfterAccountDeletionTests.flags.\(UUID().uuidString)")!
+        // #345 fixed a host hang with serialization, a widget reload stub and
+        // plain suites together; the cause was not isolated. Keep serialization
+        // and the stub while restoring self-cleaning suites (#279, #332).
+        let defaults = ThrowawayDefaults("LocalWipeAfterAccountDeletionTests.flags")
         flag = AutoRestoreFlag(defaults: defaults)
         pending = PendingLocalWipe(defaults: defaults)
         container = try TestHelpers.createContainer()

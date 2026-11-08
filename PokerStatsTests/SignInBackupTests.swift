@@ -118,6 +118,7 @@ struct SignInBackupTests {
             log.events.append("sign-in backup")
             return metadata()
         }
+        #expect(auth.isBackupPending, "Backup must be scheduled before waiting for completion")
         await waitUntil("sign-in backup finished") { !auth.isBackupPending }
         #expect(!auth.hasUnsentChanges)
 
@@ -142,6 +143,7 @@ struct SignInBackupTests {
             log.events.append("sign-in backup")
             return metadata()
         }
+        #expect(auth.isBackupPending, "Backup must be scheduled before waiting for completion")
         await waitUntil("sign-in backup finished") { !auth.isBackupPending }
         #expect(log.count("sign-in backup") == 1)
         #expect(!auth.hasUnsentChanges)
@@ -162,6 +164,7 @@ struct SignInBackupTests {
             log.events.append("sign-in backup")
             return metadata()
         }
+        #expect(relaunched.isBackupPending, "Backup must be scheduled before waiting for completion")
         await waitUntil("sign-in backup finished") { !relaunched.isBackupPending }
         #expect(log.count("sign-in backup") == 1)
         #expect(!relaunched.hasUnsentChanges)
@@ -175,6 +178,7 @@ struct SignInBackupTests {
         let auth = signedOutAuth(owner)
         signIn(auth)
         auth.scheduleBackup { throw URLError(.notConnectedToInternet) }
+        #expect(auth.isBackupPending, "Backup must be scheduled before waiting for completion")
         await waitUntil("backup failed") { !auth.isBackupPending }
 
         #expect(signedOutAuth(owner).hasUnsentChanges)
@@ -214,6 +218,7 @@ struct SignInBackupTests {
 
         signIn(auth)
         auth.backUpUnsentChangesAtSignIn(modelContext: context)
+        #expect(auth.isBackupPending, "Backup must be scheduled before waiting for completion")
         await waitUntil("sign-in backup finished") { !auth.isBackupPending }
         auth.backUpUnsentChangesAtSignIn(modelContext: context)
         for _ in 0..<20 { await Task.yield() }
@@ -297,6 +302,7 @@ struct SignInBackupTests {
             log.events.append("sign-in backup")
             return metadata()
         }
+        #expect(auth.isBackupPending, "Backup must be scheduled before waiting for completion")
         await waitUntil("sign-in backup finished") { log.count("sign-in backup") == 1 && !auth.isBackupPending }
         #expect(!auth.hasUnsentChanges)
 

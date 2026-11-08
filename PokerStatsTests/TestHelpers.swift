@@ -2,7 +2,21 @@ import Foundation
 import SwiftData
 @testable import PokerStats
 
-/// Test helper to create in-memory SwiftData containers.
+/// A UserDefaults suite that deletes itself once the test releases it (#68).
+final class ThrowawayDefaults: UserDefaults {
+    private let name: String
+
+    init(_ prefix: String) {
+        name = "\(prefix).\(UUID().uuidString)"
+        super.init(suiteName: name)!
+    }
+
+    deinit {
+        removePersistentDomain(forName: name)
+    }
+}
+
+/// Shared isolated test fixtures.
 enum TestHelpers {
 
     @MainActor
@@ -10,6 +24,19 @@ enum TestHelpers {
         let schema = Schema([Session.self, Hand.self, Settings.self])
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         return try ModelContainer(for: schema, configurations: [config])
+    }
+
+    @MainActor
+    static func authService(client: SupabaseClient = .shared) -> AuthService {
+        let auth = AuthService(client: client)
+        auth.localDataOwner = LocalDataOwner(defaults: ThrowawayDefaults("AuthServiceTests"))
+        return auth
+    }
+
+    static func repositoryFile(_ path: String) throws -> String {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+        return try String(contentsOf: root.appendingPathComponent(path), encoding: .utf8)
     }
 
     // MARK: - Hand Factories
