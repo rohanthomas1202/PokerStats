@@ -123,7 +123,7 @@ Third-party Swift packages are allowed. Every package the app uses is listed her
 
 | Name | Pinned version | Purpose | Link |
 |------|----------------|---------|------|
-| supabase-swift (products Auth, Functions, PostgREST, Storage) | 2.55.5 | Supabase clients: Sign in with Apple and the session (Keychain storage, token refresh), backups in Storage, `backup_metadata` and `profiles` through PostgREST, and the `delete-account` edge function. Realtime is not used. | [supabase/supabase-swift](https://github.com/supabase/supabase-swift) |
+| supabase-swift (products Auth, Functions, PostgREST, Storage) | 2.55.6 | Supabase clients: Sign in with Apple and the session (Keychain storage, token refresh), backups in Storage, `backup_metadata` and `profiles` through PostgREST, and the `delete-account` edge function. Realtime is not used. | [supabase/supabase-swift](https://github.com/supabase/supabase-swift) |
 
 `Package.resolved` also pins the packages supabase-swift depends on (swift-asn1, swift-clocks, swift-concurrency-extras, swift-crypto, swift-http-types, swift-issue-reporting, xctest-dynamic-overlay). They are not used by the app directly.
 
