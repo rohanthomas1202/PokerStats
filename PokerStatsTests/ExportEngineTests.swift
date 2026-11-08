@@ -103,6 +103,31 @@ struct ExportEngineTests {
         }
     }
 
+    @Test func formulaPrefixes_areNeutralizedOnlyInCSVTextCells() throws {
+        let fixture = try ExportFixture()
+        let files = try fixture.export()
+        let csvRows = try Self.csv(files.sessionsCSV)
+        let json = try Self.document(files.json)
+        let jsonRows = try #require(json["sessions"] as? [[String: Any]])
+        let triggers: [(Int, String, String)] = [
+            (0, "stakes", "=1+2"),
+            (1, "stakes", "+1/2"),
+            (1, "notes", "-Abandoned"),
+            (2, "location", "@Home"),
+            (2, "stakes", "\t1/2"),
+            (2, "notes", "\rActive, \"table\"\nnotes"),
+        ]
+        for (index, column, raw) in triggers {
+            #expect(csvRows[index][column] == "'" + raw)
+            #expect(jsonRows[index][column] as? String == raw)
+        }
+        #expect(csvRows[1]["location"] == "")
+        // Nested player names are JSON content, not spreadsheet cell prefixes.
+        let config = try #require(jsonRows[0]["table_config"] as? [String: Any])
+        let seats = try #require(config["seats"] as? [[String: Any]])
+        #expect(seats[0]["playerName"] as? String == "=Zoë")
+    }
+
     @Test func emptyAccount_isHeaderOnlyAndValidJSON() throws {
         let files = try ExportEngine.makeFiles(sessions: [], hands: [], settings: Settings())
         for (actual, name) in [(files.sessionsCSV, "sessions.csv"), (files.handsCSV, "hands.csv")] {
@@ -265,12 +290,15 @@ private struct ExportFixture {
             let f = row.fields
             let hand = try Hand(
                 id: row.id, handNumber: #require(f.handNumber), timestamp: #require(f.playedAt),
-                preflopAction: #require(f.preflopAction), faced3Bet: #require(f.faced3Bet),
+                preflopAction: #require(f.preflopAction), faced3Bet: #require(f.faced3Bet as Bool?),
                 threeBetResponse: f.threeBetResponse ?? nil, postflopResult: f.postflopResult ?? nil,
                 didCBet: f.didCBet ?? nil, notes: #require(f.notes), position: #require(f.position)
             )
             context.insert(hand)
-            hand.session = try #require(sessions.first { $0.id == f.sessionId })
+            guard let session = sessions.first(where: { $0.id == f.sessionId }) else {
+                throw Invalid.row
+            }
+            hand.session = session
             hands.append(hand)
         }
         try context.save()

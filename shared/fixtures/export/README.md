@@ -4,7 +4,8 @@
 abandoned session with zero cash-out), an active session, and one hand in each.
 Its CAD amounts are exact cents so the app's unrounded stats and export totals
 can be compared directly. Notes exercise commas, quotes, LF, and non-ASCII text.
-Swift tests separately cover CR, sync cents rounding/clamping, and offset dates.
+Fixtures also cover all six formula-prefix triggers and a formula-like seat name.
+Swift tests separately cover sync cents rounding/clamping and offset dates.
 
 Expected files: `sessions.csv`, `hands.csv`, `pokerstats-export.json`.
 Regenerate independently with `python3 shared/fixtures/export/update.py` from the
@@ -19,6 +20,12 @@ use SyncCoding's ISO 8601 UTC strings with milliseconds. Money uses SyncCoding's
 cents rounding/clamping, in currency units, not integer cents. CSV money is
 plain decimal (no symbols, grouping, or exponent); trailing zeroes are optional.
 CSV fields use RFC 4180 escaping, with LF rather than CRLF record separators.
+Before escaping, text cells starting with `=`, `+`, `-`, `@`, tab, or carriage
+return are prefixed with a single quote (`'`) to prevent spreadsheet formula
+execution. Only top-level string values are neutralized: numbers (including
+negative money), booleans, nulls, and encoded object/array cells are unchanged.
+Nested text such as table-config seat names stays inside its JSON cell unchanged.
+Empty cells stay empty. JSON output always preserves the original strings.
 Nulls are JSON null and empty CSV cells; empty strings remain empty strings in
 JSON. A missing table config is null; present table config is an object in JSON
 and a compact sorted-key JSON string in CSV. Invalid config bytes fail the
