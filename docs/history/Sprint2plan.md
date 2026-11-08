@@ -1,3 +1,5 @@
+> Historical plan from Sprint 2. Not instructions; do not follow its process rules.
+
 # PokerStats — UI Redesign + 5 New Features Plan
 
 ## Context

@@ -1,7 +1,7 @@
 <h1 align="center">PokerStats</h1>
 
 <p align="center">
-  <strong>A native iOS app for live poker players to track sessions, log hands in real-time, and compute HUD-style statistics — all offline.</strong>
+  <strong>A native iOS app for live poker players to track sessions, log hands in real-time, and compute HUD-style statistics offline, with optional Sign in with Apple and Supabase cloud backup.</strong>
 </p>
 
 <p align="center">
@@ -9,7 +9,7 @@
   <img src="https://img.shields.io/badge/swift-6.0-orange?style=flat-square" alt="Swift">
   <img src="https://img.shields.io/badge/swiftui-latest-purple?style=flat-square" alt="SwiftUI">
   <img src="https://img.shields.io/badge/swiftdata-latest-green?style=flat-square" alt="SwiftData">
-  <img src="https://img.shields.io/badge/tests-91%20passing-success?style=flat-square" alt="Tests">
+  <img src="https://img.shields.io/badge/iOS%20unit%20tests-459%20passing-success?style=flat-square" alt="459 iOS unit tests passing">
 </p>
 
 ---
@@ -20,29 +20,28 @@ Live poker players have no fast, mobile-first tool to track both financial resul
 
 ## The Solution
 
-PokerStats combines session-level financial tracking with a **sub-3-second hand-logging interaction**, enabling live poker players to compute statistics — **VPIP, PFR, 3-Bet%, C-Bet%, WTSD%, W$SD%** — that were previously only available through online poker HUD software.
+PokerStats combines session-level financial tracking with hand logging designed for live play. The sub-3-second entry target guides the interaction; it is not a measured timing guarantee. The app computes **VPIP, PFR, Fold to 3-Bet%, C-Bet%, WTSD%, W$SD%** from recorded hands. Session tracking and analysis work offline; sign-in enables cloud backup and restore.
 
 ---
 
 ## Features
 
 ### Session Management
-- **One-tap session start** with buy-in, stakes, and location
-- **Live session timer** computed from persisted start time (crash-proof)
+- **Session setup** with buy-in, stakes, location, and optional table configuration
+- **Live session timer** computed from persisted start time
 - **Rebuy and add-on tracking** during active sessions
 - **Cash-out and P&L auto-calculation** at session end
 - **Session recovery** — kill the app mid-session and pick up right where you left off
 
-### Hand Logger (Sub-3-Second Design)
-The hand logger uses **progressive disclosure** to minimize taps:
+### Hand Logger
+The hand logger uses progressive disclosure. Tap **Log Hand** to open the sheet, select a position or Skip, then choose Fold, Call, or Raise. Fold saves the hand and dismisses the sheet. Calls ask for the result; raises also ask about facing a 3-bet, the response if needed, and a c-bet if the player saw the flop.
 
-| Scenario | Taps | Time |
-|----------|------|------|
-| Fold preflop | 1 | < 1s |
-| Call, won/lost | 2 | ~1.5s |
-| Raise, no 3-bet, won preflop | 3 | ~2s |
-| Raise, saw flop + c-bet | 4 | ~2.5s |
-| Raise, faced 3-bet, called, result + c-bet | 5 | ~3s |
+With manual position selection, a preflop fold takes two choices inside the sheet, plus the tap to open it. With calibrated automatic position tracking, the sheet starts at preflop, so Fold is one choice inside the sheet. It is not a one-tap action from the active session screen. Notes and position corrections are optional.
+
+### Position Tracking
+- Manual position selection, including Skip for unknown position
+- Optional table setup and button calibration for automatic position rotation, with corrections during a session
+- Per-position hand counts, VPIP, and PFR on the dashboard and session detail screen
 
 ### Poker Statistics Engine
 All stats computed on-demand from raw hand data using pure functions:
@@ -70,7 +69,7 @@ All stats computed on-demand from raw hand data using pure functions:
 
 ### Trend Charts (Swift Charts)
 - **Cumulative bankroll** line chart over time
-- **Rolling VPIP/PFR** dual-line trend with configurable window
+- **Rolling VPIP/PFR** dual-line trend
 - **Profit by day of week** bar chart (green/red)
 - **Session P&L distribution** histogram
 - Time filter: All Time, 30 days, 90 days, 6 months
@@ -81,7 +80,7 @@ All stats computed on-demand from raw hand data using pure functions:
 - Per-session mental state badges in session detail
 
 ### Live Activities & Widgets
-- **Lock screen Live Activity** during active sessions with timer, hand count, and invested amount
+- **Lock screen Live Activity** during active sessions with timer and hand count; location and invested amount are privacy-sensitive
 - **Dynamic Island** support (compact and expanded)
 - **Home screen widget** with lifetime P&L, sessions, and streak (small + medium sizes)
 
@@ -93,6 +92,16 @@ All stats computed on-demand from raw hand data using pure functions:
 - **Per-session insights** in session detail view (10+ hands required)
 - **Overall health assessment** — Solid, Needs Work, or Leaking
 - Minimum 20 hands required for lifetime analysis
+
+### Account & Cloud Backup
+- Optional **Sign in with Apple** through Supabase Auth, with Keychain session storage
+- Manual backups and automatic backups after local changes while signed in
+- Backup history, loading and retry states, and pull-to-refresh that keeps existing content visible
+- Restore a selected backup, with an option to back up first; restore replaces local data rather than merging it
+- Automatic restore into an empty local store after sign-in
+- Account deletion with Apple reauthentication when required, cloud deletion, and local cleanup with retry if cleanup fails
+
+Cloud backups use Supabase Storage with metadata in Postgres. They are encrypted on the server, not end-to-end encrypted. Backup and restore are available today; ongoing cross-device sync and sharing belong to milestone 1.1.
 
 ### Session History
 - Full session list grouped by month
@@ -106,7 +115,7 @@ All stats computed on-demand from raw hand data using pure functions:
 
 | Component | Choice | Rationale |
 |-----------|--------|-----------|
-| **Language** | Swift 6 | Latest stable with strict concurrency |
+| **Language** | Swift 6 | Strict concurrency |
 | **UI** | SwiftUI | Native, declarative, mature on iOS 26 |
 | **Persistence** | SwiftData | Modern replacement for Core Data, `@Model` + `@Query` |
 | **Architecture** | MVVM | Lightweight, idiomatic SwiftUI with `@Observable` |
@@ -174,8 +183,10 @@ cd PokerStats
 The Xcode project is generated from `project.yml` using XcodeGen. This keeps the project file out of source control and avoids merge conflicts.
 
 ```bash
-xcodegen generate
+./ci_scripts/generate_project.sh
 ```
+
+The wrapper restores the committed `Package.resolved` after generation. See [Dependencies](#dependencies) for the lockfile policy. Cloud features also need Supabase configuration; the pre-build step in `project.yml` reads `SUPABASE_URL` and `SUPABASE_ANON_KEY` from a local, untracked `.env`. Without it, the build uses placeholders.
 
 ### 3. Open in Xcode
 
@@ -204,11 +215,11 @@ Or in Xcode: **Cmd + U**
 
 One repo holds the iOS app, the backend, and the web app.
 
-- **iOS app:** `PokerStats/`, `PokerStatsWidgets/`, `PokerStatsTests/`, and `PokerStatsUITests/`. The [Project Structure](#project-structure) section below lists their files.
+- **iOS app:** `PokerStats/`, `PokerStatsWidgets/`, `PokerStatsTests/`, and `PokerStatsUITests/`. The [Project Structure](#project-structure) section below summarizes their contents.
 - **Backend:** `supabase/` holds the database migrations, row-level security policies, and edge functions. Deploying `delete-account`: [docs/runbooks/delete-account-deploy.md](docs/runbooks/delete-account-deploy.md).
 - **Web app:** goes in `web/` when the 1.2 milestone starts. It doesn't exist yet.
-- **Shared test data:** goes in `shared/fixtures/`. The iOS and web test suites will both read it, so the two compute the same stats. It doesn't exist yet.
-- **Specs:** product specs are in `docs/specs/`.
+- **Shared test data:** `shared/fixtures/stats/` holds stat definitions, datasets, and a reference calculator; `shared/fixtures/sync/` holds sync schemas, examples, and contract tests. The Deno fixture tests run in the Shared fixtures CI job. The iOS and future web suites can use these contracts; they are not part of the iOS unit-test count.
+- **Specs:** product specs are in `docs/specs/`. [Sprint2plan.md](docs/history/Sprint2plan.md) and the plans under `docs/superpowers/` are historical records, not current process instructions.
 - **Backlog:** this repo's issues, ranked in [#17](https://github.com/rohanthomas1202/PokerStats/issues/17). The `ios`, `backend`, and `web` lane labels decide which engineer takes an item.
 - **CI:** each pull request runs only the jobs its changes touch, and one check, `CI passed`, reports the result ([#98](https://github.com/rohanthomas1202/PokerStats/issues/98)). The `Detect changes` job runs `ci-areas-test.sh` before it picks the jobs. See [Continuous Integration](#continuous-integration).
 - **Review rules:** `.github/CODEOWNERS` sets who must review each path ([#99](https://github.com/rohanthomas1202/PokerStats/issues/99)).
@@ -219,103 +230,20 @@ One repo holds the iOS app, the backend, and the web app.
 
 ## Project Structure
 
-```
-PokerStats/
-├── project.yml                          # XcodeGen project definition
-├── PokerStats/
-│   ├── App/
-│   │   ├── PokerStatsApp.swift          # Entry point, ModelContainer setup
-│   │   └── ContentView.swift            # 4-tab navigation (Dashboard, Session, Trends, History)
-│   │
-│   ├── Models/
-│   │   ├── Session.swift                # @Model: session with inline money tracking
-│   │   ├── Hand.swift                   # @Model: hand with computed stat flags
-│   │   ├── Settings.swift               # @Model: user preferences singleton
-│   │   ├── Enums.swift                  # GameType, SessionStatus, PreflopAction, MentalMetricType, etc.
-│   │   ├── ComputedStats.swift          # Value type for aggregated statistics
-│   │   └── SessionActivityAttributes.swift # Live Activity attributes for active sessions
-│   │
-│   ├── ViewModels/
-│   │   ├── DashboardViewModel.swift     # Lifetime stats, recent sessions
-│   │   ├── NewSessionViewModel.swift    # Session creation form state
-│   │   ├── ActiveSessionViewModel.swift # Live session: timer, hands, money
-│   │   ├── HandLoggerViewModel.swift    # State machine for hand entry flow
-│   │   ├── SessionListViewModel.swift   # History filtering and grouping
-│   │   ├── SessionDetailViewModel.swift # Single session stats + editing
-│   │   ├── TrendsViewModel.swift        # Trend chart data + time filtering
-│   │   ├── LeakFinderViewModel.swift    # Leak analysis, profile selection
-│   │   └── SettingsViewModel.swift      # Preferences management
-│   │
-│   ├── Views/
-│   │   ├── Dashboard/
-│   │   │   └── DashboardView.swift      # Main dashboard with stats and recent sessions
-│   │   ├── Session/
-│   │   │   ├── SessionTabView.swift     # Context-aware: start vs active session
-│   │   │   ├── StartSessionView.swift   # New session form with mental sliders
-│   │   │   ├── ActiveSessionView.swift  # Live session with hand logging + check-in
-│   │   │   ├── HandLoggerSheet.swift    # Progressive disclosure hand entry
-│   │   │   ├── MentalCheckSheet.swift   # Mid-session tilt/energy/focus check-in
-│   │   │   └── EndSessionSummaryView.swift  # Session completion summary
-│   │   ├── History/
-│   │   │   ├── SessionHistoryView.swift # Searchable session list by month
-│   │   │   ├── SessionRowView.swift     # Compact session row component
-│   │   │   └── SessionDetailView.swift  # Session stats, hand log, and per-session insights
-│   │   ├── Trends/
-│   │   │   └── TrendsView.swift         # 4 Swift Charts (bankroll, VPIP/PFR, day-of-week, P&L)
-│   │   ├── Analysis/
-│   │   │   └── LeakFinderView.swift     # Profile picker, health summary, insight cards
-│   │   ├── Settings/
-│   │   │   └── SettingsView.swift       # Defaults, data management, about
-│   │   ├── Theme/
-│   │   │   └── PokerTheme.swift         # Dark color palette, spacing tokens, card modifier
-│   │   └── Components/
-│   │       ├── StatCardView.swift       # StatCardView, StatGaugeView, EmptyStateView, CurrencyField
-│   │       ├── RangeBarView.swift       # Gradient bar with indicator dot and good-range overlay
-│   │       ├── StatHelpView.swift       # Stat definitions with help sheet
-│   │       ├── PlayStyleChartView.swift # Diamond radar chart (TAG/LAG/ROCK/FISH)
-│   │       ├── PlayStyleLabel.swift     # Play style classification + badge
-│   │       ├── CircularGaugeView.swift  # Gradient ring gauge with center text
-│   │       ├── MentalMetricSlider.swift # 5-dot tappable scale for tilt/energy/focus
-│   │       └── InsightCardView.swift    # Expandable leak insight with severity bar
-│   │
-│   ├── Services/
-│   │   ├── StatCalculator.swift         # Pure stat computation (all formulas)
-│   │   ├── TrendCalculator.swift        # Time-series data for charts + mental correlation
-│   │   ├── LeakFinder.swift             # Stat analysis vs optimal ranges, coaching insights
-│   │   ├── AppGroupContainer.swift      # Shared ModelContainer for widget extension
-│   │   └── SessionRecoveryService.swift # Active session crash recovery
-│   │
-│   ├── Repositories/
-│   │   └── SessionRepository.swift      # Protocol + SwiftData CRUD implementation
-│   │
-│   ├── Utilities/
-│   │   ├── CurrencyFormatter.swift      # Locale-aware money formatting
-│   │   ├── DurationFormatter.swift      # TimeInterval → "2h 15m" or "01:23:45"
-│   │   └── DateFormatting.swift         # Shared date formatters
-│   │
-│   ├── Resources/
-│   │   └── Assets.xcassets              # App icon, accent color
-│   │
-│   └── Preview Content/
-│       └── PreviewSampleData.swift      # Sample data for SwiftUI previews
-│
-├── PokerStatsWidgets/
-│   ├── PokerStatsWidgetBundle.swift     # Widget bundle (Live Activity + Home Screen)
-│   ├── PokerStatsLiveActivity.swift     # Lock screen + Dynamic Island live activity
-│   └── PokerStatsLifetimeWidget.swift   # Home screen widget (small + medium)
-│
-└── PokerStatsTests/
-    ├── StatCalculatorTests.swift        # All stat formula tests + 3 worked examples
-    ├── SessionTests.swift               # Session computed property tests
-    ├── HandTests.swift                  # Hand computed flag tests
-    ├── PlayStyleTests.swift             # Play style classification tests
-    ├── TrendCalculatorTests.swift       # Trend chart data computation tests
-    ├── TiltTrackerTests.swift           # Mental correlation tests
-    ├── LeakFinderTests.swift            # Leak analysis, severity, profiles, edge cases
-    └── TestHelpers.swift                # In-memory container + hand factories
-```
+This is a directory guide, not an exhaustive file inventory. See the linked folders for current files.
 
-**Total: 48 source files | 7 test files | 91 tests**
+| Path | Contents |
+|------|----------|
+| [`PokerStats/App/`](PokerStats/App/) | App entry, four-tab navigation, auth and auto-restore setup |
+| [`PokerStats/Models/`](PokerStats/Models/) | SwiftData models, table configuration, computed stats, cloud DTOs, Live Activity attributes |
+| [`PokerStats/Views/`](PokerStats/Views/) | Dashboard, session logging, history, trends, analysis, auth, settings, shared components |
+| [`PokerStats/ViewModels/`](PokerStats/ViewModels/) | Screen state, hand logger flow, auth, backup, restore, local data ownership |
+| [`PokerStats/Services/`](PokerStats/Services/) | Stat/trend calculators, leak analysis, position tracking, recovery, auth, backup/restore, local cleanup |
+| [`PokerStats/Repositories/`](PokerStats/Repositories/) | Session repository protocol and SwiftData implementation |
+| [`PokerStatsWidgets/`](PokerStatsWidgets/) | Home screen widget and Live Activity extension |
+| [`PokerStatsTests/`](PokerStatsTests/) | iOS unit suites and test helpers, including auth, backup/restore, deletion, widgets, stats and position tracking |
+| [`PokerStatsUITests/`](PokerStatsUITests/) | UI screenshot tests, separate from the iOS CI unit-test job |
+| `project.yml` | XcodeGen targets, packages, build settings, and pre-build configuration |
 
 ---
 
@@ -323,7 +251,9 @@ PokerStats/
 
 ### MVVM with @Observable
 
-All ViewModels use the `@Observable` macro with `@MainActor` isolation. SwiftData `@Model` objects are also `@MainActor`-isolated. Stats are computed on-demand — no caching needed at MVP scale.
+Screen ViewModels use `@Observable` with `@MainActor` isolation. The app accesses SwiftData through its model contexts; `AppGroupContainer` creates the shared store for the app and widget. Stat, trend, and leak calculations derive results from recorded data on demand.
+
+`AuthService` coordinates Supabase authentication, backup scheduling, and account deletion. `BackupService` serializes local data into versioned payloads, uploads them to Storage, and records metadata through PostgREST. `LocalDataRestorer` validates payloads and replaces local records in a separate context with a single save. Local data ownership checks prevent backing up another account's stats. These are backups, not a live sync engine.
 
 ```
 ┌─────────────┐     ┌──────────────┐     ┌─────────────────┐
@@ -332,7 +262,7 @@ All ViewModels use the `@Observable` macro with `@MainActor` isolation. SwiftDat
 └─────────────┘     └──────────────┘     └─────────────────┘
                            │
                     ┌──────┴───────┐
-                    │  Repository  │
+                    │ ModelContext │
                     │  (SwiftData) │
                     └──────────────┘
 ```
@@ -341,12 +271,19 @@ All ViewModels use the `@Observable` macro with `@MainActor` isolation. SwiftDat
 
 | Decision | Why |
 |----------|-----|
-| **MVVM over TCA** | App complexity doesn't warrant unidirectional data flow overhead |
+| **MVVM** | Screen state lives in observable ViewModels; views handle presentation |
 | **SwiftData over Core Data** | Modern, less boilerplate, native `@Query` integration |
-| **On-demand stat computation** | Sub-millisecond at MVP scale (< 10K hands), no caching complexity |
+| **On-demand stat computation** | Derive statistics from raw hands rather than storing separate stat totals |
 | **Inline money fields on Session** | No separate entity needed — one financial record per session |
 | **Enum-based hand model** | Matches the UI flow directly; computed properties derive stat flags |
-| **Timer from persisted startDate** | Uses `TimelineView` — survives app crashes by design |
+| **Timer from persisted startTime** | Uses `TimelineView` — survives app crashes by design |
+
+### Data Model
+
+- `Session` stores dates, location, game type, stakes, status, notes, buy-in, rebuys, add-ons, cash-out, tip/rake, and optional tilt/energy/focus levels. Optional encoded `TableConfig` stores seats and button calibration. Net profit is cash-out minus buy-in, rebuys, and add-ons; hourly rate and ROI are computed.
+- `Session.hands` has a cascade-delete relationship to `Hand`. Each hand stores its UUID, number, timestamp, position, preflop action, 3-bet response, postflop result, c-bet choice, and notes. Computed flags feed the calculators.
+- `Settings` stores default game type, stakes, buy-in, and currency. Live Activity visibility is a separate preference.
+- `BackupPayload` contains a schema version, creation date, app version, session/hand DTOs, and optional settings. `BackupMetadata` identifies the account's Storage object and records its counts, size, and schema version. Cloud DTOs are separate from SwiftData models.
 
 ### Data Flow
 
@@ -360,19 +297,13 @@ Hand Logger → Hand(@Model) → StatCalculator → ComputedStats → Dashboard/
 
 ## Testing
 
-The test suite covers all stat formulas with known-input/output validation and three complete worked examples that trace hands through every formula.
+The iOS unit suites cover stat formulas with known-input/output validation and worked examples, plus auth, backup/restore, deletion, local ownership, widgets, and presentation helpers.
 
 ### Test Suites
 
-| Suite | Tests | Coverage |
-|-------|-------|----------|
-| `StatCalculatorTests` | 30 | VPIP, PFR, Fold-to-3B, C-Bet, WTSD, W$SD, money stats, aggregation + 3 worked examples |
-| `HandTests` | 17 | All computed flags: voluntarilyPutMoneyIn, raisedPreflop, foldedPreflop, sawFlop, wentToShowdown, hadCBetOpportunity, actionSummary |
-| `SessionTests` | 7 | totalInvested, netProfit, hourlyRate, roi, isActive, nextHandNumber |
-| `PlayStyleTests` | 5 | TAG, Fish, Nit, Maniac classification + nil handling |
-| `TrendCalculatorTests` | 12 | Cumulative bankroll, rolling VPIP/PFR, day-of-week, P&L distribution, mental correlation |
-| `TiltTrackerTests` | 10 | Mental correlation computation, nil exclusion, averaging, edge cases |
-| `LeakFinderTests` | 10 | Tight player (all healthy), loose player (leaks), nil stats, boundaries, borderline, overall ratings, sorting, profile comparison |
+[`PokerStatsTests/`](PokerStatsTests/) contains **459 `@Test` declarations in 35 `@Suite` files**, plus two helper files, counted at base `39ef84c`. The green [CI run 42495410942](https://github.com/rohanthomas1202/PokerStats/actions/runs/42495410942), at PR #353 head `ba38111` before its squash merge, reported **459 tests in 35 suites passed**.
+
+That is the iOS unit-test count, not the monorepo total. The iOS job uses `-only-testing:PokerStatsTests`; it does not run `PokerStatsUITests`, Deno edge-function tests, pgTAP database tests, or shared fixture tests. The Deno, database, and shared fixture jobs were path-filter skipped in that run.
 
 ### Worked Examples
 
@@ -392,12 +323,14 @@ Cmd + U
 
 ### Continuous Integration
 
-GitHub Actions runs `.github/workflows/ci.yml` on every pull request to `main` and on every push to `main`. The **Detect changes** job passes the pull request's changed paths to `.github/scripts/ci-areas.sh`, which decides whether the iOS and Deno jobs run. A change under `.github/` runs both, and a push to `main` runs everything. The **CI passed** job fails if any other job failed or was cancelled, so it is the one check to require. The jobs that do the work:
+GitHub Actions runs `.github/workflows/ci.yml` on every pull request to `main` and on every push to `main`. The **Detect changes** job passes the pull request's changed paths to `.github/scripts/ci-areas.sh`, which decides whether the iOS, Deno, shared fixture, and database jobs run. A change under `.github/` runs all of those jobs, and a push to `main` runs everything. The **CI passed** job fails if any other job failed or was cancelled, so it is the one check to require. The jobs that do the work:
 
 - **iOS build and test** (`macos-26` runner, Xcode 26.6): installs a pinned XcodeGen release, runs `xcodegen generate`, builds the `PokerStats` scheme for the newest available iOS 26 iPhone simulator with code signing off, then runs the `PokerStatsTests` unit tests. Unsigned builds have no App Group entitlement, so `AppGroupContainer` uses an in-memory store when it runs as a unit-test host; a normal launch without the App Group fails with a clear error instead. SwiftPM checkouts and the module cache are cached, and packages resolve only from the committed `Package.resolved`. If tests fail, the `.xcresult` bundle is uploaded as a run artifact. The fastlane screenshot UI tests are not run in CI. CI has no `.env` file and no secrets: the pre-build script writes a placeholder `Secrets.plist`. The build gets its build number from `ci_scripts/build_number.sh`, and `ci_scripts/check_build_numbers.sh` checks that the built app and every `.appex` in its `PlugIns` folder carry it, with the app's version. The check fails if `PlugIns/PokerStatsWidgets.appex` is missing. It looks only at `PlugIns/*.appex`: an ExtensionKit extension under `Extensions/`, an App Clip or a nested extension is not checked, so extend the script before adding a target like that. Build numbers are UTC timestamps (`YYYYMMDDHHMMSS`, 14 digits) from now on, and they can't go back to a smaller counter: once a timestamp build is uploaded for a version, App Store Connect rejects a later build of that version unless its number is higher. Any other upload path, such as Xcode Cloud (#66), must use `ci_scripts/build_number.sh` or start above the latest timestamp build.
 - **Release scripts** (`ubuntu-latest`, every run): `.github/scripts/ios-release-test.sh` tests the tag parsing, the TestFlight notes, `fastlane/asc_key.rb`, the upload gates in `ios-release.yml` and the Fastfile, and the package lock: `build_app` passes `disable_package_automatic_updates: true`, both upload lanes call `ci_scripts/generate_project.sh`, the `release` lane alone passes `APP_STORE_SUBMISSION` (run against stand-in fastlane actions, with mutated Fastfile copies that must fail, and `project.yml`, the workflows and `ci_scripts/` must not set it), and `generate_project.sh`, run in a throwaway repo with a stand-in `xcodegen` that deletes `Package.resolved`, puts the file back and fails when it is missing, uncommitted or changed. `.github/scripts/build-numbers-test.sh` tests `ci_scripts/build_number.sh` (14 digits, two runs a second apart differ) and runs `ci_scripts/check_build_numbers.sh` on fake app bundles, with a Python stand-in for PlistBuddy. It also runs the Fastfile's check line on an archive path with a space and a single quote.
 - **Repo settings files** (`ubuntu-latest`, every run): `.github/scripts/repo-settings-test.sh` checks that `.github/rulesets/main.json` and `ios-tags.json` parse and hold the agreed settings, and that `main.json` requires exactly the gate job's name from `ci.yml`, so renaming **CI passed** fails CI. It also runs `.github/scripts/repo-settings-check.sh` against a stand-in `gh` and fails if the check makes any call other than a plain GET.
 - **Edge functions (Deno)** (`ubuntu-latest`): runs `deno check` and `deno test` in each folder under `supabase/functions/`.
+- **Shared fixtures** (`ubuntu-latest`): runs the Deno tests in `shared/fixtures/sync/` and `shared/fixtures/stats/` when backend or shared files change.
+- **Database tests (pgTAP)** (`ubuntu-latest`): applies migrations to a local Supabase Postgres instance, runs `supabase test db`, and checks that a deliberately weakened profiles policy fails the tests. Runs when backend or CI configuration files change.
 - **Privacy manifest declarations** (`ubuntu-latest`, runs when the iOS job does): `.github/scripts/privacy-api-check.sh` greps the app's and the widget extension's non-test Swift sources (the widget's list comes from `project.yml`) for required-reason APIs (UserDefaults, file timestamps, system boot time, disk space, active keyboards) and fails unless each category found is declared with a reason in that target's `PrivacyInfo.xcprivacy` (`PokerStats/PrivacyInfo.xcprivacy`, `PokerStatsWidgets/PrivacyInfo.xcprivacy`). Files under a folder named `PokerStatsTests/` or `PokerStatsUITests/`, at any depth, are skipped as tests; no other folder counts as a test folder. For the widget it reads each source's `path` and ignores excludes, so it can scan more files than the target builds, never fewer. It covers first-party Swift sources only: third-party SPM packages ship their own privacy manifests, which it does not read. It does not check that a declared reason code fits the category. It is a grep, so an API it does not list is not caught. The iOS job also prints the built app's manifest with `plutil -p`.
 - **Fastlane never submits** (`ubuntu-latest`, every run): `.github/scripts/fastlane-no-submit.sh` fails if a file under `fastlane/`, `.github/workflows/` or `ci_scripts/` sets `submit_for_review` or `automatic_release` to a literal true value (`true`, `yes`, `on` or `1`, any case) in one of these forms: a Ruby key, hash rocket, call or assignment (`key: true`, `:key => true`, `key(true)`, `key true`, `key = true`), a positional symbol key (`store(:submit_for_review, true)`), a setter symbol (`send(:submit_for_review=, true)`), an env or YAML setting (`DELIVER_SUBMIT_FOR_REVIEW=yes`, `KEY: "true"`, also behind a YAML tag such as `!!bool` or an `&anchor`), or a bare CLI flag (`--submit_for_review` with no value). After a separator (`:`, `=>`, `=`, `(` or one of those commas) the value may be on the next line. It also catches an `ENV.fetch` default when the env var name contains the key (`ENV.fetch("DELIVER_AUTOMATIC_RELEASE", "true")`) or when the key is set to the `ENV.fetch` call (`submit_for_review: ENV.fetch("ANY_NAME", "true")`), with or without parentheses and with nested `ENV.fetch` defaults. It does not detect values set in variables or options hashes, expressions such as `false || true`, an `ENV.fetch` block default, a comment line between the key and its value, or env vars set in the Xcode Cloud UI. Known false positives: a quoted key or a symbol key followed by a comma and a true word fails the check, even in a comment (`"submit_for_review", on` or `# options like :submit_for_review, on demand only`). Only those three paths are scanned, so a release script added anywhere else (the repo root, a Makefile, `.github/scripts/`) must also be added to the path list in `ci.yml`. The owner submits to App Review by hand.
 - **App Store metadata** (`ubuntu-latest`, every run): `.github/scripts/app-store-metadata-check.sh` checks the text files in `fastlane/metadata/en-US` against Apple's limits, counting characters without the final newline: name and subtitle 30, keywords 100, promotional text 170, description and release notes 4000. Each file must be valid UTF-8 with a trailing newline and no carriage returns. Keywords must be one comma-separated line with no spaces next to the commas and no empty, repeated, or name.txt words. URL files must hold one `https://` URL. A missing file is skipped. `.github/scripts/app-store-metadata-check-test.sh` tests the check and runs it on the committed files. It does not upload anything.
@@ -455,10 +388,14 @@ git push origin ios-sprint-3
 - [x] **Tilt & energy tracker** — Self-report mood/focus, correlate with hourly rate
 - [x] **Live Activities** — Lock screen session timer + home screen widget
 - [x] **Leak Finder** — Automated coaching insights comparing stats to optimal ranges
-- [ ] **Position tracking** — Per-position stat breakdowns (UTG, MP, CO, BTN, SB, BB)
-- [ ] **Tournament support** — Buy-ins, placements, ICM
-- [ ] **Data export** — CSV/JSON export via ShareLink
-- [ ] **iCloud sync** — Cross-device backup with CloudKit
+- [x] **Position tracking** — Manual selection, automatic rotation with table calibration, per-position VPIP/PFR
+- [x] **1.0 account and backup implementation** — Sign in with Apple, cloud backup/restore, account deletion, loading/retry states
+
+The 1.0 release still has open acceptance and owner setup work. This list records implemented functionality, not an App Store or TestFlight launch.
+
+Upcoming milestones are **1.1 Sync + sharing**, **1.2 Web**, and **1.3 Leaderboards**. After 1.0, Supabase is the single source of truth for user data. [iCloud sync #10](https://github.com/rohanthomas1202/PokerStats/issues/10#issuecomment-6248855748) is cancelled, not planned alongside Supabase sync.
+
+New feature proposals are welcome. The ranked issues in [#17](https://github.com/rohanthomas1202/PokerStats/issues/17) track scope and priority; historical plans are not product restrictions.
 
 ---
 
@@ -478,14 +415,14 @@ Contributions are welcome! Please follow these steps:
 
 - Follow existing patterns (MVVM, `@Observable`, pure `StatCalculator` functions)
 - Add unit tests for any new stat formulas
-- Keep the hand logger under 3 seconds for the longest path
+- Keep hand logging fast, with sub-3-second entry as the design goal rather than a guaranteed timing or fixed tap limit
 - Third-party SPM packages are allowed; follow the [dependency policy](#policy)
 
 ---
 
 ## License
 
-This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
+No `LICENSE` file is currently committed to this repository.
 
 ---
 
