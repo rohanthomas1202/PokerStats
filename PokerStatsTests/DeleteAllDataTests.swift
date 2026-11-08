@@ -10,7 +10,7 @@ private struct InjectedSaveFailure: Error {}
 @Suite("Delete All Data Tests")
 @MainActor
 struct DeleteAllDataTests {
-    private let owner = LocalDataOwner(defaults: ThrowawayDefaults("DeleteAllDataTests"))
+    private let owner = LocalDataOwner(defaults: UserDefaults(suiteName: "DeleteAllDataTests.\(UUID().uuidString)")!)
     private let container: ModelContainer
 
     init() throws {

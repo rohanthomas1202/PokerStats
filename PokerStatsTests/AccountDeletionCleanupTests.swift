@@ -26,7 +26,7 @@ struct AccountDeletionCleanupTests {
 
     private func settingsViewModel() -> SettingsViewModel {
         let vm = SettingsViewModel()
-        let defaults = ThrowawayDefaults("AccountDeletionCleanupTests.settings")
+        let defaults = UserDefaults(suiteName: "AccountDeletionCleanupTests.settings.\(UUID().uuidString)")!
         vm.autoRestoreFlag = AutoRestoreFlag(defaults: defaults)
         vm.localDataOwner = LocalDataOwner(defaults: defaults)
         vm.pendingLocalWipe = PendingLocalWipe(defaults: defaults)
@@ -357,7 +357,7 @@ struct AccountDeletionCleanupTests {
         let context = container.mainContext
         let auth = signedInAuth()
         let log = EventLog()
-        let owner = LocalDataOwner(defaults: ThrowawayDefaults("AccountDeletionCleanupTests"))
+        let owner = LocalDataOwner(defaults: UserDefaults(suiteName: "AccountDeletionCleanupTests.\(UUID().uuidString)")!)
         let service = BackupService(authService: auth, modelContext: context, owner: owner)
         let vm = BackupViewModel()
         vm.configure(BackupViewModel.Actions(
@@ -392,7 +392,7 @@ struct AccountDeletionCleanupTests {
         let container = try seededContainer()
         let context = container.mainContext
         let auth = signedInAuth()
-        let owner = LocalDataOwner(defaults: ThrowawayDefaults("AccountDeletionCleanupTests"))
+        let owner = LocalDataOwner(defaults: UserDefaults(suiteName: "AccountDeletionCleanupTests.\(UUID().uuidString)")!)
         let service = BackupService(authService: auth, modelContext: context, owner: owner)
 
         try await auth.deleteAccount(serverDelete: {
@@ -511,7 +511,7 @@ struct AccountDeletionCleanupTests {
         let context = container.mainContext
         let auth = signedInAuth()
         let log = EventLog()
-        let owner = LocalDataOwner(defaults: ThrowawayDefaults("AccountDeletionCleanupTests"))
+        let owner = LocalDataOwner(defaults: UserDefaults(suiteName: "AccountDeletionCleanupTests.\(UUID().uuidString)")!)
         let service = BackupService(authService: auth, modelContext: context, owner: owner)
 
         // A backup and a manual restore download are in flight.
