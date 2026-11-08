@@ -5,7 +5,12 @@ import Foundation
 // false. `logging_device_id` and `deleted_at` wait for #85's model fields.
 
 extension SyncSessionFields {
-    init(creating session: Session) {
+    /// Throws when `tableConfigData` is not a JSON object, rather than sending
+    /// `table_config` as null and wiping the server's copy.
+    init(creating session: Session) throws {
+        let tableConfig = try session.tableConfigData.map {
+            try JSONDecoder().decode([String: SyncJSON].self, from: $0)
+        }
         self.init(
             startTime: session.startTime,
             endTime: .some(session.endTime),
@@ -23,9 +28,7 @@ extension SyncSessionFields {
             energyLevel: .some(session.energyLevel),
             focusLevel: .some(session.focusLevel),
             // A JSON object, not the string the backup format uses.
-            tableConfig: .some(session.tableConfigData.flatMap {
-                try? JSONDecoder().decode([String: SyncJSON].self, from: $0)
-            })
+            tableConfig: .some(tableConfig)
         )
     }
 }
