@@ -112,7 +112,7 @@ struct BackupSettingsView: View {
                 }
             }
 
-            if viewModel.isLoadingBackups {
+            if viewModel.listState == .loading {
                 Section {
                     HStack {
                         Spacer()

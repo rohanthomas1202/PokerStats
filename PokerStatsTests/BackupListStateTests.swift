@@ -108,6 +108,67 @@ struct BackupListStateTests {
         #expect(vm.listState == .loaded([backup]))
     }
 
+    @Test func refreshFromEmpty_keepsEmptyCopyWhileFetching() async {
+        let fake = FakeBackupList([.success([]), .success([backup])])
+        let vm = viewModel(fake)
+        await vm.loadBackups()
+        fake.holdNext = true
+
+        let task = Task { await vm.refresh() }
+        while fake.gate == nil { await Task.yield() }
+        #expect(vm.isLoadingBackups)
+        #expect(vm.listState == .empty)
+        #expect(vm.listState != .loading)
+        #expect(vm.backups.isEmpty)
+
+        fake.gate?.resume()
+        await task.value
+        #expect(vm.listState == .loaded([backup]))
+        #expect(!vm.isLoadingBackups)
+    }
+
+    @Test func refreshFromLoaded_keepsRowsAndUsesExistingErrorSectionOnFailure() async {
+        let fake = FakeBackupList([
+            .success([backup]), .failure(URLError(.notConnectedToInternet)), .success([backup])
+        ])
+        let vm = viewModel(fake)
+        await vm.loadBackups()
+        fake.holdNext = true
+
+        let task = Task { await vm.refresh() }
+        while fake.gate == nil { await Task.yield() }
+        #expect(vm.isLoadingBackups)
+        #expect(vm.listState == .loaded([backup]))
+        #expect(vm.listState != .loading)
+        #expect(vm.backups == [backup])
+
+        fake.gate?.resume()
+        await task.value
+        #expect(vm.listState == .failed(UserFacingError.offlineMessage))
+        #expect(vm.backups == [backup])
+        #expect(vm.errorMessage == UserFacingError.offlineMessage)
+        // Retained history owns the only header; the existing error section shows Try Again.
+        #expect(!vm.showsLoadFailureInList)
+        #expect(vm.canRetry)
+
+        await vm.retry()
+        #expect(fake.calls == 3)
+        #expect(vm.listState == .loaded([backup]))
+        #expect(vm.errorMessage == nil)
+    }
+
+    @Test func refreshFromEmpty_failureUsesSingleHistoryErrorSection() async {
+        let vm = viewModel(FakeBackupList([
+            .success([]), .failure(URLError(.notConnectedToInternet))
+        ]))
+        await vm.loadBackups()
+        await vm.refresh()
+        #expect(vm.backups.isEmpty)
+        #expect(vm.listState == .failed(UserFacingError.offlineMessage))
+        #expect(vm.showsLoadFailureInList)
+        #expect(vm.canRetry)
+    }
+
     @Test func signedOut_isEmpty_withoutCallingTheService() async {
         let fake = FakeBackupList([])
         let vm = viewModel(fake, signedIn: false)
