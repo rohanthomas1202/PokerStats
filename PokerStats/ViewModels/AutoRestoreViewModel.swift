@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import os
 
 /// The top banner for the restore that runs after sign-in. Success and "no
@@ -23,13 +24,15 @@ final class AutoRestoreViewModel {
     /// Bumped by each run and by `dismiss()`; a run whose number is stale
     /// reports nothing, even if its restore ignores cancellation.
     @ObservationIgnored private var generation = 0
+    /// Tests record the announcement instead of posting it.
+    @ObservationIgnored var announce: @MainActor (String) -> Void = { AccessibilityNotification.Announcement($0).post() }
 
     private static let logger = Logger(subsystem: "com.rohanthomas.PokerStats", category: "AutoRestoreViewModel")
 
     var message: String? {
         switch status {
         case .restoring: "Restoring from cloud..."
-        case .restored(let sessionCount): "Restored \(sessionCount) sessions"
+        case .restored(let sessionCount): sessionCount == 1 ? "Restored 1 session" : "Restored \(sessionCount) sessions"
         case .noBackups: "No backups found"
         case .failed(let message, _): message
         case nil: nil
@@ -101,10 +104,11 @@ final class AutoRestoreViewModel {
                 UserFacingError.log(error, action: .autoRestore, to: Self.logger)
                 guard thisRun == generation else { return }
                 let userFacing = UserFacingError(error)
-                status = .failed(
-                    message: userFacing.bannerMessage(for: .autoRestore, isSignedIn: isSignedIn()),
-                    canRetry: userFacing.isRetryable
-                )
+                let signedIn = isSignedIn()
+                let message = userFacing.bannerMessage(for: .autoRestore, isSignedIn: signedIn)
+                // Signed out, Try Again can't succeed; the copy says to sign in (#259).
+                status = .failed(message: message, canRetry: userFacing.isRetryable && signedIn)
+                announce(message)
             }
         }
         runTask = task
