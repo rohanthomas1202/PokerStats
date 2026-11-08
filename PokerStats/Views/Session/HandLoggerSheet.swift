@@ -1,11 +1,13 @@
 import SwiftUI
 
 /// Sub-3-second hand logging sheet using progressive disclosure.
-/// Fold = 1 tap. Max = 5 taps.
+/// Taps including opening the sheet (auto-position / manual position):
+/// fold 2/3; call + result 3/4; raise to flop 5/6; raise then 3-bet to flop 6/7.
 struct HandLoggerSheet: View {
     @Bindable var viewModel: HandLoggerViewModel
     let onComplete: (Hand) -> Void
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         NavigationStack {
@@ -22,38 +24,42 @@ struct HandLoggerSheet: View {
 
                 Spacer()
 
-                // Position override overlay
-                if viewModel.isOverridingPosition {
-                    positionOverrideStep
-                        .transition(.asymmetric(
-                            insertion: .move(edge: .top).combined(with: .opacity),
-                            removal: .move(edge: .top).combined(with: .opacity)
-                        ))
-                } else {
-                    // Current step content
-                    Group {
-                        switch viewModel.currentStep {
-                        case .position:
-                            positionStep
-                        case .preflop:
-                            preflopStep
-                        case .threeBetQualifier:
-                            threeBetQualifierStep
-                        case .threeBetResponse:
-                            threeBetResponseStep
-                        case .postflopResult:
-                            postflopResultStep
-                        case .cBet:
-                            cBetStep
-                        case .done:
-                            EmptyView()
+                // Keep every step reachable at accessibility text sizes.
+                ScrollView {
+                    // Position override overlay
+                    if viewModel.isOverridingPosition {
+                        positionOverrideStep
+                            .transition(.asymmetric(
+                                insertion: .move(edge: .top).combined(with: .opacity),
+                                removal: .move(edge: .top).combined(with: .opacity)
+                            ))
+                    } else {
+                        // Current step content
+                        Group {
+                            switch viewModel.currentStep {
+                            case .position:
+                                positionStep
+                            case .preflop:
+                                preflopStep
+                            case .threeBetQualifier:
+                                threeBetQualifierStep
+                            case .threeBetResponse:
+                                threeBetResponseStep
+                            case .postflopResult:
+                                postflopResultStep
+                            case .cBet:
+                                cBetStep
+                            case .done:
+                                EmptyView()
+                            }
                         }
+                        .transition(.asymmetric(
+                            insertion: .move(edge: .trailing).combined(with: .opacity),
+                            removal: .move(edge: .leading).combined(with: .opacity)
+                        ))
                     }
-                    .transition(.asymmetric(
-                        insertion: .move(edge: .trailing).combined(with: .opacity),
-                        removal: .move(edge: .leading).combined(with: .opacity)
-                    ))
                 }
+                .scrollBounceBehavior(.basedOnSize)
 
                 Spacer()
 
@@ -152,9 +158,9 @@ struct HandLoggerSheet: View {
 
             Text("Where are you seated?")
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.primary)
 
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+            LazyVGrid(columns: positionColumns, spacing: 12) {
                 ForEach(viewModel.availablePositions, id: \.self) { position in
                     Button {
                         withAnimation(.easeInOut(duration: 0.2)) {
@@ -167,12 +173,13 @@ struct HandLoggerSheet: View {
                                 .fontWeight(.bold)
                             Text(position.longName)
                                 .font(.caption2)
-                                .foregroundStyle(.white.opacity(0.7))
+                                .foregroundStyle(.black)
                         }
+                        .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity)
-                        .frame(height: 60)
+                        .frame(minHeight: 60)
                         .background(Color.pokerAccent, in: RoundedRectangle(cornerRadius: 12))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.black)
                     }
                 }
             }
@@ -184,7 +191,7 @@ struct HandLoggerSheet: View {
             } label: {
                 Text("Skip")
                     .font(.subheadline)
-                    .foregroundStyle(Color.pokerTextSecondary)
+                    .foregroundStyle(.primary)
             }
         }
     }
@@ -199,16 +206,16 @@ struct HandLoggerSheet: View {
 
             Text("What did you do preflop?")
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.primary)
 
-            HStack(spacing: 12) {
-                actionButton("Fold", color: .gray) {
+            actionLayout {
+                actionButton("Fold", color: .pokerCard, foreground: .white) {
                     withAnimation(.easeInOut(duration: 0.2)) {
                         viewModel.selectPreflopAction(.fold)
                     }
                 }
 
-                actionButton("Call", color: .blue) {
+                actionButton("Call", color: .pokerAccent) {
                     withAnimation(.easeInOut(duration: 0.2)) {
                         viewModel.selectPreflopAction(.call)
                     }
@@ -233,16 +240,16 @@ struct HandLoggerSheet: View {
 
             Text("Did someone 3-bet after your raise?")
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.primary)
 
             HStack(spacing: 12) {
-                actionButton("No", color: .green) {
+                actionButton("No", color: .pokerProfit) {
                     withAnimation(.easeInOut(duration: 0.2)) {
                         viewModel.selectFaced3Bet(false)
                     }
                 }
 
-                actionButton("Yes", color: .red) {
+                actionButton("Yes", color: .pokerLoss) {
                     withAnimation(.easeInOut(duration: 0.2)) {
                         viewModel.selectFaced3Bet(true)
                     }
@@ -261,16 +268,16 @@ struct HandLoggerSheet: View {
 
             Text("What did you do facing the 3-bet?")
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.primary)
 
-            HStack(spacing: 12) {
-                actionButton("Folded", color: .gray) {
+            actionLayout {
+                actionButton("Folded", color: .pokerCard, foreground: .white) {
                     withAnimation(.easeInOut(duration: 0.2)) {
                         viewModel.selectThreeBetResponse(.folded)
                     }
                 }
 
-                actionButton("Called", color: .blue) {
+                actionButton("Called", color: .pokerAccent) {
                     withAnimation(.easeInOut(duration: 0.2)) {
                         viewModel.selectThreeBetResponse(.called)
                     }
@@ -295,14 +302,14 @@ struct HandLoggerSheet: View {
 
             Text("How did the hand end?")
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.primary)
 
             VStack(spacing: 10) {
-                resultButton("Won Preflop", subtitle: "No flop dealt", color: .green, result: .wonPreflop)
-                resultButton("Won Before Showdown", subtitle: "Opponent(s) folded", color: .green, result: .wonBeforeShowdown)
-                resultButton("Lost Before Showdown", subtitle: "You folded post-flop", color: .red, result: .lostBeforeShowdown)
-                resultButton("Won at Showdown", subtitle: "Best hand at showdown", color: .green, result: .wonAtShowdown)
-                resultButton("Lost at Showdown", subtitle: "Lost at showdown", color: .red, result: .lostAtShowdown)
+                resultButton("Won Preflop", subtitle: "No flop dealt", color: .pokerProfit, result: .wonPreflop)
+                resultButton("Won Before Showdown", subtitle: "Opponent(s) folded", color: .pokerProfit, result: .wonBeforeShowdown)
+                resultButton("Lost Before Showdown", subtitle: "You folded post-flop", color: .pokerLoss, result: .lostBeforeShowdown)
+                resultButton("Won at Showdown", subtitle: "Best hand at showdown", color: .pokerProfit, result: .wonAtShowdown)
+                resultButton("Lost at Showdown", subtitle: "Lost at showdown", color: .pokerLoss, result: .lostAtShowdown)
             }
         }
     }
@@ -320,15 +327,16 @@ struct HandLoggerSheet: View {
                         .fontWeight(.semibold)
                     Text(subtitle)
                         .font(.caption)
-                        .foregroundStyle(.white.opacity(0.7))
+                        .foregroundStyle(.black)
                 }
                 Spacer()
-                Image(systemName: color == .green ? "arrow.up.circle" : "arrow.down.circle")
+                Image(systemName: result.isWin ? "arrow.up.circle" : "arrow.down.circle")
             }
+            .fixedSize(horizontal: false, vertical: true)
             .padding()
             .frame(maxWidth: .infinity)
-            .background(color.opacity(0.8), in: RoundedRectangle(cornerRadius: 12))
-            .foregroundStyle(.white)
+            .background(color, in: RoundedRectangle(cornerRadius: 12))
+            .foregroundStyle(.black)
         }
     }
 
@@ -342,16 +350,16 @@ struct HandLoggerSheet: View {
 
             Text("Did you bet the flop after raising preflop?")
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.primary)
 
             HStack(spacing: 12) {
-                actionButton("Yes", color: .green) {
+                actionButton("Yes", color: .pokerProfit) {
                     withAnimation(.easeInOut(duration: 0.2)) {
                         viewModel.selectCBet(true)
                     }
                 }
 
-                actionButton("No", color: .red) {
+                actionButton("No", color: .pokerLoss) {
                     withAnimation(.easeInOut(duration: 0.2)) {
                         viewModel.selectCBet(false)
                     }
@@ -362,15 +370,28 @@ struct HandLoggerSheet: View {
 
     // MARK: - Action Button
 
-    private func actionButton(_ title: String, color: Color, action: @escaping () -> Void) -> some View {
+    private var actionLayout: AnyLayout {
+        dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(spacing: 12))
+            : AnyLayout(HStackLayout(spacing: 12))
+    }
+
+    private var positionColumns: [GridItem] {
+        Array(repeating: GridItem(.flexible()), count: dynamicTypeSize.isAccessibilitySize ? 2 : 3)
+    }
+
+    private func actionButton(
+        _ title: String, color: Color, foreground: Color = .black, action: @escaping () -> Void
+    ) -> some View {
         Button(action: action) {
             Text(title)
                 .font(.title3)
                 .fontWeight(.bold)
+                .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity)
-                .frame(height: 70)
+                .frame(minHeight: 70)
                 .background(color, in: RoundedRectangle(cornerRadius: 16))
-                .foregroundStyle(.white)
+                .foregroundStyle(foreground)
         }
     }
 
@@ -391,8 +412,8 @@ struct HandLoggerSheet: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 6)
-            .background(Color.pokerAccent.opacity(0.2), in: Capsule())
-            .foregroundStyle(Color.pokerAccent)
+            .background(Color.pokerAccent, in: Capsule())
+            .foregroundStyle(.black)
         }
     }
 
@@ -406,9 +427,9 @@ struct HandLoggerSheet: View {
 
             Text("Tap to correct your position")
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.primary)
 
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+            LazyVGrid(columns: positionColumns, spacing: 12) {
                 ForEach(viewModel.availablePositions, id: \.self) { position in
                     Button {
                         withAnimation(.easeInOut(duration: 0.2)) {
@@ -421,17 +442,19 @@ struct HandLoggerSheet: View {
                                 .fontWeight(.bold)
                             Text(position.longName)
                                 .font(.caption2)
-                                .foregroundStyle(.white.opacity(0.7))
+                                .foregroundStyle(.black)
                         }
+                        .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity)
-                        .frame(height: 60)
-                        .background(
-                            position == viewModel.selectedPosition
-                                ? Color.pokerAccent
-                                : Color.pokerAccent.opacity(0.6),
-                            in: RoundedRectangle(cornerRadius: 12)
-                        )
-                        .foregroundStyle(.white)
+                        .frame(minHeight: 60)
+                        .background(Color.pokerAccent, in: RoundedRectangle(cornerRadius: 12))
+                        .overlay {
+                            if position == viewModel.selectedPosition {
+                                RoundedRectangle(cornerRadius: 12)
+                                    .strokeBorder(.black, lineWidth: 3)
+                            }
+                        }
+                        .foregroundStyle(.black)
                     }
                 }
             }
@@ -443,7 +466,7 @@ struct HandLoggerSheet: View {
             } label: {
                 Text("Cancel")
                     .font(.subheadline)
-                    .foregroundStyle(Color.pokerTextSecondary)
+                    .foregroundStyle(.primary)
             }
         }
     }
