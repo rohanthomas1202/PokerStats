@@ -62,7 +62,7 @@ struct SettingsDTO: Codable, Sendable {
 
 // MARK: - Backup Metadata (from Supabase)
 
-struct BackupMetadata: Codable, Sendable, Identifiable {
+struct BackupMetadata: Codable, Sendable, Identifiable, Equatable {
     let id: UUID
     let userId: UUID
     let storagePath: String

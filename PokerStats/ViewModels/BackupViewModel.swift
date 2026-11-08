@@ -10,7 +10,10 @@ final class BackupViewModel {
     var backups: [BackupMetadata] = []
     var isBackingUp = false
     var isRestoring = false
-    var isLoadingBackups = false
+    /// The backup list's state, so the screen never says "No backups yet"
+    /// while the list loads or after it failed to load (#38).
+    private(set) var listState: ListState = .loading
+    var isLoadingBackups: Bool { listState == .loading }
     var errorMessage: String?
     var successMessage: String?
 
@@ -35,6 +38,14 @@ final class BackupViewModel {
 
     static let backupStoppedMessage = "Backup stopped. Tap Back Up Now to try again."
     static let restoreStoppedMessage = "Restore stopped. Choose a backup to try again."
+
+    enum ListState: Equatable {
+        case loading
+        case loaded([BackupMetadata])
+        case empty
+        /// The friendly copy from `UserFacingError`.
+        case failed(String)
+    }
 
     enum RetryableAction {
         case loadBackups
@@ -87,21 +98,36 @@ final class BackupViewModel {
     func loadBackups() async {
         guard let actions, actions.isSignedIn() else {
             backups = []
+            listState = .empty
             actions?.setStoppedWork(nil)
             return
         }
 
-        isLoadingBackups = true
+        listState = .loading
         clearError()
 
         do {
-            backups = try await actions.listBackups()
+            let loaded = try await actions.listBackups()
+            backups = loaded
+            listState = loaded.isEmpty ? .empty : .loaded(loaded)
             needsReloadAfterRestore = false
         } catch {
             show(error, action: .loadBackups, retry: .loadBackups)
+            listState = .failed(errorMessage ?? UserFacingError.unknownMessage(for: .loadBackups))
         }
+    }
 
-        isLoadingBackups = false
+    /// Pull to refresh: reloads the list unless a backup or restore is running.
+    func refresh() async {
+        guard !isBackingUp, !isRestoring, !isLoadingBackups else { return }
+        await loadBackups()
+    }
+
+    /// True when the current error is the list's load failure, shown in the
+    /// history section with its own Try Again row instead of the error section.
+    var showsLoadFailureInList: Bool {
+        guard case .failed(let message) = listState else { return false }
+        return errorMessage == message
     }
 
     // MARK: - Create Backup
