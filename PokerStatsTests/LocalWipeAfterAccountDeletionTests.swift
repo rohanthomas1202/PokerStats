@@ -14,6 +14,8 @@ struct LocalWipeAfterAccountDeletionTests {
     private let container: ModelContainer
 
     init() throws {
+        flag = freshFlag()
+        pending = PendingLocalWipe(defaults: ThrowawayDefaults("LocalWipeAfterAccountDeletionTests"))
         container = try TestHelpers.createContainer()
         let context = container.mainContext
         let session = Session(location: "A", status: .completed, buyIn: 100)
@@ -38,8 +40,8 @@ struct LocalWipeAfterAccountDeletionTests {
         ]
     }
 
-    private let flag = freshFlag()
-    private let pending = PendingLocalWipe(defaults: ThrowawayDefaults("LocalWipeAfterAccountDeletionTests"))
+    private let flag: AutoRestoreFlag
+    private let pending: PendingLocalWipe
     /// Results held until "the alert has dismissed".
     private let held = HeldResults()
     private let announced = Announcements()
@@ -235,12 +237,10 @@ struct LocalWipeAfterAccountDeletionTests {
     }
 }
 
-@MainActor
-private final class HeldResults {
+private final class HeldResults: @unchecked Sendable {
     var results: [@MainActor @Sendable () -> Void] = []
 }
 
-@MainActor
-private final class Announcements {
+private final class Announcements: @unchecked Sendable {
     var events: [String] = []
 }
