@@ -15,16 +15,18 @@ struct SyncWireTypesTests {
         #expect(SyncFeature.isEnabled == false)
     }
 
-    /// No app code outside Services/Sync names a sync type, so nothing in 1.0
-    /// calls into it while the switch is off.
+    /// No app code outside Services/Sync and Services/Export names a sync type,
+    /// so nothing in 1.0 calls into it while the switch is off.
     @Test func appCode_doesNotUseSyncTypes() throws {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         let syncFolder = root.appendingPathComponent("PokerStats/Services/Sync").standardizedFileURL.path
+        let exportFolder = root.appendingPathComponent("PokerStats/Services/Export").standardizedFileURL.path
         var checked = 0
         for folder in ["PokerStats", "PokerStatsWidgets"] {
             let files = FileManager.default.enumerator(at: root.appendingPathComponent(folder), includingPropertiesForKeys: nil)
             while let url = files?.nextObject() as? URL {
-                guard url.pathExtension == "swift", !url.standardizedFileURL.path.hasPrefix(syncFolder) else { continue }
+                guard url.pathExtension == "swift", !url.standardizedFileURL.path.hasPrefix(syncFolder + "/"),
+                      !url.standardizedFileURL.path.hasPrefix(exportFolder + "/") else { continue }
                 let source = try String(contentsOf: url, encoding: .utf8)
                 #expect(source.range(of: #"\bSync[A-Z]"#, options: .regularExpression) == nil, "\(url.lastPathComponent) uses a sync type")
                 checked += 1
