@@ -54,7 +54,7 @@ How to read the labels:
 
 **How the database schema is handled**
 - The schema (`Schema([Session.self, Hand.self, Settings.self])`) is listed three times: `AppGroupContainer`, `TestHelpers`, `PreviewSampleData`.
-- It has no version or migration plan, so the database just upgrades itself automatically when fields are added. `Sprint2plan.md` proposed a migration plan, but it was never built.
+- It has no version or migration plan, so the database just upgrades itself automatically when fields are added. [The historical Sprint 2 plan](../history/Sprint2plan.md) proposed a migration plan, but it was never built.
 - The widget extension compiles `Session.swift`, `Hand.swift`, `Settings.swift`, `Enums.swift`, `ComputedStats.swift`, `SessionActivityAttributes.swift`, `TableConfig.swift` and `AppGroupContainer.swift` (see `project.yml`).
 - **Rule:** any new type that `Session` refers to must also be added to the widget's source list, or the widget won't build.
 
