@@ -2,6 +2,8 @@ import SwiftUI
 import SwiftData
 
 struct ExportShareRow: View {
+    static let footer = "Creates three files with all your sessions and hands. Anyone you share them with can see your results. The JSON file keeps every detail. The CSV files open in spreadsheet apps."
+
     @Environment(\.modelContext) private var modelContext
     @State private var viewModel = ExportShareViewModel()
     @State private var isPresented = false
@@ -34,7 +36,7 @@ struct ExportShareRow: View {
                         case .removing:
                             ProgressView("Removing temporary files…")
                         case .cleanupFailed:
-                            Label("Couldn't remove the temporary files. Please try again.", systemImage: "exclamationmark.triangle")
+                            Label(ExportShareViewModel.cleanupFailedMessage, systemImage: "exclamationmark.triangle")
                             Button("Try Again") {
                                 Task {
                                     await viewModel.cleanup()
@@ -42,13 +44,13 @@ struct ExportShareRow: View {
                                 }
                             }
                         case .failed:
-                            Label("Couldn't export your data. Please try again.", systemImage: "exclamationmark.triangle")
+                            Label(ExportShareViewModel.failedMessage, systemImage: "exclamationmark.triangle")
                             Button("Try Again") {
                                 Task { await viewModel.prepare(container: modelContext.container) }
                             }
                         }
                     } footer: {
-                        Text("Exports three files with your poker data. The JSON file is the lossless copy. Tap Done after sharing to remove temporary files.")
+                        Text(Self.footer)
                     }
                 }
                 .navigationTitle("Export your data")
