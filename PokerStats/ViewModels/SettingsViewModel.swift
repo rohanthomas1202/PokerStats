@@ -41,6 +41,8 @@ final class SettingsViewModel {
     @ObservationIgnored var makeWiper: @MainActor (ModelContext) -> LocalDataWiper = { LocalDataWiper(modelContext: $0) }
     /// Tests record the call instead of ending real Live Activities.
     @ObservationIgnored var endLiveActivities: @MainActor () -> Void = { LocalDataWiper.endLiveActivities() }
+    /// Tests skip reloading real widget timelines.
+    @ObservationIgnored var reloadWidgets: @MainActor () -> Void = { WidgetCenter.shared.reloadAllTimelines() }
     /// Tests record the announcement instead of posting it.
     @ObservationIgnored var announce: @MainActor (String) -> Void = { AccessibilityNotification.Announcement($0).post() }
     /// Runs the result of Delete All Data once the "Are you absolutely sure?"
@@ -208,7 +210,7 @@ final class SettingsViewModel {
         // activity ends either way. Widgets reload even if nothing changed
         // (#273).
         endLiveActivities()
-        WidgetCenter.shared.reloadAllTimelines()
+        reloadWidgets()
         return wiped
     }
 

@@ -7,15 +7,18 @@ private struct InjectedSaveFailure: Error {}
 
 /// #60: after the account is deleted, a failed local wipe must tell the user
 /// and let them retry, not leave their data on the iPhone silently.
-@Suite("Local Wipe After Account Deletion Tests")
+@Suite("Local Wipe After Account Deletion Tests", .serialized)
 @MainActor
 struct LocalWipeAfterAccountDeletionTests {
     private let owner = LocalDataOwner(defaults: UserDefaults(suiteName: "LocalWipeAfterAccountDeletionTests.\(UUID().uuidString)")!)
     private let container: ModelContainer
 
     init() throws {
-        flag = freshFlag()
-        pending = PendingLocalWipe(defaults: ThrowawayDefaults("LocalWipeAfterAccountDeletionTests"))
+        // Plain suites, like `owner`: a ThrowawayDefaults released when the
+        // suite tears down hung the test host here.
+        let defaults = UserDefaults(suiteName: "LocalWipeAfterAccountDeletionTests.flags.\(UUID().uuidString)")!
+        flag = AutoRestoreFlag(defaults: defaults)
+        pending = PendingLocalWipe(defaults: defaults)
         container = try TestHelpers.createContainer()
         let context = container.mainContext
         let session = Session(location: "A", status: .completed, buyIn: 100)
@@ -56,6 +59,7 @@ struct LocalWipeAfterAccountDeletionTests {
         let announced = announced
         vm.announce = { announced.events.append($0) }
         vm.endLiveActivities = {}
+        vm.reloadWidgets = {}
         if failing {
             vm.makeWiper = { context in
                 var wiper = LocalDataWiper(modelContext: context)
