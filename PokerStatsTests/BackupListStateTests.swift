@@ -45,6 +45,7 @@ struct BackupListStateTests {
     @Test func startsLoading_notEmpty() {
         let vm = viewModel(FakeBackupList([]))
         #expect(vm.listState == .loading)
+        #expect(!vm.isLoadingBackups)
         #expect(vm.listState != .empty)
     }
 

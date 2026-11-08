@@ -12,8 +12,12 @@ final class BackupViewModel {
     var isRestoring = false
     /// The backup list's state, so the screen never says "No backups yet"
     /// while the list loads or after it failed to load (#38).
+    /// Starts as `.loading` (a UI placeholder, not an in-flight fetch).
     private(set) var listState: ListState = .loading
-    var isLoadingBackups: Bool { listState == .loading }
+    /// True only while `loadBackups()` is fetching. The initial `.loading`
+    /// placeholder does not count, so Try Again stays enabled until a
+    /// real load, backup, or restore is running.
+    var isLoadingBackups = false
     var errorMessage: String?
     var successMessage: String?
 
@@ -104,7 +108,9 @@ final class BackupViewModel {
         }
 
         listState = .loading
+        isLoadingBackups = true
         clearError()
+        defer { isLoadingBackups = false }
 
         do {
             let loaded = try await actions.listBackups()
