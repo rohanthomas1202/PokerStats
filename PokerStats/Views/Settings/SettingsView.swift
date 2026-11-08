@@ -11,6 +11,9 @@ struct SettingsView: View {
     @State private var isShowingDeleteAccountFinal = false
     @State private var isSeeding = false
     @State private var seedComplete = false
+    /// onAppear also runs when popping back from a subview; ask about a
+    /// failed wipe once per Settings visit, not on every return (#273).
+    @State private var checkedPendingLocalWipe = false
     @AppStorage(LiveActivityPreference.key) private var showOnLockScreen = LiveActivityPreference.defaultValue
 
     var body: some View {
@@ -170,7 +173,10 @@ struct SettingsView: View {
         .navigationBarBackButtonHidden(authViewModel?.isDeletingAccount == true)
         .onAppear {
             viewModel.loadSettings(from: modelContext)
-            viewModel.showPendingLocalWipe(isSignedIn: authService.isAuthenticated)
+            if !checkedPendingLocalWipe {
+                checkedPendingLocalWipe = true
+                viewModel.showPendingLocalWipe(isSignedIn: authService.isAuthenticated)
+            }
             if authViewModel == nil {
                 authViewModel = AuthViewModel(authService: authService)
             }
