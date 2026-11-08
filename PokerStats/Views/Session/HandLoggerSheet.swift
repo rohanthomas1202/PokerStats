@@ -7,6 +7,7 @@ struct HandLoggerSheet: View {
     @Bindable var viewModel: HandLoggerViewModel
     let onComplete: (Hand) -> Void
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         NavigationStack {
@@ -159,7 +160,7 @@ struct HandLoggerSheet: View {
                 .font(.subheadline)
                 .foregroundStyle(.primary)
 
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+            LazyVGrid(columns: positionColumns, spacing: 12) {
                 ForEach(viewModel.availablePositions, id: \.self) { position in
                     Button {
                         withAnimation(.easeInOut(duration: 0.2)) {
@@ -207,7 +208,7 @@ struct HandLoggerSheet: View {
                 .font(.subheadline)
                 .foregroundStyle(.primary)
 
-            HStack(spacing: 12) {
+            actionLayout {
                 actionButton("Fold", color: .pokerCard, foreground: .white) {
                     withAnimation(.easeInOut(duration: 0.2)) {
                         viewModel.selectPreflopAction(.fold)
@@ -269,7 +270,7 @@ struct HandLoggerSheet: View {
                 .font(.subheadline)
                 .foregroundStyle(.primary)
 
-            HStack(spacing: 12) {
+            actionLayout {
                 actionButton("Folded", color: .pokerCard, foreground: .white) {
                     withAnimation(.easeInOut(duration: 0.2)) {
                         viewModel.selectThreeBetResponse(.folded)
@@ -369,6 +370,16 @@ struct HandLoggerSheet: View {
 
     // MARK: - Action Button
 
+    private var actionLayout: AnyLayout {
+        dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(spacing: 12))
+            : AnyLayout(HStackLayout(spacing: 12))
+    }
+
+    private var positionColumns: [GridItem] {
+        Array(repeating: GridItem(.flexible()), count: dynamicTypeSize.isAccessibilitySize ? 2 : 3)
+    }
+
     private func actionButton(
         _ title: String, color: Color, foreground: Color = .black, action: @escaping () -> Void
     ) -> some View {
@@ -418,7 +429,7 @@ struct HandLoggerSheet: View {
                 .font(.subheadline)
                 .foregroundStyle(.primary)
 
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+            LazyVGrid(columns: positionColumns, spacing: 12) {
                 ForEach(viewModel.availablePositions, id: \.self) { position in
                     Button {
                         withAnimation(.easeInOut(duration: 0.2)) {
