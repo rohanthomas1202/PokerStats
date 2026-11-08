@@ -119,6 +119,10 @@ struct SettingsView: View {
                 .disabled(isSeeding)
                 #endif
 
+                if ExportFeature.isEnabled {
+                    ExportShareRow()
+                }
+
                 Button(role: .destructive) {
                     viewModel.showDeleteAllConfirmation = true
                 } label: {
