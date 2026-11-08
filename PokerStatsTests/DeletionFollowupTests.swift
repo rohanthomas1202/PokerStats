@@ -72,6 +72,38 @@ struct DeletionFollowupTests {
         backupViewModel(auth, log: log)
     }
 
+    @Test func successfulAutoBackup_clearsOnlyTheBackupStoppedNote() async {
+        for stopped in [StoppedCloudWork.backup, .restore] {
+            let auth = signedInAuth()
+            auth.setStoppedCloudWork(stopped)
+            let screen = reopenedScreen(auth, log: Log())
+
+            auth.scheduleBackup { metadata() }
+            await waitUntil("auto-backup finished") { !auth.isBackupPending }
+
+            #expect(auth.backupStatus?.hasPrefix("Backed up") == true)
+            if stopped == .backup {
+                #expect(auth.stoppedCloudWork == nil)
+                #expect(screen.stoppedNote == nil)
+            } else {
+                #expect(auth.stoppedCloudWork == .restore)
+                #expect(screen.stoppedNote == BackupViewModel.restoreStoppedMessage)
+            }
+            await auth.signOut()
+        }
+    }
+
+    @Test func failedAutoBackup_keepsTheBackupStoppedNote() async {
+        let auth = signedInAuth()
+        auth.setStoppedCloudWork(.backup)
+        auth.scheduleBackup { throw ServerDown() }
+        await waitUntil("auto-backup failed") { !auth.isBackupPending }
+
+        #expect(auth.stoppedCloudWork == .backup)
+        #expect(reopenedScreen(auth, log: Log()).stoppedNote == BackupViewModel.backupStoppedMessage)
+        await auth.signOut()
+    }
+
     // MARK: - #268: say when a deletion that didn't complete stopped a manual backup or restore
 
     @Test func backUpNow_stoppedByADeletionThatDidNotComplete_showsANeutralNote() async {
@@ -404,5 +436,26 @@ struct DeletionFollowupTests {
         #expect(list.events.count == 2)
         #expect(vm.backups.count == 1)
         #expect(vm.successMessage?.hasPrefix("Restored") == true)
+    }
+
+    @Test func newManualRestore_dropsThePreviousRestoresPendingListReload() async {
+        let list = Log(), create = Log(), restore = Log()
+        let vm = reloadFailsOnce(list: list, create: create, restore: restore, downloadFailures: 2)
+        vm.initiateRestore(backup: metadata())
+        await vm.backupThenRestore()
+        #expect(vm.errorMessage == UserFacingError.timeoutMessage)
+        #expect(list.events.count == 1)
+
+        // Dismiss the first failure and choose a different backup.
+        vm.errorMessage = nil
+        vm.initiateRestore(backup: metadata())
+        await vm.confirmRestore()
+        #expect(vm.errorMessage == UserFacingError.timeoutMessage)
+        await vm.retry()
+
+        #expect(vm.errorMessage == nil)
+        #expect(restore.events == ["restored"])
+        #expect(list.events.count == 1)
+        #expect(create.events == ["upload"])
     }
 }

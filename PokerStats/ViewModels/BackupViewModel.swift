@@ -62,7 +62,7 @@ final class BackupViewModel {
     // MARK: - Setup
 
     func configure(authService: AuthService, modelContext: ModelContext) {
-        let backupService = BackupService(authService: authService, modelContext: modelContext)
+        let backupService = BackupService(authService: authService, modelContext: modelContext, client: authService.client)
         configure(Actions(
             isSignedIn: { authService.isAuthenticated },
             listBackups: { try await backupService.listBackups() },
@@ -147,6 +147,7 @@ final class BackupViewModel {
 
     func confirmRestore() async {
         guard let selectedBackup else { return }
+        needsReloadAfterRestore = false
         await restore(selectedBackup)
     }
 
