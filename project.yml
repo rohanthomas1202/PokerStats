@@ -146,6 +146,8 @@ targets:
       - path: PokerStats/Models/SessionActivityAttributes.swift
       - path: PokerStats/Models/TableConfig.swift
       - path: PokerStats/Services/AppGroupContainer.swift
+      # The widget's lifetime numbers, shared so the stat fixture tests run them (#238).
+      - path: PokerStats/Models/LifetimeSummary.swift
       # Shared money formatting, so the widget matches the app (#249).
       - path: PokerStats/Utilities/CurrencyFormatter.swift
       # Shared result colors, so the widget's $0 gray is one mapping (#309).
@@ -195,6 +197,15 @@ targets:
     platform: iOS
     sources:
       - path: PokerStatsTests
+      # XcodeGen copies resources through sources, not a target resources key (#238).
+      # Keep the folder reference so Bundle lookups retain datasets/*.json.
+      - path: shared/fixtures/stats/datasets
+        buildPhase: resources
+        type: folder
+      - path: shared/fixtures/stats/definitions.json
+        buildPhase: resources
+      - path: shared/fixtures/stats/display.json
+        buildPhase: resources
     dependencies:
       - target: PokerStats
     settings:
