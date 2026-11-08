@@ -60,6 +60,8 @@ struct HandLoggerSheet: View {
                     }
                 }
                 .scrollBounceBehavior(.basedOnSize)
+                // Center short steps; long steps still scroll from the top edge.
+                .defaultScrollAnchor(.center, for: .alignment)
 
                 Spacer()
 
@@ -209,7 +211,7 @@ struct HandLoggerSheet: View {
                 .foregroundStyle(.primary)
 
             actionLayout {
-                actionButton("Fold", color: .pokerCard, foreground: .white) {
+                actionButton("Fold", color: .pokerCard, foreground: .white, outlined: true) {
                     withAnimation(.easeInOut(duration: 0.2)) {
                         viewModel.selectPreflopAction(.fold)
                     }
@@ -271,7 +273,7 @@ struct HandLoggerSheet: View {
                 .foregroundStyle(.primary)
 
             actionLayout {
-                actionButton("Folded", color: .pokerCard, foreground: .white) {
+                actionButton("Folded", color: .pokerCard, foreground: .white, outlined: true) {
                     withAnimation(.easeInOut(duration: 0.2)) {
                         viewModel.selectThreeBetResponse(.folded)
                     }
@@ -371,17 +373,19 @@ struct HandLoggerSheet: View {
     // MARK: - Action Button
 
     private var actionLayout: AnyLayout {
-        dynamicTypeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(spacing: 12))
-            : AnyLayout(HStackLayout(spacing: 12))
+        HandLoggerLayout.actionLayout(for: dynamicTypeSize)
     }
 
     private var positionColumns: [GridItem] {
-        Array(repeating: GridItem(.flexible()), count: dynamicTypeSize.isAccessibilitySize ? 2 : 3)
+        HandLoggerLayout.positionColumns(for: dynamicTypeSize)
     }
 
     private func actionButton(
-        _ title: String, color: Color, foreground: Color = .black, action: @escaping () -> Void
+        _ title: String,
+        color: Color,
+        foreground: Color = .black,
+        outlined: Bool = false,
+        action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
             Text(title)
@@ -391,6 +395,13 @@ struct HandLoggerSheet: View {
                 .frame(maxWidth: .infinity)
                 .frame(minHeight: 70)
                 .background(color, in: RoundedRectangle(cornerRadius: 16))
+                // pokerCard fills nearly match the sheet, so outline them for a visible edge.
+                .overlay {
+                    if outlined {
+                        RoundedRectangle(cornerRadius: 16)
+                            .strokeBorder(Color.white.opacity(0.4), lineWidth: 1.5)
+                    }
+                }
                 .foregroundStyle(foreground)
         }
     }
@@ -469,5 +480,28 @@ struct HandLoggerSheet: View {
                     .foregroundStyle(.primary)
             }
         }
+    }
+}
+
+/// Dynamic Type driven layout choices for the hand logger, shared by the view and tests.
+enum HandLoggerLayout {
+    enum Axis: Equatable { case horizontal, vertical }
+
+    static func actionAxis(for size: DynamicTypeSize) -> Axis {
+        size.isAccessibilitySize ? .vertical : .horizontal
+    }
+
+    static func actionLayout(for size: DynamicTypeSize) -> AnyLayout {
+        actionAxis(for: size) == .vertical
+            ? AnyLayout(VStackLayout(spacing: 12))
+            : AnyLayout(HStackLayout(spacing: 12))
+    }
+
+    static func positionColumnCount(for size: DynamicTypeSize) -> Int {
+        size.isAccessibilitySize ? 2 : 3
+    }
+
+    static func positionColumns(for size: DynamicTypeSize) -> [GridItem] {
+        Array(repeating: GridItem(.flexible()), count: positionColumnCount(for: size))
     }
 }
