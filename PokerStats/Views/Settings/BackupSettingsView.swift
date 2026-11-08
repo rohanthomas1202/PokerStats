@@ -17,7 +17,8 @@ struct BackupSettingsView: View {
                         Text(lastDate)
                             .foregroundStyle(.secondary)
                     }
-                } else {
+                } else if viewModel.listState == .empty {
+                    // Only once the list loaded and is empty (#38).
                     Text("No backups yet")
                         .foregroundStyle(.secondary)
                 }
@@ -66,7 +67,7 @@ struct BackupSettingsView: View {
                 }
             }
 
-            if let error = viewModel.errorMessage {
+            if let error = viewModel.errorMessage, !viewModel.showsLoadFailureInList {
                 Section {
                     Label(error, systemImage: "exclamationmark.triangle.fill")
                         .foregroundStyle(.red)
@@ -98,11 +99,25 @@ struct BackupSettingsView: View {
                 }
             }
 
+            if viewModel.showsLoadFailureInList, let error = viewModel.errorMessage {
+                Section("Backup History") {
+                    Label(error, systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.red)
+                    if viewModel.retryableAction != nil {
+                        Button("Try Again") {
+                            Task { await viewModel.retry() }
+                        }
+                        .disabled(!viewModel.canRetry)
+                    }
+                }
+            }
+
             if viewModel.isLoadingBackups {
                 Section {
                     HStack {
                         Spacer()
                         ProgressView()
+                            .accessibilityLabel("Loading backups")
                         Spacer()
                     }
                 }
@@ -111,6 +126,7 @@ struct BackupSettingsView: View {
         .scrollContentBackground(.hidden)
         .background(Color.pokerBackground)
         .navigationTitle("Cloud Backup")
+        .refreshable { await viewModel.refresh() }
         .onAppear {
             viewModel.configure(authService: authService, modelContext: modelContext)
             Task { await viewModel.loadBackups() }
