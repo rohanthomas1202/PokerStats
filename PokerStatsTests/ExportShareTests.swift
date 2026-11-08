@@ -10,6 +10,31 @@ struct ExportShareTests {
         #expect(!ExportFeature.isEnabled)
     }
 
+    @Test func footer_explainsSharingAndFileFormats() {
+        #expect(ExportShareRow.footer == "Creates three files with all your sessions and hands. Anyone you share them with can see your results. The JSON file keeps every detail. The CSV files open in spreadsheet apps.")
+    }
+
+    @Test func writer_sweepsOnlyExportDirectoriesBeforeWriting() throws {
+        let manager = FileManager.default
+        let root = manager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? manager.removeItem(at: root) }
+        let input = ExportFiles(sessionsCSV: Data(), handsCSV: Data(), json: Data())
+        let previous = try ExportShareFiles.write(input, under: root)
+        let unrelated = root.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let similarName = root.appendingPathComponent("pokerstats-export-unrelated", isDirectory: true)
+        for directory in [unrelated, similarName] {
+            try manager.createDirectory(at: directory, withIntermediateDirectories: true)
+            try Data("keep".utf8).write(to: directory.appendingPathComponent("keep.txt"))
+        }
+        let next = try ExportShareFiles.write(input, under: root)
+        #expect(!manager.fileExists(atPath: previous.directory.path))
+        for directory in [unrelated, similarName] {
+            #expect(try Data(contentsOf: directory.appendingPathComponent("keep.txt")) == Data("keep".utf8))
+        }
+        #expect(next.urls.map(\.lastPathComponent) == ["sessions.csv", "hands.csv", "pokerstats-export.json"])
+        #expect(next.urls.allSatisfy { manager.fileExists(atPath: $0.path) })
+    }
+
     @Test func writer_usesOnlyNeutralNamesAndDefaultProtection_thenRemovesFiles() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
@@ -26,19 +51,17 @@ struct ExportShareTests {
         for url in files.urls {
             #expect(try FileManager.default.attributesOfItem(atPath: url.path)[.protectionKey] as? String == expected)
         }
-        let source = try TestHelpers.repositoryFile("PokerStats/Services/Export/ExportShareFiles.swift")
-        #expect(source.contains("attributes: nil"))
-        #expect(source.contains("data.write(to: url)"))
-        #expect(!source.contains("setAttributes"))
-        #expect(!source.contains("NSFileProtectionKey"))
-        #expect(!source.contains("fileProtection"))
         try files.remove()
         #expect(!FileManager.default.fileExists(atPath: files.directory.path))
         try files.remove() // Dismissing an already-cleaned flow is harmless.
     }
 
     @Test func progress_yieldsMainActorWhileGenerating_thenPublishesThreeURLs() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
         let model = ExportShareViewModel()
+        var announcements: [String] = []
+        model.announce = { announcements.append($0) }
         let gate = DispatchSemaphore(value: 0)
         let (events, started) = AsyncStream<Void>.makeStream()
         let task = Task {
@@ -46,12 +69,13 @@ struct ExportShareTests {
                 #expect(!Thread.isMainThread)
                 started.yield(())
                 #expect(gate.wait(timeout: .now() + 10) == .success)
-                return try ExportShareFiles.write(ExportEngine.makeFiles(sessions: [], hands: [], settings: Settings()))
+                return try ExportShareFiles.write(ExportEngine.makeFiles(sessions: [], hands: [], settings: Settings()), under: root)
             }
         }
         var iterator = events.makeAsyncIterator()
         _ = await iterator.next()
         #expect(model.state == .generating)
+        #expect(announcements.isEmpty)
         // Executing here while the worker is blocked proves the UI actor is free.
         gate.signal()
         await task.value
@@ -61,8 +85,23 @@ struct ExportShareTests {
         }
         #expect(files.urls.count == 3)
         #expect(files.urls.allSatisfy { FileManager.default.fileExists(atPath: $0.path) })
-        await model.cleanup()
+        #expect(announcements == ["Export ready"])
+        let (removingEvents, removing) = AsyncStream<Void>.makeStream()
+        let cleanup = Task {
+            await model.cleanup { files in
+                removing.yield(())
+                #expect(gate.wait(timeout: .now() + 10) == .success)
+                try files.remove()
+            }
+        }
+        var removingIterator = removingEvents.makeAsyncIterator()
+        _ = await removingIterator.next()
+        #expect(model.state == .removing)
+        #expect(announcements == ["Export ready"])
+        gate.signal()
+        await cleanup.value
         #expect(model.state == .idle)
+        #expect(announcements == ["Export ready"])
         #expect(!FileManager.default.fileExists(atPath: files.directory.path))
     }
 
@@ -101,32 +140,43 @@ struct ExportShareTests {
     }
 
     @Test func engineFailures_showErrorAndAllowRetry() async {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
         let model = ExportShareViewModel()
+        var announcements: [String] = []
+        model.announce = { announcements.append($0) }
         await model.prepare {
-            try ExportShareFiles.write(ExportEngine.makeFiles(sessions: [], hands: [Hand()], settings: Settings()))
+            try ExportShareFiles.write(ExportEngine.makeFiles(sessions: [], hands: [Hand()], settings: Settings()), under: root)
         }
         #expect(model.state == .failed)
+        #expect(announcements == ["Couldn't export your data. Please try again."])
         await model.prepare {
             let session = Session()
             session.tableConfigData = Data("invalid JSON".utf8)
-            return try ExportShareFiles.write(ExportEngine.makeFiles(sessions: [session], hands: [], settings: Settings()))
+            return try ExportShareFiles.write(ExportEngine.makeFiles(sessions: [session], hands: [], settings: Settings()), under: root)
         }
         #expect(model.state == .failed)
+        #expect(announcements == Array(repeating: "Couldn't export your data. Please try again.", count: 2))
         await model.prepare {
-            try ExportShareFiles.write(ExportEngine.makeFiles(sessions: [], hands: [], settings: Settings()))
+            try ExportShareFiles.write(ExportEngine.makeFiles(sessions: [], hands: [], settings: Settings()), under: root)
         }
         guard case .ready = model.state else {
             Issue.record("Expected retry to succeed")
             return
         }
+        #expect(announcements == ["Couldn't export your data. Please try again.", "Couldn't export your data. Please try again.", "Export ready"])
         await model.cleanup()
     }
 
     @Test func cleanupFailure_keepsOwnershipAndAllowsRetry() async {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
         enum Failure: Error { case denied }
         let model = ExportShareViewModel()
+        var announcements: [String] = []
+        model.announce = { announcements.append($0) }
         await model.prepare {
-            try ExportShareFiles.write(ExportEngine.makeFiles(sessions: [], hands: [], settings: Settings()))
+            try ExportShareFiles.write(ExportEngine.makeFiles(sessions: [], hands: [], settings: Settings()), under: root)
         }
         guard case .ready(let files) = model.state else {
             Issue.record("Expected files to clean up")
@@ -134,20 +184,33 @@ struct ExportShareTests {
         }
         await model.cleanup { _ in throw Failure.denied }
         #expect(model.state == .cleanupFailed(files))
+        #expect(announcements == ["Export ready", "Couldn't remove the temporary files. Please try again."])
         #expect(FileManager.default.fileExists(atPath: files.directory.path))
         await model.cleanup()
         #expect(model.state == .idle)
+        #expect(announcements == ["Export ready", "Couldn't remove the temporary files. Please try again."])
         #expect(!FileManager.default.fileExists(atPath: files.directory.path))
     }
 
-    @Test func dismissalDuringGeneration_removesLateFilesWithoutPresentingThem() async {
+    @Test(arguments: [false, true])
+    func dismissalDuringGeneration_removesLateFilesWithoutPresentingThem(removeFails: Bool) async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        enum Failure: Error { case denied }
         let model = ExportShareViewModel()
+        var announcements: [String] = []
+        model.announce = { announcements.append($0) }
+        let (removalEvents, removed) = AsyncStream<ExportShareFiles>.makeStream()
         let gate = DispatchSemaphore(value: 0)
         let (events, started) = AsyncStream<ExportShareFiles>.makeStream()
         let task = Task {
-            await model.prepare {
+            await model.prepare(remove: { files in
+                removed.yield(files)
+                if removeFails { throw Failure.denied }
+                try files.remove()
+            }) {
                 defer { started.finish() }
-                let files = try ExportShareFiles.write(ExportEngine.makeFiles(sessions: [], hands: [], settings: Settings()))
+                let files = try ExportShareFiles.write(ExportEngine.makeFiles(sessions: [], hands: [], settings: Settings()), under: root)
                 started.yield(files)
                 #expect(gate.wait(timeout: .now() + 10) == .success)
                 return files
@@ -159,6 +222,12 @@ struct ExportShareTests {
         gate.signal()
         await task.value
         #expect(model.state == .idle)
-        if let files { #expect(!FileManager.default.fileExists(atPath: files.directory.path)) }
+        #expect(announcements.isEmpty)
+        let yieldedFiles = try #require(files)
+        removed.finish()
+        var removalIterator = removalEvents.makeAsyncIterator()
+        let removedFiles = try #require(await removalIterator.next())
+        #expect(removedFiles == yieldedFiles)
+        #expect(FileManager.default.fileExists(atPath: yieldedFiles.directory.path) == removeFails)
     }
 }
