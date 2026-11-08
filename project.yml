@@ -197,12 +197,15 @@ targets:
     platform: iOS
     sources:
       - path: PokerStatsTests
-    # Shared stat fixtures, checked against the app by StatFixtureTests (#238).
-    resources:
+      # XcodeGen copies resources through sources, not a target resources key (#238).
+      # Keep the folder reference so Bundle lookups retain datasets/*.json.
       - path: shared/fixtures/stats/datasets
+        buildPhase: resources
         type: folder
       - path: shared/fixtures/stats/definitions.json
+        buildPhase: resources
       - path: shared/fixtures/stats/display.json
+        buildPhase: resources
     dependencies:
       - target: PokerStats
     settings:
