@@ -227,6 +227,31 @@ struct RetryAndSignOutTests {
         let vm = AutoRestoreViewModel()
         await vm.start(isSignedIn: { false }) { throw SupabaseError.sessionChanged }.value
         #expect(vm.message == "Restore didn't finish. \(UserFacingError.sessionChangedSignedOutMessage)")
+        #expect(vm.isFailed)
+        #expect(!vm.canRetry)
+        #expect(vm.retry() == nil)
+    }
+
+    @Test func autoRestoreSessionChangedWhileSignedIn_keepsTryAgain() async {
+        let vm = AutoRestoreViewModel()
+        await vm.start(isSignedIn: { true }) { throw SupabaseError.sessionChanged }.value
+        #expect(vm.message == "Restore didn't finish. \(UserFacingError.sessionChangedMessage)")
+        #expect(vm.canRetry)
+    }
+
+    @Test func autoRestoreFailure_announcesTheMessageForVoiceOver() async {
+        var announcements: [String] = []
+        let vm = AutoRestoreViewModel()
+        vm.announce = { announcements.append($0) }
+        await vm.start { throw URLError(.notConnectedToInternet) }.value
+        #expect(announcements == ["Restore didn't finish. \(UserFacingError.offlineMessage)"])
+    }
+
+    @Test func autoRestoreRestoredOneSession_isSingular() async {
+        let vm = AutoRestoreViewModel()
+        vm.announce = { _ in }
+        await vm.start { .restored(sessionCount: 1) }.value
+        #expect(vm.message == "Restored 1 session")
     }
 
     @Test func autoRestoreSkipped_showsNothing() async {

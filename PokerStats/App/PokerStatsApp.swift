@@ -31,7 +31,9 @@ struct PokerStatsApp: App {
                         }
                     }
                 }
-                .overlay(alignment: .top) {
+                // An inset, not an overlay, so the banner pushes content down
+                // instead of covering the navigation bar (#258).
+                .safeAreaInset(edge: .top, spacing: 0) {
                     if let message = autoRestore.message {
                         CloudStatusBanner(message: message, autoRestore: autoRestore)
                     } else if let message = authService.backupStatus {
@@ -82,8 +84,8 @@ struct PokerStatsApp: App {
     }
 }
 
-/// The app-wide cloud status banner. A failed auto-restore gets Try Again
-/// and a close button.
+/// The app-wide cloud status banner. A failed auto-restore gets a close button,
+/// and Try Again when retrying can help. Both are at least 44 pt.
 private struct CloudStatusBanner: View {
     let message: String
     var autoRestore: AutoRestoreViewModel?
@@ -96,10 +98,14 @@ private struct CloudStatusBanner: View {
 
             if let autoRestore, autoRestore.isFailed {
                 if autoRestore.canRetry {
-                    Button("Try Again") {
+                    Button {
                         _ = autoRestore.retry()
+                    } label: {
+                        Text("Try Again")
+                            .font(.caption.weight(.semibold))
+                            .frame(minWidth: 44, minHeight: 44)
+                            .contentShape(Rectangle())
                     }
-                    .font(.caption.weight(.semibold))
                 }
 
                 Button {
@@ -107,6 +113,8 @@ private struct CloudStatusBanner: View {
                 } label: {
                     Image(systemName: "xmark")
                         .font(.caption.weight(.semibold))
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
                 }
                 .accessibilityLabel("Dismiss")
             }
