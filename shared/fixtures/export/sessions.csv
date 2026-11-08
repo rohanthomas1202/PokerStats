@@ -1,5 +1,6 @@
 id,start_time,end_time,location,stakes,notes,game_type,status,buy_in,rebuys,add_ons,cash_out,tip_rake,tilt_level,energy_level,focus_level,table_config,currency
-10000000-0000-0000-0000-000000000001,2026-10-18T01:00:00.000Z,2026-10-18T03:00:00.000Z,"Café, Montréal",1/2,"He said ""call"", then left.
-Bon jeu — 東京",cash,completed,200.07,50.25,25.25,388,7.5,1,4,5,"{""buttonSeatIndex"":-1,""heroSeatIndex"":0,""seats"":[{""index"":0,""isOccupied"":true,""playerName"":""Zoë""}]}",CAD
-10000000-0000-0000-0000-000000000002,2026-10-19T01:00:00.000Z,2026-10-19T03:00:00.000Z,,1/2,Abandoned,tournament,completed,80.25,0,0,0,2,,,,,CAD
-10000000-0000-0000-0000-000000000003,2026-10-20T01:00:00.000Z,,Home,1/2,,cash,active,999,0,0,0,0,,,,,CAD
+10000000-0000-0000-0000-000000000001,2026-10-18T01:00:00.000Z,2026-10-18T03:00:00.000Z,"Café, Montréal",'=1+2,"He said ""call"", then left.
+Bon jeu — 東京",cash,completed,200.07,50.25,25.25,388,7.5,1,4,5,"{""buttonSeatIndex"":-1,""heroSeatIndex"":0,""seats"":[{""index"":0,""isOccupied"":true,""playerName"":""=Zoë""}]}",CAD
+10000000-0000-0000-0000-000000000002,2026-10-19T01:00:00.000Z,2026-10-19T03:00:00.000Z,,'+1/2,'-Abandoned,tournament,completed,80.25,0,0,0,2,,,,,CAD
+10000000-0000-0000-0000-000000000003,2026-10-20T01:00:00.000Z,,'@Home,'	1/2,"'Active, ""table""
+notes",cash,active,999,0,0,0,0,,,,,CAD

@@ -5,7 +5,7 @@
       "start_time": "2026-10-18T01:00:00.000Z",
       "end_time": "2026-10-18T03:00:00.000Z",
       "location": "Café, Montréal",
-      "stakes": "1/2",
+      "stakes": "=1+2",
       "notes": "He said \"call\", then left.\nBon jeu — 東京",
       "game_type": "cash",
       "status": "completed",
@@ -21,7 +21,7 @@
         "seats": [
           {
             "index": 0,
-            "playerName": "Zoë",
+            "playerName": "=Zoë",
             "isOccupied": true
           }
         ],
@@ -34,8 +34,8 @@
       "start_time": "2026-10-19T01:00:00.000Z",
       "end_time": "2026-10-19T03:00:00.000Z",
       "location": "",
-      "stakes": "1/2",
-      "notes": "Abandoned",
+      "stakes": "+1/2",
+      "notes": "-Abandoned",
       "game_type": "tournament",
       "status": "completed",
       "buy_in": 80.25,
@@ -52,9 +52,9 @@
     {
       "start_time": "2026-10-20T01:00:00.000Z",
       "end_time": null,
-      "location": "Home",
-      "stakes": "1/2",
-      "notes": "",
+      "location": "@Home",
+      "stakes": "\t1/2",
+      "notes": "\rActive, \"table\"\nnotes",
       "game_type": "cash",
       "status": "active",
       "buy_in": 999,

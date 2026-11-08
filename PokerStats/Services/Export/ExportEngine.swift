@@ -77,7 +77,12 @@ enum ExportEngine {
     private static func cell(_ value: SyncJSON) throws -> String {
         switch value {
         case .null: return ""
-        case .string(let text): return text
+        case .string(let text):
+            // Only text cells can be formulas; preserve numeric and nested JSON cells.
+            if let first = text.unicodeScalars.first, "=+-@\t\r".unicodeScalars.contains(first) {
+                return "'" + text
+            }
+            return text
         case .bool(let flag): return flag ? "true" : "false"
         case .number(let number):
             // Plain decimal, not printf/NumberFormatter or scientific notation.

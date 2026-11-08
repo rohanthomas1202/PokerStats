@@ -18,7 +18,7 @@ def csv_cell(value):
     if value is None:
         text = ''
     elif isinstance(value, str):
-        text = value
+        text = "'" + value if value.startswith(tuple("=+-@\t\r")) else value
     else:
         text = canonical(value)
     if any(c in text for c in ',"\r\n'):
