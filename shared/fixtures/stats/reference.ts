@@ -1,8 +1,8 @@
 // A line-for-line TypeScript port of the iOS stat code, used only to check
 // that the expected values in datasets/ follow definitions.json. Each function
 // cites the Swift it ports. If the Swift changes, this file, definitions.json
-// and the datasets change in the same PR. The Swift test that reads the
-// datasets is #238.
+// and the datasets change in the same PR. PokerStatsTests/StatFixtureTests.swift
+// checks the app against the datasets and display.json in CI (#238).
 
 export type SessionRow = {
   id: string;
@@ -392,7 +392,7 @@ export function leakFinder(
   return out;
 }
 
-// --- Home-screen widget (PokerStatsLifetimeWidget.swift:59-85) ---
+// --- Home-screen widget (LifetimeSummary.swift, used by PokerStatsLifetimeWidget.swift) ---
 
 export function widget(sessions: SessionRow[], now: string) {
   const completed = sessions.filter(isCompleted).sort((a, b) =>
@@ -483,11 +483,12 @@ export function roundHalfEven(x: number, digits: number): string {
 }
 
 const group = (digits: string) => digits.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+// NumberFormatter keeps the minus sign of a negative value that rounds to zero,
+// so CurrencyFormatter.format(-0.4) is "-$0" (display.json, checked on iOS by
+// PokerStatsTests/StatFixtureTests.swift, #238). The signed formats below drop it.
 const dollars = (x: number, decimals: number) => {
-  const r = roundHalfEven(x, decimals);
-  const neg = r.startsWith("-");
-  const [i, f] = r.replace("-", "").split(".");
-  return `${neg ? "-" : ""}$${group(i)}${f !== undefined ? "." + f : ""}`;
+  const [i, f] = roundHalfEven(Math.abs(x), decimals).split(".");
+  return `${x < 0 ? "-" : ""}$${group(i)}${f !== undefined ? "." + f : ""}`;
 };
 
 // Signed money (app and widget): "+" or "-" unless the rounded value is zero,

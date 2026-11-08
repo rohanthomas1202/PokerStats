@@ -55,33 +55,13 @@ struct LifetimeProvider: TimelineProvider {
             return LifetimeEntry(date: .now, totalProfit: 0, sessionsPlayed: 0, hourlyRate: nil, currentStreak: 0)
         }
 
-        let context = container.mainContext
-        let descriptor = FetchDescriptor<Session>(
-            sortBy: [SortDescriptor(\Session.startTime, order: .reverse)]
-        )
-        let sessions = (try? context.fetch(descriptor)) ?? []
-        let completed = sessions.filter { $0.status == .completed }
-
-        let totalProfit = completed.reduce(0.0) { $0 + $1.netProfit }
-        let totalHours = completed.reduce(0.0) { $0 + $1.durationHours }
-        let hourlyRate = totalHours > 0.01 ? totalProfit / totalHours : nil
-
-        // Calculate current winning streak
-        var streak = 0
-        for session in completed {
-            if session.netProfit > 0 {
-                streak += 1
-            } else {
-                break
-            }
-        }
-
+        let summary = LifetimeSummary.fetch(from: container.mainContext)
         return LifetimeEntry(
             date: .now,
-            totalProfit: totalProfit,
-            sessionsPlayed: completed.count,
-            hourlyRate: hourlyRate,
-            currentStreak: streak
+            totalProfit: summary.totalProfit,
+            sessionsPlayed: summary.sessionsPlayed,
+            hourlyRate: summary.hourlyRate,
+            currentStreak: summary.currentStreak
         )
     }
 }

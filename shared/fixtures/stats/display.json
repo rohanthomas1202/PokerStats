@@ -69,6 +69,12 @@
       "note": "Tie with separator"
     },
     {
+      "format": "currency",
+      "value": -0.4,
+      "expected": "-$0",
+      "note": "Negative zero: NumberFormatter keeps the minus sign of a loss that rounds to $0. Only the signed formats drop it"
+    },
+    {
       "format": "currency_signed",
       "value": 250,
       "expected": "+$250",
@@ -157,6 +163,12 @@
       "value": -0.0004,
       "expected": "0.0%",
       "note": "Rounds to 0.0, no sign, never -0.0%"
+    },
+    {
+      "format": "roi",
+      "value": -0.0001,
+      "expected": "0.0%",
+      "note": "Negative zero: -0.01% rounds to 0.0 and shows no sign (CurrencyFormatter.formatSignedPercent)"
     },
     {
       "format": "roi",

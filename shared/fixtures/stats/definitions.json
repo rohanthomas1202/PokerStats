@@ -325,7 +325,7 @@
       "formula": "total_profit, sessions_played and hourly_rate as the lifetime money stats (total_profit shown as widget_currency, hourly_rate as widget_hourly); current_streak = number of completed sessions, newest start_time first, with net_profit > 0 before the first that is not",
       "null_when": null,
       "display": "widget_currency",
-      "source": "PokerStatsWidgets/PokerStatsLifetimeWidget.swift:59-85"
+      "source": "PokerStats/Models/LifetimeSummary.swift, called by PokerStatsWidgets/PokerStatsLifetimeWidget.swift"
     }
   },
   "leak_profiles": {
@@ -464,9 +464,9 @@
     "boolean": "Not shown.",
     "ratings": "Rating names healthy, borderline, leak; overall Solid, Needs Work, Leaking.",
     "percent": "value * 100 rounded half even to 1 decimal, then '%'. null is '--'. PokerStats/Models/ComputedStats.swift:58-61",
-    "currency": "en_US currency, whole dollars, half even: $1,234 and -$567. PokerStats/Utilities/CurrencyFormatter.swift:21-23",
+    "currency": "en_US currency, whole dollars, half even: $1,234 and -$567. A negative value that rounds to $0 keeps its sign, as NumberFormatter does: -$0. PokerStats/Utilities/CurrencyFormatter.swift:21-23",
     "currency_signed": "en_US currency, whole dollars, half even, as currency; '+' above 0 and '-' below, but a value that rounds to $0 shows as '$0' with no sign. PokerStats/Utilities/CurrencyFormatter.swift:44-51",
-    "hourly_rate": "en_US currency with 2 decimals, half even, then '/hr'. null is '--'. PokerStats/Models/ComputedStats.swift:64-72",
+    "hourly_rate": "en_US currency with 2 decimals, half even, then '/hr'; a negative value keeps its sign, as currency. null is '--'. PokerStats/Models/ComputedStats.swift:64-72",
     "roi": "value * 100 with printf %.1f of the magnitude, then '%'; '+' above 0 and '-' below, but a value that rounds to 0.0 shows as '0.0%' with no sign. PokerStats/Utilities/CurrencyFormatter.swift:81-98",
     "widget_currency": "Same rule as currency_signed (the widget's lifetime total). PokerStats/Utilities/CurrencyFormatter.swift:44-51",
     "widget_hourly": "As widget_currency with 2 decimals (the widget's $/hr row): '+$18.50', '-$35.00', '$0.00'. PokerStats/Utilities/CurrencyFormatter.swift:44-51"
