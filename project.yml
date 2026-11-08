@@ -206,6 +206,13 @@ targets:
         buildPhase: resources
       - path: shared/fixtures/stats/display.json
         buildPhase: resources
+      # Sync contract fixtures (#236). examples stays a folder reference so
+      # lookups keep examples/<schema>/valid|invalid/.
+      - path: shared/fixtures/sync/columns.json
+        buildPhase: resources
+      - path: shared/fixtures/sync/examples
+        buildPhase: resources
+        type: folder
     dependencies:
       - target: PokerStats
     settings:
