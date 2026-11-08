@@ -358,7 +358,7 @@ struct AccountDeletionCleanupTests {
         let auth = signedInAuth()
         let log = EventLog()
         let owner = LocalDataOwner(defaults: UserDefaults(suiteName: "AccountDeletionCleanupTests.\(UUID().uuidString)")!)
-        let service = BackupService(authService: auth, modelContext: context, owner: owner)
+        let service = BackupService(authService: auth, modelContext: context, client: auth.client, owner: owner)
         let vm = BackupViewModel()
         vm.configure(BackupViewModel.Actions(
             isSignedIn: { auth.isAuthenticated },
@@ -393,7 +393,7 @@ struct AccountDeletionCleanupTests {
         let context = container.mainContext
         let auth = signedInAuth()
         let owner = LocalDataOwner(defaults: UserDefaults(suiteName: "AccountDeletionCleanupTests.\(UUID().uuidString)")!)
-        let service = BackupService(authService: auth, modelContext: context, owner: owner)
+        let service = BackupService(authService: auth, modelContext: context, client: auth.client, owner: owner)
 
         try await auth.deleteAccount(serverDelete: {
             #expect(throws: CancellationError.self) { try service.restoreBackup(payload()) }
@@ -512,7 +512,7 @@ struct AccountDeletionCleanupTests {
         let auth = signedInAuth()
         let log = EventLog()
         let owner = LocalDataOwner(defaults: UserDefaults(suiteName: "AccountDeletionCleanupTests.\(UUID().uuidString)")!)
-        let service = BackupService(authService: auth, modelContext: context, owner: owner)
+        let service = BackupService(authService: auth, modelContext: context, client: auth.client, owner: owner)
 
         // A backup and a manual restore download are in flight.
         await startEndlessBackup(auth, log: log)

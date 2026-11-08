@@ -63,7 +63,7 @@ struct PokerStatsApp: App {
 
     private func autoRestoreIfEmpty() {
         let context = container.mainContext
-        let backupService = BackupService(authService: authService, modelContext: context)
+        let backupService = BackupService(authService: authService, modelContext: context, client: authService.client)
         let restore = AutoRestore(
             modelContext: context,
             listBackups: { try await backupService.listBackups() },

@@ -17,7 +17,7 @@ final class AuthService {
 
     var displayEmail: String { userEmail ?? "Unknown" }
 
-    private let client: SupabaseClient
+    let client: SupabaseClient
     private static let logger = Logger(subsystem: "com.rohanthomas.PokerStats", category: "AuthService")
     @ObservationIgnored nonisolated(unsafe) private var authEventsTask: Task<Void, Never>?
 
@@ -231,6 +231,7 @@ final class AuthService {
                 let metadata = try await backup()
                 if Task.isCancelled { return }
                 unfinishedBackup = nil
+                if stoppedCloudWork == .backup { stoppedCloudWork = nil }
                 backupStatus = "Backed up \(metadata.sessionCount) sessions"
             } catch {
                 // A cancelled backup was replaced or stopped; it reports nothing.

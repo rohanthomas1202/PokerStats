@@ -40,6 +40,24 @@ struct BackupServiceRequestTests {
         return BackupService(authService: auth, modelContext: container.mainContext, client: client, owner: auth.localDataOwner)
     }
 
+    @Test func configuredBackupViewModel_usesTheAuthServicesClient() async {
+        let server = FakeServer()
+        let storage = InMemoryAuthStorage()
+        storage.seed(testSession(accessToken: "fresh-access", expired: false))
+        let client = testClient(storage, server: server) { _, _ in .status(200, "[]") }
+        let auth = TestHelpers.authService(client: client)
+        auth.restoreSession()
+        let vm = BackupViewModel()
+        vm.configure(authService: auth, modelContext: container.mainContext)
+
+        await vm.loadBackups()
+
+        #expect(vm.errorMessage == nil)
+        #expect(server.requests.count == 1)
+        #expect(server.requests.first?.path == "/rest/v1/backup_metadata")
+        #expect(server.requests.first?.header("Authorization") == "Bearer fresh-access")
+    }
+
     @Test func createAndUploadBackup_sendsUploadMetadataProfileAndRetention() async throws {
         let server = FakeServer()
         // Seven stored backups, newest first: the two oldest go.

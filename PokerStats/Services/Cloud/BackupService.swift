@@ -28,7 +28,7 @@ final class BackupService {
     init(
         authService: AuthService,
         modelContext: ModelContext,
-        client: SupabaseClient = .shared,
+        client: SupabaseClient,
         owner: LocalDataOwner = .standard
     ) {
         self.authService = authService
