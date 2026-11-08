@@ -31,7 +31,7 @@ struct DeletionFollowupTests {
 
     private func signedInAuth(_ storage: InMemoryAuthStorage = InMemoryAuthStorage()) -> AuthService {
         storage.seed(testSession(accessToken: "fresh-access", expired: false))
-        let auth = AuthService(client: testClient(storage) { _, _ in .status(204, "") })
+        let auth = TestHelpers.authService(client: testClient(storage) { _, _ in .status(204, "") })
         auth.restoreSession()
         return auth
     }

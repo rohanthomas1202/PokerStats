@@ -14,8 +14,10 @@ struct LocalWipeAfterAccountDeletionTests {
     private let container: ModelContainer
 
     init() throws {
-        // Plain suites, like `owner`: a ThrowawayDefaults released when the
-        // suite tears down hung the test host here.
+        // Keep plain suites: ThrowawayDefaults correlates with test-host hangs
+        // in this wipe suite (#345) and DeleteAllDataTests (#348), where its
+        // introduction was the only change from a green main run. The trigger
+        // inside ThrowawayDefaults is not isolated; do not restore it here.
         let defaults = UserDefaults(suiteName: "LocalWipeAfterAccountDeletionTests.flags.\(UUID().uuidString)")!
         flag = AutoRestoreFlag(defaults: defaults)
         pending = PendingLocalWipe(defaults: defaults)

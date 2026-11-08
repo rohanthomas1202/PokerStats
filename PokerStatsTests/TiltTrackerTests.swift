@@ -111,6 +111,20 @@ struct TiltTrackerTests {
         #expect(abs((insight?.tiltedRate ?? 0) - -100.0) < 0.01)
     }
 
+    @Test func mentalInsight_level4WithMultipleSessions_stillPoolsLevel5() throws {
+        let sessions = [
+            session(tilt: 1, cashOut: 300),
+            session(tilt: 1, cashOut: 400),
+            session(tilt: 4, cashOut: 100), // -$50/hr
+            session(tilt: 4, cashOut: 100), // -$50/hr
+            session(tilt: 5, buyIn: 400, cashOut: 0), // -$200/hr
+        ]
+        let points = TrendCalculator.mentalCorrelation(sessions: sessions)
+        let insight = try #require(TrendCalculator.mentalInsight(points: points))
+        #expect(abs(insight.calmRate - 75.0) < 0.01)
+        #expect(abs(insight.tiltedRate - -100.0) < 0.01)
+    }
+
     @Test func mentalInsight_level5Only_shown() {
         let sessions = [
             session(tilt: 1, cashOut: 300), // +$50/hr

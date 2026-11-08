@@ -158,9 +158,9 @@ struct UserFacingErrorTests {
         let storage = InMemoryAuthStorage()
         storage.seed(testSession(accessToken: "fresh-access", expired: false))
         let client = testClient(storage) { _, _ in reply }
-        let auth = AuthService(client: client)
+        let auth = TestHelpers.authService(client: client)
         auth.restoreSession()
-        let service = BackupService(authService: auth, modelContext: container.mainContext, client: client)
+        let service = BackupService(authService: auth, modelContext: container.mainContext, client: client, owner: auth.localDataOwner)
         do {
             _ = try await service.createAndUploadBackup()
             Issue.record("the backup should have failed")
@@ -186,7 +186,7 @@ struct UserFacingErrorTests {
     /// AuthService passes the SDK's error through, so sign-in copy can tell offline apart.
     @Test func signIn_offline_showsOfflineCopy() async {
         let client = testClient(InMemoryAuthStorage()) { _, _ in .urlError(.notConnectedToInternet) }
-        let vm = AuthViewModel(authService: AuthService(client: client))
+        let vm = AuthViewModel(authService: TestHelpers.authService(client: client))
         _ = vm.startAppleSignInAttempt()
         await vm.completeAppleSignIn(
             identityToken: Data("id.token".utf8),

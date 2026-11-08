@@ -24,6 +24,17 @@ struct AccountDeletionCleanupTests {
 
     // MARK: - Fixtures
 
+    private func settingsViewModel() -> SettingsViewModel {
+        let vm = SettingsViewModel()
+        let defaults = UserDefaults(suiteName: "AccountDeletionCleanupTests.settings.\(UUID().uuidString)")!
+        vm.autoRestoreFlag = AutoRestoreFlag(defaults: defaults)
+        vm.localDataOwner = LocalDataOwner(defaults: defaults)
+        vm.pendingLocalWipe = PendingLocalWipe(defaults: defaults)
+        vm.endLiveActivities = {}
+        vm.reloadWidgets = {}
+        return vm
+    }
+
     /// Two sessions (3 hands) and settings, all saved.
     private func seededContainer() throws -> ModelContainer {
         let container = try TestHelpers.createContainer()
@@ -55,7 +66,7 @@ struct AccountDeletionCleanupTests {
     private func signedInAuth() -> AuthService {
         let storage = InMemoryAuthStorage()
         storage.seed(testSession(accessToken: "fresh-access", expired: false))
-        let auth = AuthService(client: testClient(storage) { _, _ in .status(204, "") })
+        let auth = TestHelpers.authService(client: testClient(storage) { _, _ in .status(204, "") })
         auth.restoreSession()
         return auth
     }
@@ -124,7 +135,7 @@ struct AccountDeletionCleanupTests {
     @Test func settingsViewModel_wipeAfterAccountDeletion_clearsStoreAndResetsFields() throws {
         let container = try seededContainer()
         let context = container.mainContext
-        let vm = SettingsViewModel()
+        let vm = settingsViewModel()
         vm.loadSettings(from: context)
         #expect(vm.defaultBuyIn == "500")
 
@@ -213,7 +224,7 @@ struct AccountDeletionCleanupTests {
         let log = EventLog()
         await startEndlessBackup(auth, log: log)
         #expect(auth.isAuthenticated)
-        let settings = SettingsViewModel()
+        let settings = settingsViewModel()
         let vm = AuthViewModel(authService: auth, performDeleteAccount: {
             try await auth.deleteAccount(serverDelete: {
                 let before = try counts(context)
@@ -244,7 +255,7 @@ struct AccountDeletionCleanupTests {
 
         await vm.deleteAccount {
             wiped.events.append("wiped")
-            SettingsViewModel().wipeAfterAccountDeletion(from: context)
+            settingsViewModel().wipeAfterAccountDeletion(from: context)
         }.value
 
         #expect(wiped.events.isEmpty)
@@ -299,18 +310,27 @@ struct AccountDeletionCleanupTests {
         #expect(vm.errorMessage == nil) // stopped by the deletion, not an error
     }
 
-    @Test func autoRestoreInFlight_isStopped_andWritesNothing() async throws {
+    @Test(arguments: [false, true])
+    func autoRestoreInFlight_isStopped_andWritesNothing(wipeDuringDownload: Bool) async throws {
         let container = try TestHelpers.createContainer()
         let context = container.mainContext
         let auth = signedInAuth()
         let log = EventLog()
         let flag = freshFlag()
+        let writeChecks = EventLog()
         let restore = AutoRestore(
             modelContext: context,
             listBackups: { [metadata()] },
-            downloadBackup: { _ in await ignoresCancellation(log, "download") },
+            downloadBackup: { _ in
+                let downloaded = await ignoresCancellation(log, "download")
+                if wipeDuringDownload { flag.clear() }
+                return downloaded
+            },
             flag: flag,
-            checkCanWrite: { try auth.checkRestoreCanWrite() }
+            checkCanWrite: {
+                writeChecks.events.append("checked")
+                try auth.checkRestoreCanWrite()
+            }
         )
         let banner = AutoRestoreViewModel()
         let run = banner.start(isSignedIn: { auth.isAuthenticated }) {
@@ -329,6 +349,7 @@ struct AccountDeletionCleanupTests {
         #expect(try locations(context).isEmpty)
         #expect(!flag.isSet) // the next launch tries again
         #expect(banner.status == nil) // no failure banner for a stop by deletion
+        #expect(writeChecks.events == (wipeDuringDownload ? [] : ["checked"]))
     }
 
     @Test func manualRestoreInFlight_isStopped_andWritesNothing() async throws {
@@ -500,7 +521,7 @@ struct AccountDeletionCleanupTests {
         }
         await waitUntil("download started") { log.events.contains("download started") }
 
-        let settings = SettingsViewModel()
+        let settings = settingsViewModel()
         settings.localDataOwner = owner
         settings.autoRestoreFlag = freshFlag()
         settings.makeWiper = { context in

@@ -2,7 +2,17 @@ import Foundation
 import SwiftData
 @testable import PokerStats
 
-/// Test helper to create in-memory SwiftData containers.
+/// Isolated UserDefaults suite with a unique name so tests cannot collide (#68).
+/// Does not call removePersistentDomain in deinit: that correlated with
+/// test-host hangs when this type was adopted in wipe and ownership suites
+/// (#345, #348). Unique names already isolate tests.
+final class ThrowawayDefaults: UserDefaults {
+    init(_ prefix: String) {
+        super.init(suiteName: "\(prefix).\(UUID().uuidString)")!
+    }
+}
+
+/// Shared isolated test fixtures.
 enum TestHelpers {
 
     @MainActor
@@ -10,6 +20,19 @@ enum TestHelpers {
         let schema = Schema([Session.self, Hand.self, Settings.self])
         let config = ModelConfiguration(isStoredInMemoryOnly: true)
         return try ModelContainer(for: schema, configurations: [config])
+    }
+
+    @MainActor
+    static func authService(client: SupabaseClient = .shared) -> AuthService {
+        let auth = AuthService(client: client)
+        auth.localDataOwner = LocalDataOwner(defaults: ThrowawayDefaults("AuthServiceTests"))
+        return auth
+    }
+
+    static func repositoryFile(_ path: String) throws -> String {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent()
+        return try String(contentsOf: root.appendingPathComponent(path), encoding: .utf8)
     }
 
     // MARK: - Hand Factories

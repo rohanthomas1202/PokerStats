@@ -28,7 +28,7 @@ struct SignInAnnouncementTests {
         authorize: @escaping @MainActor () async throws -> AppleAuthorization = { appleAuthorization }
     ) -> AuthViewModel {
         let vm = AuthViewModel(
-            authService: AuthService(),
+            authService: TestHelpers.authService(),
             performDeleteAccount: {},
             performAppleSignIn: { _ in try await signIn() },
             performAppleAuthorization: { _ in try await authorize() }

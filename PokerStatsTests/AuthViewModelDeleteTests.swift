@@ -33,7 +33,7 @@ private final class Gate {
 struct AuthViewModelDeleteTests {
 
     private func viewModel(_ perform: @escaping @MainActor () async throws -> Void) -> AuthViewModel {
-        AuthViewModel(authService: AuthService(), performDeleteAccount: perform)
+        AuthViewModel(authService: TestHelpers.authService(), performDeleteAccount: perform)
     }
 
     @Test func inProgress_showsOverlay_andHasNotWipedYet() async {
@@ -160,7 +160,7 @@ struct AuthViewModelDeleteTests {
 
     /// End to end through AuthService: a typed error isn't flattened to the generic one.
     @Test func authService_passesTypedErrorsThrough() async {
-        let auth = AuthService()
+        let auth = TestHelpers.authService()
         let vm = AuthViewModel(authService: auth, performDeleteAccount: {
             try await auth.deleteAccount(serverDelete: {
                 throw AccountDeleter.mapped(SupabaseError.httpError(

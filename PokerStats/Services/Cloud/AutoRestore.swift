@@ -21,7 +21,8 @@ struct AutoRestore {
         case skippedLocalDataExists
         /// Local data appeared while the backup was downloading.
         case skippedDataAppearedDuringDownload
-        /// Auto-restore already ran on this device, or the user deleted local data.
+        /// Already ran, or a local wipe/account deletion stopped this run.
+        /// Does not imply the flag is set: account deletion clears it.
         case skippedAlreadyRan
     }
 
@@ -52,6 +53,8 @@ struct AutoRestore {
         // device before the old device's first backup has uploaded means no
         // auto-restore there later; manual restore in Settings > Cloud Backup
         // still works (#68).
+        // From restoreIfStoreEmpty through flag.set(), stay free of suspension
+        // points: a wipe must not interleave between the restore and this flag.
         flag.set()
         return outcome
     }

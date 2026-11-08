@@ -10,20 +10,6 @@ private final class Flag {
     var value = false
 }
 
-/// A UserDefaults suite that deletes itself once the test releases it (#68).
-final class ThrowawayDefaults: UserDefaults {
-    private let name: String
-
-    init(_ prefix: String) {
-        name = "\(prefix).\(UUID().uuidString)"
-        super.init(suiteName: name)!
-    }
-
-    deinit {
-        removePersistentDomain(forName: name)
-    }
-}
-
 /// A flag backed by its own UserDefaults suite, unset.
 @MainActor
 func freshFlag() -> AutoRestoreFlag {

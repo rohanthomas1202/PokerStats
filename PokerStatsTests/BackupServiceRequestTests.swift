@@ -35,9 +35,9 @@ struct BackupServiceRequestTests {
         let storage = InMemoryAuthStorage()
         storage.seed(testSession(accessToken: "fresh-access", expired: false))
         let client = testClient(storage, server: server, respond: respond)
-        let auth = AuthService(client: client)
+        let auth = TestHelpers.authService(client: client)
         auth.restoreSession()
-        return BackupService(authService: auth, modelContext: container.mainContext, client: client)
+        return BackupService(authService: auth, modelContext: container.mainContext, client: client, owner: auth.localDataOwner)
     }
 
     @Test func createAndUploadBackup_sendsUploadMetadataProfileAndRetention() async throws {

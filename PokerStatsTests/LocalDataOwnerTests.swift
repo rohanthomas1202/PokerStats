@@ -15,7 +15,7 @@ struct LocalDataOwnerTests {
     private let container: ModelContainer
 
     init() throws {
-        owner = LocalDataOwner(defaults: UserDefaults(suiteName: "LocalDataOwnerTests.\(UUID().uuidString)")!)
+        owner = LocalDataOwner(defaults: ThrowawayDefaults("LocalDataOwnerTests"))
         container = try TestHelpers.createContainer()
     }
 
@@ -442,7 +442,7 @@ struct LocalDataOwnerTests {
     @Test func ownerChangeInAnotherStore_isIgnored() {
         let viewModel = viewModel()
         let revision = viewModel.ownerRevision
-        let other = LocalDataOwner(defaults: UserDefaults(suiteName: "LocalDataOwnerTests.other.\(UUID().uuidString)")!)
+        let other = LocalDataOwner(defaults: ThrowawayDefaults("LocalDataOwnerTests.other"))
 
         other.adopt(accountA)
 
