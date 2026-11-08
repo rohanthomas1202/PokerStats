@@ -164,8 +164,12 @@ extension SyncChange.Fields {
         case let (.session(old), .session(new)): .session(old.merged(with: new))
         case let (.hand(old), .hand(new)): .hand(old.merged(with: new))
         case let (.settings(old), .settings(new)): .settings(old.merged(with: new))
-        // Unreachable: one row is in one table.
-        default: later
+        // One row is in one table, so enqueue never merges across tables. No
+        // `default`, so a new table fails to compile until it is handled here.
+        case (.session, .hand), (.session, .settings),
+             (.hand, .session), (.hand, .settings),
+             (.settings, .session), (.settings, .hand):
+            preconditionFailure("Cannot merge fields from different tables")
         }
     }
 }

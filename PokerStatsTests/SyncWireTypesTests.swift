@@ -148,12 +148,34 @@ struct SyncWireTypesTests {
             heroSeatIndex: 0,
             buttonSeatIndex: -1
         )
-        let object = try Self.object(SyncSessionFields(creating: session))
+        let object = try Self.object(try SyncSessionFields(creating: session))
         let config = try #require(object["table_config"] as? [String: Any])
         #expect(config["heroSeatIndex"] as? Int == 0)
         #expect(config["buttonSeatIndex"] as? Int == -1)
         #expect((config["seats"] as? [Any])?.count == 2)
         #expect(object["logging_device_id"] == nil)
+    }
+
+    @Test func tableConfig_objectBytesDecodeToThatObject() throws {
+        let session = Session()
+        session.tableConfigData = Data(#"{"seats":9,"heroSeat":3}"#.utf8)
+        let fields = try SyncSessionFields(creating: session)
+        #expect(fields.tableConfig == .some(["seats": .number(9), "heroSeat": .number(3)]))
+    }
+
+    @Test func tableConfig_missingIsSentAsNull() throws {
+        let session = Session()
+        #expect(session.tableConfigData == nil)
+        let fields = try SyncSessionFields(creating: session)
+        #expect(fields.tableConfig == .some(nil))
+    }
+
+    /// Bytes that are not a JSON object throw instead of sending null.
+    @Test(arguments: [#"{not-json"#, #"[1,2]"#, #""seats""#, "null"])
+    func tableConfig_nonObjectBytesThrow(_ bytes: String) {
+        let session = Session()
+        session.tableConfigData = Data(bytes.utf8)
+        #expect(throws: (any Error).self) { try SyncSessionFields(creating: session) }
     }
 
     @Test @MainActor func createFromModels_sendsEveryClientColumn() throws {
@@ -163,7 +185,7 @@ struct SyncWireTypesTests {
         let hand = Hand(handNumber: 4, preflopAction: .raise, faced3Bet: true, threeBetResponse: .called, position: .btn)
         container.mainContext.insert(hand)
         hand.session = session
-        let sessionKeys = try Self.keys(SyncSessionFields(creating: session))
+        let sessionKeys = try Self.keys(try SyncSessionFields(creating: session))
         #expect(sessionKeys == Set(SyncSessionColumn.clientColumns.map(\.rawValue)).subtracting(["logging_device_id"]))
         let handFields = try #require(SyncHandFields(creating: hand))
         #expect(try Self.keys(handFields) == Set(SyncHandColumn.clientColumns.map(\.rawValue)))
