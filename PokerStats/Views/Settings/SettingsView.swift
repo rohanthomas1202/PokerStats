@@ -170,7 +170,7 @@ struct SettingsView: View {
         .navigationBarBackButtonHidden(authViewModel?.isDeletingAccount == true)
         .onAppear {
             viewModel.loadSettings(from: modelContext)
-            viewModel.showPendingLocalWipe()
+            viewModel.showPendingLocalWipe(isSignedIn: authService.isAuthenticated)
             if authViewModel == nil {
                 authViewModel = AuthViewModel(authService: authService)
             }
@@ -178,6 +178,9 @@ struct SettingsView: View {
         .onChange(of: ownership.localDataDeletions) { _, _ in
             // "Delete from This iPhone" wiped the settings too (#264).
             viewModel.loadSettings(from: modelContext)
+        }
+        .onChange(of: authService.isAuthenticated) { _, signedIn in
+            if signedIn { viewModel.clearPendingLocalWipe() }
         }
         .onChange(of: viewModel.defaultBuyIn) { _, _ in
             viewModel.saveSettings(to: modelContext)

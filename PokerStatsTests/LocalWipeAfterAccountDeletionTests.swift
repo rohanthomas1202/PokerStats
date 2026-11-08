@@ -133,22 +133,67 @@ struct LocalWipeAfterAccountDeletionTests {
         // Settings appears again, or after a relaunch with a new view model.
         let relaunched = viewModel(failing: true)
         #expect(!relaunched.localWipeFailed)
-        relaunched.showPendingLocalWipe()
+        relaunched.showPendingLocalWipe(isSignedIn: false)
         #expect(relaunched.localWipeFailed)
     }
 
     @Test func successfulWipe_clearsThePendingPrompt() throws {
         let vm = viewModel(failing: true)
         vm.wipeAfterAccountDeletion(from: context)
-        #expect(pending.isSet)
+        #expect(pending.isRecorded)
 
         vm.makeWiper = { LocalDataWiper(modelContext: $0) }
         vm.wipeAfterAccountDeletion(from: context)
 
-        #expect(!pending.isSet)
+        #expect(!pending.isRecorded)
         let fresh = viewModel(failing: false)
-        fresh.showPendingLocalWipe()
+        fresh.showPendingLocalWipe(isSignedIn: false)
         #expect(!fresh.localWipeFailed)
+    }
+
+    @Test func deleteAllData_afterFailedWipe_clearsThePrompt() throws {
+        let vm = viewModel(failing: true)
+        vm.wipeAfterAccountDeletion(from: context)
+        vm.localWipeFailed = false
+
+        vm.makeWiper = { LocalDataWiper(modelContext: $0) }
+        vm.deleteAllData(from: context)
+
+        #expect(try counts() == [0, 0, 0])
+        #expect(!pending.isRecorded)
+        let relaunched = viewModel(failing: false)
+        relaunched.showPendingLocalWipe(isSignedIn: false)
+        #expect(!relaunched.localWipeFailed)
+    }
+
+    @Test func signInAfterFailedWipe_showsNoAlert_andKeepsTheNewAccountsData() throws {
+        let vm = viewModel(failing: true)
+        vm.wipeAfterAccountDeletion(from: context)
+        vm.localWipeFailed = false
+
+        // Another account signs in; it may or may not take the data.
+        let relaunched = viewModel(failing: false)
+        relaunched.showPendingLocalWipe(isSignedIn: true)
+
+        #expect(!relaunched.localWipeFailed)
+        #expect(!pending.isRecorded)
+        #expect(try counts() == [1, 1, 1])
+        relaunched.showPendingLocalWipe(isSignedIn: false)
+        #expect(!relaunched.localWipeFailed)
+    }
+
+    @Test func ownerChangeAfterFailedWipe_showsNoAlert() throws {
+        let vm = viewModel(failing: true)
+        vm.wipeAfterAccountDeletion(from: context)
+        vm.localWipeFailed = false
+
+        // Another account signed in and adopted the data, then signed out.
+        owner.adopt(UUID())
+        let relaunched = viewModel(failing: false)
+        relaunched.showPendingLocalWipe(isSignedIn: false)
+
+        #expect(!relaunched.localWipeFailed)
+        #expect(try counts() == [1, 1, 1])
     }
 
     // MARK: - #272

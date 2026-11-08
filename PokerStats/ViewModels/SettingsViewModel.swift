@@ -82,8 +82,20 @@ final class SettingsViewModel {
 
     /// Settings appeared: bring back the failed-wipe alert if an earlier one
     /// was dismissed with Not Now or the app was relaunched (#273).
-    func showPendingLocalWipe() {
-        if pendingLocalWipe.isSet { localWipeFailed = true }
+    /// Signed in, the deleted account's data either belongs to the new account
+    /// now or awaits its choice, so the record is dropped instead (#273).
+    func showPendingLocalWipe(isSignedIn: Bool) {
+        if isSignedIn {
+            clearPendingLocalWipe()
+        } else if pendingLocalWipe.isPending(owner: localDataOwner, isSignedIn: false) {
+            localWipeFailed = true
+        }
+    }
+
+    /// A sign-in or a successful Delete All Data: the failed wipe is moot.
+    func clearPendingLocalWipe() {
+        pendingLocalWipe.clear()
+        localWipeFailed = false
     }
 
     func saveSettings(to context: ModelContext) {
@@ -125,6 +137,8 @@ final class SettingsViewModel {
             return
         }
         deleteAllDataFailure = nil
+        // Nothing left for the failed-wipe alert to delete (#273).
+        clearPendingLocalWipe()
         // No stats left, so they belong to no account (#69).
         localDataOwner.clear()
         // In the running app, any default this changes fires SettingsView's
@@ -163,7 +177,7 @@ final class SettingsViewModel {
             }
         } else {
             afterConfirmationDismisses {
-                guard self.pendingLocalWipe.isSet else { return }
+                guard self.pendingLocalWipe.isRecorded else { return }
                 self.localWipeFailed = true
             }
         }
@@ -185,7 +199,7 @@ final class SettingsViewModel {
             wiped = true
         } catch {
             Self.logger.error("Local wipe after account deletion failed: \(error.localizedDescription, privacy: .private)")
-            pendingLocalWipe.set()
+            pendingLocalWipe.set(owner: localDataOwner)
             wiped = false
         }
         // Runs on failure too, and again on each retry; both are harmless
