@@ -25,7 +25,13 @@ final class SettingsViewModel {
     var localWipeFailed = false
 
     static let localWipeFailedTitle = "Data Still on This iPhone"
-    static let localWipeFailedMessage = "Your account was deleted, but the data on this iPhone couldn't be removed. Delete it now so no one else using this iPhone can see it."
+    static let localWipeFailedMessage = "Your account was deleted, but the data on this iPhone couldn't be removed. Delete it now so no one else using this iPhone can see it. You can also use Delete All Data in Settings."
+    /// Read by VoiceOver when the retry from the alert works (#272).
+    static let localWipeRetrySucceededAnnouncement = "Local data deleted"
+
+    /// Survives Not Now and relaunch, so Settings asks again until the wipe
+    /// works (#273). Tests use an isolated store.
+    @ObservationIgnored var pendingLocalWipe = PendingLocalWipe.standard
 
     /// Tests use an isolated store.
     @ObservationIgnored var autoRestoreFlag = AutoRestoreFlag.standard
@@ -54,15 +60,30 @@ final class SettingsViewModel {
     /// With no saved Settings (a new install, or after "Delete from This
     /// iPhone" wiped them), shows the defaults instead of keeping the
     /// previous values, which the next edit would save back (#264).
+    /// A failed fetch keeps the current values: showing defaults then would
+    /// let the next edit save them over the real row (#332).
     func loadSettings(from context: ModelContext) {
         let descriptor = FetchDescriptor<Settings>()
-        if let settings = try? context.fetch(descriptor).first {
+        let settings: Settings?
+        do {
+            settings = try context.fetch(descriptor).first
+        } catch {
+            Self.logger.error("Loading Settings failed: \(error.localizedDescription, privacy: .private)")
+            return
+        }
+        if let settings {
             defaultBuyIn = String(Int(settings.defaultBuyIn))
             defaultStakes = settings.defaultStakes
             defaultGameType = settings.defaultGameType
         } else {
             resetToDefaults()
         }
+    }
+
+    /// Settings appeared: bring back the failed-wipe alert if an earlier one
+    /// was dismissed with Not Now or the app was relaunched (#273).
+    func showPendingLocalWipe() {
+        if pendingLocalWipe.isSet { localWipeFailed = true }
     }
 
     func saveSettings(to context: ModelContext) {
@@ -127,18 +148,54 @@ final class SettingsViewModel {
     /// the empty store has no owner (#69). If it fails, `localWipeFailed`
     /// shows an alert whose retry calls this again (#60).
     func wipeAfterAccountDeletion(from context: ModelContext) {
+        if !wipeLocalDataAfterAccountDeletion(from: context) {
+            localWipeFailed = true
+        }
+    }
+
+    /// The alert's Delete Local Data. The alert is still dismissing when this
+    /// runs, and SwiftUI can reset the binding afterward, so a second failure
+    /// shows the alert only once it has gone (#272).
+    func retryLocalWipe(from context: ModelContext) {
+        if wipeLocalDataAfterAccountDeletion(from: context) {
+            afterConfirmationDismisses {
+                self.announce(Self.localWipeRetrySucceededAnnouncement)
+            }
+        } else {
+            afterConfirmationDismisses {
+                guard self.pendingLocalWipe.isSet else { return }
+                self.localWipeFailed = true
+            }
+        }
+    }
+
+    /// Returns whether the wipe worked.
+    private func wipeLocalDataAfterAccountDeletion(from context: ModelContext) -> Bool {
         autoRestoreFlag.clear()
+        let wiped: Bool
         do {
             try makeWiper(context).wipe()
             localDataOwner.clear()
+            pendingLocalWipe.clear()
             localWipeFailed = false
+            // Only now is the Settings row gone. On failure it stays, and
+            // showing defaults would let SettingsView's onChange save them
+            // over the real buy-in, stakes and game (#273).
+            resetToDefaults()
+            wiped = true
         } catch {
             Self.logger.error("Local wipe after account deletion failed: \(error.localizedDescription, privacy: .private)")
-            localWipeFailed = true
+            pendingLocalWipe.set()
+            wiped = false
         }
-        resetToDefaults()
+        // Runs on failure too, and again on each retry; both are harmless
+        // repeats. Unlike Delete All Data, which keeps the Live Activity when
+        // its wipe fails (#269), the account is gone here, so its session's
+        // activity ends either way. Widgets reload even if nothing changed
+        // (#273).
         endLiveActivities()
         WidgetCenter.shared.reloadAllTimelines()
+        return wiped
     }
 
     /// The wiper also deletes the saved Settings, so show the defaults.

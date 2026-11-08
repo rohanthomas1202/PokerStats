@@ -38,10 +38,22 @@ struct LocalWipeAfterAccountDeletionTests {
         ]
     }
 
+    private let flag = freshFlag()
+    private let pending = PendingLocalWipe(defaults: ThrowawayDefaults("LocalWipeAfterAccountDeletionTests"))
+    /// Results held until "the alert has dismissed".
+    private let held = HeldResults()
+    private let announced = Announcements()
+
     private func viewModel(failing: Bool) -> SettingsViewModel {
         let vm = SettingsViewModel()
         vm.localDataOwner = owner
-        vm.autoRestoreFlag = freshFlag()
+        vm.autoRestoreFlag = flag
+        vm.pendingLocalWipe = pending
+        let held = held
+        vm.afterConfirmationDismisses = { held.results.append($0) }
+        let announced = announced
+        vm.announce = { announced.events.append($0) }
+        vm.endLiveActivities = {}
         if failing {
             vm.makeWiper = { context in
                 var wiper = LocalDataWiper(modelContext: context)
@@ -85,4 +97,105 @@ struct LocalWipeAfterAccountDeletionTests {
         #expect(owner.ownerId == nil)
         #expect(!vm.localWipeFailed)
     }
+
+    // MARK: - #273
+
+    @Test func failedWipe_keepsTheSavedSettings() throws {
+        let vm = viewModel(failing: true)
+        vm.loadSettings(from: context)
+
+        vm.wipeAfterAccountDeletion(from: context)
+
+        #expect(vm.defaultBuyIn == "500")
+        #expect(vm.defaultStakes == "2/5")
+        let saved = try ModelContext(container).fetch(FetchDescriptor<Settings>())
+        #expect(saved.first?.defaultBuyIn == 500)
+        #expect(saved.first?.defaultStakes == "2/5")
+    }
+
+    @Test func failedWipe_stillClearsTheAutoRestoreFlag() throws {
+        flag.set()
+        let vm = viewModel(failing: true)
+
+        vm.wipeAfterAccountDeletion(from: context)
+
+        #expect(!flag.isSet)
+    }
+
+    @Test func notNow_leavesTheData_andSettingsAsksAgain() throws {
+        let vm = viewModel(failing: true)
+        vm.wipeAfterAccountDeletion(from: context)
+
+        // Not Now: SwiftUI sets the binding to false.
+        vm.localWipeFailed = false
+        #expect(try counts() == [1, 1, 1])
+
+        // Settings appears again, or after a relaunch with a new view model.
+        let relaunched = viewModel(failing: true)
+        #expect(!relaunched.localWipeFailed)
+        relaunched.showPendingLocalWipe()
+        #expect(relaunched.localWipeFailed)
+    }
+
+    @Test func successfulWipe_clearsThePendingPrompt() throws {
+        let vm = viewModel(failing: true)
+        vm.wipeAfterAccountDeletion(from: context)
+        #expect(pending.isSet)
+
+        vm.makeWiper = { LocalDataWiper(modelContext: $0) }
+        vm.wipeAfterAccountDeletion(from: context)
+
+        #expect(!pending.isSet)
+        let fresh = viewModel(failing: false)
+        fresh.showPendingLocalWipe()
+        #expect(!fresh.localWipeFailed)
+    }
+
+    // MARK: - #272
+
+    @Test func secondRetryFailure_showsTheAlertAfterItDismisses() throws {
+        let vm = viewModel(failing: true)
+        vm.wipeAfterAccountDeletion(from: context)
+
+        // Delete Local Data: SwiftUI dismisses the alert, then the retry runs.
+        vm.localWipeFailed = false
+        vm.retryLocalWipe(from: context)
+        // SwiftUI may reset the binding while the alert dismisses.
+        vm.localWipeFailed = false
+        #expect(held.results.count == 1)
+
+        held.results.removeFirst()()
+        #expect(vm.localWipeFailed)
+        #expect(try counts() == [1, 1, 1])
+        #expect(announced.events.isEmpty)
+    }
+
+    @Test func retrySuccess_announcesIt() throws {
+        let vm = viewModel(failing: true)
+        vm.wipeAfterAccountDeletion(from: context)
+        vm.localWipeFailed = false
+
+        vm.makeWiper = { LocalDataWiper(modelContext: $0) }
+        vm.retryLocalWipe(from: context)
+        #expect(announced.events.isEmpty)
+        held.results.removeFirst()()
+
+        #expect(announced.events == [SettingsViewModel.localWipeRetrySucceededAnnouncement])
+        #expect(!vm.localWipeFailed)
+        #expect(try counts() == [0, 0, 0])
+    }
+
+    @Test func notNowCopy_pointsToDeleteAllData() {
+        #expect(SettingsViewModel.localWipeFailedMessage.hasSuffix("You can also use Delete All Data in Settings."))
+    }
+}
+
+@MainActor
+private final class HeldResults {
+    var results: [@MainActor @Sendable () -> Void] = []
+}
+
+@MainActor
+private final class Announcements {
+    var events: [String] = []
 }

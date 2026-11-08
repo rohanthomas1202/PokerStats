@@ -170,6 +170,7 @@ struct SettingsView: View {
         .navigationBarBackButtonHidden(authViewModel?.isDeletingAccount == true)
         .onAppear {
             viewModel.loadSettings(from: modelContext)
+            viewModel.showPendingLocalWipe()
             if authViewModel == nil {
                 authViewModel = AuthViewModel(authService: authService)
             }
@@ -191,9 +192,10 @@ struct SettingsView: View {
         .modifier(SignOutConfirmation(authViewModel: authViewModel))
         .modifier(DeleteAllDataFailureAlert(viewModel: viewModel))
         .alert(SettingsViewModel.localWipeFailedTitle, isPresented: $viewModel.localWipeFailed) {
-            Button("Cancel", role: .cancel) { }
+            // Not Now keeps the pending flag, so the alert returns (#273).
+            Button("Not Now", role: .cancel) { }
             Button("Delete Local Data", role: .destructive) {
-                viewModel.wipeAfterAccountDeletion(from: modelContext)
+                viewModel.retryLocalWipe(from: modelContext)
             }
         } message: {
             Text(SettingsViewModel.localWipeFailedMessage)
