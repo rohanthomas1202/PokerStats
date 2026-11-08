@@ -1,0 +1,113 @@
+{
+  "currency": "CAD",
+  "sessions": [
+    {
+      "start_time": "2026-10-18T01:00:00.000Z",
+      "end_time": "2026-10-18T03:00:00.000Z",
+      "location": "Café, Montréal",
+      "stakes": "1/2",
+      "notes": "He said \"call\", then left.\nBon jeu — 東京",
+      "game_type": "cash",
+      "status": "completed",
+      "buy_in": 200.07,
+      "rebuys": 50.25,
+      "add_ons": 25.25,
+      "cash_out": 388,
+      "tip_rake": 7.5,
+      "tilt_level": 1,
+      "energy_level": 4,
+      "focus_level": 5,
+      "table_config": {
+        "seats": [
+          {
+            "index": 0,
+            "playerName": "Zoë",
+            "isOccupied": true
+          }
+        ],
+        "heroSeatIndex": 0,
+        "buttonSeatIndex": -1
+      },
+      "id": "10000000-0000-0000-0000-000000000001"
+    },
+    {
+      "start_time": "2026-10-19T01:00:00.000Z",
+      "end_time": "2026-10-19T03:00:00.000Z",
+      "location": "",
+      "stakes": "1/2",
+      "notes": "Abandoned",
+      "game_type": "tournament",
+      "status": "completed",
+      "buy_in": 80.25,
+      "rebuys": 0,
+      "add_ons": 0,
+      "cash_out": 0,
+      "tip_rake": 2,
+      "tilt_level": null,
+      "energy_level": null,
+      "focus_level": null,
+      "table_config": null,
+      "id": "10000000-0000-0000-0000-000000000002"
+    },
+    {
+      "start_time": "2026-10-20T01:00:00.000Z",
+      "end_time": null,
+      "location": "Home",
+      "stakes": "1/2",
+      "notes": "",
+      "game_type": "cash",
+      "status": "active",
+      "buy_in": 999,
+      "rebuys": 0,
+      "add_ons": 0,
+      "cash_out": 0,
+      "tip_rake": 0,
+      "tilt_level": null,
+      "energy_level": null,
+      "focus_level": null,
+      "table_config": null,
+      "id": "10000000-0000-0000-0000-000000000003"
+    }
+  ],
+  "hands": [
+    {
+      "id": "20000000-0000-0000-0000-000000000001",
+      "session_id": "10000000-0000-0000-0000-000000000001",
+      "hand_number": 1,
+      "played_at": "2026-10-18T01:15:09.250Z",
+      "preflop_action": "raise",
+      "faced_3bet": true,
+      "three_bet_response": "called",
+      "postflop_result": "wonAtShowdown",
+      "did_cbet": true,
+      "notes": "\"Raise\", encore\nTrès bien 日本語",
+      "position": "BTN"
+    },
+    {
+      "id": "20000000-0000-0000-0000-000000000002",
+      "session_id": "10000000-0000-0000-0000-000000000002",
+      "hand_number": 1,
+      "played_at": "2026-10-19T01:15:09.250Z",
+      "preflop_action": "call",
+      "faced_3bet": false,
+      "three_bet_response": null,
+      "postflop_result": "lostBeforeShowdown",
+      "did_cbet": false,
+      "notes": "",
+      "position": "BB"
+    },
+    {
+      "id": "20000000-0000-0000-0000-000000000003",
+      "session_id": "10000000-0000-0000-0000-000000000003",
+      "hand_number": 1,
+      "played_at": "2026-10-20T01:15:09.250Z",
+      "preflop_action": "fold",
+      "faced_3bet": false,
+      "three_bet_response": null,
+      "postflop_result": null,
+      "did_cbet": null,
+      "notes": "",
+      "position": "?"
+    }
+  ]
+}
