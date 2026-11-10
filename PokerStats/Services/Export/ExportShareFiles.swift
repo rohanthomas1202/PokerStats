@@ -19,7 +19,9 @@ struct ExportShareFiles: Equatable, Sendable {
                       fileManager: FileManager = .default, now: Date = .now) throws -> Self {
         try fileManager.createDirectory(at: root, withIntermediateDirectories: true, attributes: nil)
         sweepStaleDirectories(under: root, now: now, fileManager: fileManager)
-        let result = Self(directory: root.appendingPathComponent(directoryPrefix + UUID().uuidString, isDirectory: true))
+        // The name carries the creation time, so the sweep needs no file timestamp API.
+        let name = directoryPrefix + "\(Int(now.timeIntervalSince1970))-" + UUID().uuidString
+        let result = Self(directory: root.appendingPathComponent(name, isDirectory: true))
         // No protection attributes or writing options: inherit iOS's default protection.
         try fileManager.createDirectory(at: result.directory, withIntermediateDirectories: true, attributes: nil)
         do {
@@ -35,21 +37,29 @@ struct ExportShareFiles: Equatable, Sendable {
 
     /// Best effort: a leftover that can't be read or removed never blocks a fresh export.
     private static func sweepStaleDirectories(under root: URL, now: Date, fileManager: FileManager) {
-        let keys: [URLResourceKey] = [.isDirectoryKey, .isSymbolicLinkKey, .creationDateKey]
+        let keys: [URLResourceKey] = [.isDirectoryKey, .isSymbolicLinkKey]
         guard let entries = try? fileManager.contentsOfDirectory(at: root, includingPropertiesForKeys: keys) else { return }
         // Only our recognizable scratch directories are eligible, never unrelated temporary content.
         for url in entries {
-            let name = url.lastPathComponent
-            guard name.hasPrefix(directoryPrefix), UUID(uuidString: String(name.dropFirst(directoryPrefix.count))) != nil,
+            guard let created = creationTime(ofDirectoryNamed: url.lastPathComponent),
+                  now.timeIntervalSince(created) > staleAge,
                   let values = try? url.resourceValues(forKeys: Set(keys)),
-                  values.isDirectory == true, values.isSymbolicLink != true,
-                  let created = values.creationDate, now.timeIntervalSince(created) > staleAge else { continue }
+                  values.isDirectory == true, values.isSymbolicLink != true else { continue }
             do {
                 try fileManager.removeItem(at: url)
             } catch {
-                logger.error("Couldn't remove a stale export directory")
+                let error = error as NSError
+                logger.error("Couldn't remove a stale export directory: \(error.domain, privacy: .public) \(error.code, privacy: .public)")
             }
         }
+    }
+
+    /// Parses `pokerstats-export-<seconds since 1970>-<UUID>`; nil for any other name.
+    private static func creationTime(ofDirectoryNamed name: String) -> Date? {
+        guard name.hasPrefix(directoryPrefix) else { return nil }
+        let parts = name.dropFirst(directoryPrefix.count).split(separator: "-", maxSplits: 1)
+        guard parts.count == 2, let seconds = Int(parts[0]), UUID(uuidString: String(parts[1])) != nil else { return nil }
+        return Date(timeIntervalSince1970: TimeInterval(seconds))
     }
 
     func remove(fileManager: FileManager = .default) throws {
