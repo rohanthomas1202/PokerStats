@@ -5,13 +5,11 @@ import UIKit
 struct AppleAuthorization: Sendable {
     let identityToken: Data?
     let authorizationCode: Data?
-    let fullName: PersonNameComponents?
     let appleUserId: String
 
-    init(identityToken: Data?, authorizationCode: Data?, fullName: PersonNameComponents?, appleUserId: String) {
+    init(identityToken: Data?, authorizationCode: Data?, appleUserId: String) {
         self.identityToken = identityToken
         self.authorizationCode = authorizationCode
-        self.fullName = fullName
         self.appleUserId = appleUserId
     }
 
@@ -19,7 +17,6 @@ struct AppleAuthorization: Sendable {
         self.init(
             identityToken: credential.identityToken,
             authorizationCode: credential.authorizationCode,
-            fullName: credential.fullName,
             appleUserId: credential.user
         )
     }

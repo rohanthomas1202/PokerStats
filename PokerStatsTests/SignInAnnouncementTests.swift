@@ -13,7 +13,6 @@ private final class Spoken {
 private let appleAuthorization = AppleAuthorization(
     identityToken: Data("id-token".utf8),
     authorizationCode: Data("code".utf8),
-    fullName: nil,
     appleUserId: "001234.abc"
 )
 
@@ -44,7 +43,6 @@ struct SignInAnnouncementTests {
         vm.completeAppleSignIn(
             identityToken: Data("id-token".utf8),
             authorizationCode: Data("code".utf8),
-            fullName: nil,
             appleUserId: "001234.abc"
         )
     }

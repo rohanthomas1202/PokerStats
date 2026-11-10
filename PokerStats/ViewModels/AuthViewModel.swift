@@ -53,7 +53,6 @@ final class AuthViewModel {
     struct AppleSignInCredential: Sendable {
         let identityToken: Data
         let authorizationCode: Data
-        let fullName: PersonNameComponents?
         let appleUserId: String
         /// Raw nonce whose SHA-256 went to Apple in the request.
         let rawNonce: String
@@ -81,7 +80,7 @@ final class AuthViewModel {
     }
 
     private static func configure(_ request: ASAuthorizationAppleIDRequest, hashedNonce: String) {
-        request.requestedScopes = [.email, .fullName]
+        request.requestedScopes = [.email]
         request.nonce = hashedNonce
     }
 
@@ -116,7 +115,6 @@ final class AuthViewModel {
         return completeAppleSignIn(
             identityToken: identityToken,
             authorizationCode: authorizationCode,
-            fullName: authorization.fullName,
             appleUserId: authorization.appleUserId
         )
     }
@@ -156,7 +154,6 @@ final class AuthViewModel {
     func completeAppleSignIn(
         identityToken: Data,
         authorizationCode: Data,
-        fullName: PersonNameComponents?,
         appleUserId: String
     ) -> Task<Void, Never>? {
         guard let nonce = pendingNonce else {
@@ -168,7 +165,6 @@ final class AuthViewModel {
         let credential = AppleSignInCredential(
             identityToken: identityToken,
             authorizationCode: authorizationCode,
-            fullName: fullName,
             appleUserId: appleUserId,
             rawNonce: nonce.raw
         )
