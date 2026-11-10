@@ -1,11 +1,9 @@
 # Snapfile — Fastlane screenshot automation for PokerStats
 # Run with: fastlane snapshot
 
-# Devices to capture (matches App Store Connect requirements)
+# Native 6.9-inch size (1320x2868). Other sizes are not captured.
 devices([
-  "iPhone 17 Pro Max",   # 6.9" (covers 6.7" and 6.5" sizes)
-  "iPhone 17 Pro",       # 6.3"
-  "iPhone 16e"           # 6.1" (covers smaller sizes)
+  "iPhone 17 Pro Max"
 ])
 
 # Languages (add more as needed)
@@ -13,13 +11,15 @@ languages([
   "en-US"
 ])
 
-# iOS version (must match installed simulators exactly)
-ios_version("26.3.1")
+# ios_version is omitted. GitHub's macos-26 image ships iOS simulator
+# runtimes 26.2, 26.4.1, and 26.5, not 26.3.1. The screenshots lane picks
+# the newest iOS 26 iPhone 17 Pro Max, and the workflow prints
+# `xcrun simctl list runtimes` and devices so the choice is visible.
 
 # Xcode scheme and test plan
 scheme("PokerStats")
 
-# Output directory
+# Output directory (deliver looks for language folders under this path)
 output_directory("./fastlane/screenshots")
 
 # Clean previous screenshots

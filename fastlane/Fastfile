@@ -3,9 +3,7 @@ require_relative "asc_key"
 default_platform(:ios)
 
 SCREENSHOT_DEVICES = [
-  "iPhone 17 Pro Max",
-  "iPhone 17 Pro",
-  "iPhone 16e"
+  "iPhone 17 Pro Max"
 ]
 
 BUNDLE_ID = "com.rohanthomas.PokerStats"
@@ -90,33 +88,50 @@ def what_to_test(options = {})
   "PokerStats build"
 end
 
+# Newest available iOS 26 simulator with this name. macos-26 ships several
+# iOS 26 runtimes, each with an iPhone 17 Pro Max, so boot-by-name is
+# ambiguous. Matches the "newest iOS 26" pick in ci.yml.
+def newest_udid_for(device_name)
+  require "json"
+  data = JSON.parse(`xcrun simctl list devices available -j`)
+  runtimes = data.fetch("devices").select { |key, _| key.match?(/SimRuntime\.iOS-26/) }
+  ordered = runtimes.sort_by { |key, _| key[/iOS-(.*)/, 1].to_s.split("-").map(&:to_i) }
+  runtime, list = ordered.reverse.find { |_, devices| devices.any? { |d| d["name"] == device_name } }
+  device = list&.find { |d| d["name"] == device_name }
+  UI.user_error!("No available #{device_name} simulator on an iOS 26 runtime") if device.nil?
+  UI.message("Using #{device_name} (#{device["udid"]}) on #{runtime}")
+  device["udid"]
+end
+
 platform :ios do
   desc "Generate App Store screenshots"
   lane :screenshots do
     sh("cd .. && xcodegen generate")
 
-    output_dir = File.expand_path("../fastlane/screenshots")
+    output_dir = File.expand_path("../fastlane/screenshots/en-US")
     FileUtils.mkdir_p(output_dir)
 
     # Build app and tests once (using first device)
     UI.message("Building app and tests...")
+    build_udid = newest_udid_for(SCREENSHOT_DEVICES.first)
     sh("cd .. && xcodebuild -scheme PokerStats -project PokerStats.xcodeproj " \
-       "-destination 'platform=iOS Simulator,name=iPhone 17 Pro Max' " \
+       "-destination 'id=#{build_udid}' " \
        "build-for-testing 2>&1 | tail -5")
 
     SCREENSHOT_DEVICES.each do |device|
       UI.message("=== Capturing on #{device} ===")
+      udid = newest_udid_for(device)
 
       # Boot simulator
-      sh("xcrun simctl boot '#{device}' 2>/dev/null || true")
+      sh("xcrun simctl boot '#{udid}' 2>/dev/null || true")
       sleep(2)
 
       # Clean app data so seeding starts fresh
-      sh("xcrun simctl terminate '#{device}' #{BUNDLE_ID} 2>/dev/null || true")
-      sh("xcrun simctl uninstall '#{device}' #{BUNDLE_ID} 2>/dev/null || true")
+      sh("xcrun simctl terminate '#{udid}' #{BUNDLE_ID} 2>/dev/null || true")
+      sh("xcrun simctl uninstall '#{udid}' #{BUNDLE_ID} 2>/dev/null || true")
 
       # Override status bar for clean screenshots
-      sh("xcrun simctl status_bar '#{device}' override " \
+      sh("xcrun simctl status_bar '#{udid}' override " \
          "--time 09:41 --dataNetwork wifi --wifiMode active --wifiBars 3 " \
          "--cellularMode active --operatorName '' --cellularBars 4 " \
          "--batteryState charged --batteryLevel 100 2>/dev/null || true")
@@ -124,7 +139,7 @@ platform :ios do
       # Run UI tests — the test launches the app with --seed-screenshot-data,
       # which seeds data on first launch, then captures all screenshots
       sh("cd .. && xcodebuild -scheme PokerStats -project PokerStats.xcodeproj " \
-         "-destination 'platform=iOS Simulator,name=#{device}' " \
+         "-destination 'id=#{udid}' " \
          "-only-testing:PokerStatsUITests/ScreenshotTests/testCaptureAppStoreScreenshots " \
          "test 2>&1 | tail -5")
 
@@ -136,27 +151,10 @@ platform :ios do
         end
       end
 
-      sh("xcrun simctl shutdown '#{device}' 2>/dev/null || true")
+      sh("xcrun simctl shutdown '#{udid}' 2>/dev/null || true")
     end
 
-    # Resize screenshots to App Store Connect required dimensions
-    UI.message("Resizing screenshots to App Store dimensions...")
-    appstore_dir = File.join(output_dir, "appstore")
-    FileUtils.mkdir_p(appstore_dir)
-
-    # App Store 6.5" display: 1284x2778 (portrait) or 1242x2688
-    TARGET_WIDTH = 1284
-    TARGET_HEIGHT = 2778
-
-    Dir.glob("#{output_dir}/*.png").each do |file|
-      basename = File.basename(file)
-      dest = File.join(appstore_dir, basename)
-      FileUtils.cp(file, dest)
-      sh("sips -z #{TARGET_HEIGHT} #{TARGET_WIDTH} '#{dest}' --out '#{dest}' 2>/dev/null")
-    end
-
-    UI.success("Original screenshots: #{output_dir}")
-    UI.success("App Store sized (#{TARGET_WIDTH}x#{TARGET_HEIGHT}): #{appstore_dir}")
+    UI.success("Native screenshots: #{output_dir}")
   end
 
   desc "Upload screenshots to App Store Connect"

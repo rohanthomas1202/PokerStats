@@ -1,0 +1,74 @@
+name: Screenshots
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  screenshots:
+    name: Capture App Store screenshots
+    runs-on: macos-26
+    timeout-minutes: 45
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+      XCODEGEN_VERSION: 2.46.0
+      XCODEGEN_SHA256: 4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806
+    steps:
+      - uses: actions/checkout@v7
+
+      # Pinned release with checksum check, instead of whatever brew has today.
+      - name: Install XcodeGen
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/xcodegen.zip" \
+            "https://github.com/yonaskolb/XcodeGen/releases/download/${XCODEGEN_VERSION}/xcodegen.zip"
+          echo "${XCODEGEN_SHA256}  $RUNNER_TEMP/xcodegen.zip" | shasum -a 256 -c -
+          unzip -q "$RUNNER_TEMP/xcodegen.zip" -d "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/xcodegen/bin" >> "$GITHUB_PATH"
+
+      - name: Install fastlane
+        run: |
+          command -v fastlane >/dev/null || brew install fastlane
+          fastlane --version
+
+      - name: List simulator runtimes and devices
+        run: |
+          xcrun simctl list runtimes
+          xcrun simctl list devices available
+
+      - name: Capture screenshots
+        run: fastlane screenshots
+
+      - name: Verify screenshot dimensions
+        if: always()
+        run: |
+          set -euo pipefail
+          dir=fastlane/screenshots/en-US
+          shopt -s nullglob
+          pngs=("$dir"/*.png)
+          if (( ${#pngs[@]} == 0 )); then
+            echo "No PNGs in $dir" >&2
+            ls -la "$dir" || true
+            exit 1
+          fi
+          failed=0
+          for f in "${pngs[@]}"; do
+            w=$(sips -g pixelWidth "$f" | awk '/pixelWidth/{print $2}')
+            h=$(sips -g pixelHeight "$f" | awk '/pixelHeight/{print $2}')
+            echo "$f ${w}x${h}"
+            if [[ "$w" != "1320" || "$h" != "2868" ]]; then
+              echo "error: $f is ${w}x${h}, expected 1320x2868" >&2
+              failed=1
+            fi
+          done
+          exit "$failed"
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: screenshots-en-US
+          path: fastlane/screenshots/en-US/
+          if-no-files-found: ignore
+          retention-days: 7
