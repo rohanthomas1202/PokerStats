@@ -14,7 +14,7 @@ struct ExportShareTests {
         #expect(ExportShareRow.footer == "Creates three files with all your sessions and hands. Anyone you share them with can see your results. The JSON file keeps every detail. The CSV files open in spreadsheet apps.")
     }
 
-    @Test func writer_sweepsOnlyExportDirectoriesBeforeWriting() throws {
+    @Test func writer_sweepsOnlyStaleExportDirectoriesBeforeWriting() throws {
         let manager = FileManager.default
         let root = manager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? manager.removeItem(at: root) }
@@ -26,13 +26,36 @@ struct ExportShareTests {
             try manager.createDirectory(at: directory, withIntermediateDirectories: true)
             try Data("keep".utf8).write(to: directory.appendingPathComponent("keep.txt"))
         }
-        let next = try ExportShareFiles.write(input, under: root)
+        let next = try ExportShareFiles.write(input, under: root, now: .now + ExportShareFiles.staleAge + 60)
         #expect(!manager.fileExists(atPath: previous.directory.path))
         for directory in [unrelated, similarName] {
             #expect(try Data(contentsOf: directory.appendingPathComponent("keep.txt")) == Data("keep".utf8))
         }
         #expect(next.urls.map(\.lastPathComponent) == ["sessions.csv", "hands.csv", "pokerstats-export.json"])
         #expect(next.urls.allSatisfy { manager.fileExists(atPath: $0.path) })
+    }
+
+    @Test func writer_keepsAnotherLiveAttemptsDirectory() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let input = ExportFiles(sessionsCSV: Data(), handsCSV: Data(), json: Data())
+        let live = try ExportShareFiles.write(input, under: root)
+        let next = try ExportShareFiles.write(input, under: root)
+        #expect(live.urls.allSatisfy { FileManager.default.fileExists(atPath: $0.path) })
+        #expect(next.urls.allSatisfy { FileManager.default.fileExists(atPath: $0.path) })
+    }
+
+    @Test func writer_sweepRemovalFailure_stillWritesTheFreshExport() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let input = ExportFiles(sessionsCSV: Data("sessions".utf8), handsCSV: Data(), json: Data())
+        let stale = try ExportShareFiles.write(input, under: root)
+        // The stale attempt's own cleanup won the race, or the item is otherwise unremovable.
+        let next = try ExportShareFiles.write(input, under: root, fileManager: RemoveFailingFileManager(),
+                                              now: .now + ExportShareFiles.staleAge + 60)
+        #expect(FileManager.default.fileExists(atPath: stale.directory.path))
+        #expect(try Data(contentsOf: next.urls[0]) == input.sessionsCSV)
+        #expect(next.urls.allSatisfy { FileManager.default.fileExists(atPath: $0.path) })
     }
 
     @Test func writer_usesOnlyNeutralNamesAndDefaultProtection_thenRemovesFiles() throws {
@@ -229,5 +252,11 @@ struct ExportShareTests {
         let removedFiles = try #require(await removalIterator.next())
         #expect(removedFiles == yieldedFiles)
         #expect(FileManager.default.fileExists(atPath: yieldedFiles.directory.path) == removeFails)
+    }
+}
+
+private final class RemoveFailingFileManager: FileManager {
+    override func removeItem(at url: URL) throws {
+        throw CocoaError(.fileNoSuchFile)
     }
 }

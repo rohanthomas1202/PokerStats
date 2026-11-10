@@ -52,7 +52,7 @@ final class ExportShareViewModel {
                 do {
                     try await Task.detached { try remove(files) }.value
                 } catch {
-                    // The next export sweeps this directory; a stale result must not report a generation failure.
+                    // A later export sweeps this directory once it is stale; a stale result must not report a generation failure.
                     Self.logger.error("Could not remove stale export files")
                 }
                 if currentAttempt == attempt { state = .idle }
