@@ -275,7 +275,6 @@ struct RetryAndSignOutTests {
                 return AppleAuthorization(
                     identityToken: Data("id-token".utf8),
                     authorizationCode: Data("code".utf8),
-                    fullName: nil,
                     appleUserId: "001234.abc"
                 )
             }
@@ -286,7 +285,6 @@ struct RetryAndSignOutTests {
         await vm.completeAppleSignIn(
             identityToken: Data("id-token".utf8),
             authorizationCode: Data("code".utf8),
-            fullName: nil,
             appleUserId: "001234.abc"
         )?.value
         #expect(vm.errorMessage == UserFacingError.offlineMessage)
@@ -335,7 +333,6 @@ struct RetryAndSignOutTests {
         await vm.completeAppleSignIn(
             identityToken: Data("id-token".utf8),
             authorizationCode: Data("code".utf8),
-            fullName: nil,
             appleUserId: "001234.abc"
         )?.value
         #expect(vm.errorMessage == UserFacingError.offlineMessage)
@@ -356,7 +353,6 @@ struct RetryAndSignOutTests {
         await vm.completeAppleSignIn(
             identityToken: Data("id-token".utf8),
             authorizationCode: Data("code".utf8),
-            fullName: nil,
             appleUserId: "001234.abc"
         )?.value
         #expect(vm.errorMessage == UserFacingError.serverErrorMessage)

@@ -95,7 +95,6 @@ struct SignInNonceTests {
         vm.completeAppleSignIn(
             identityToken: Data("id-token".utf8),
             authorizationCode: Data("code".utf8),
-            fullName: nil,
             appleUserId: "001234.abc"
         )
     }
@@ -105,7 +104,7 @@ struct SignInNonceTests {
         let vm = viewModel(recorder)
         let request = ASAuthorizationAppleIDProvider().createRequest()
         vm.configureAppleRequest(request)
-        #expect(request.requestedScopes == [.email, .fullName])
+        #expect(request.requestedScopes == [.email])
         let hashed = try #require(request.nonce)
         #expect(hashed.count == 64)
 

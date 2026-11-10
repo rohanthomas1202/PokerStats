@@ -191,7 +191,6 @@ struct UserFacingErrorTests {
         await vm.completeAppleSignIn(
             identityToken: Data("id.token".utf8),
             authorizationCode: Data("code".utf8),
-            fullName: nil,
             appleUserId: TestUser.appleUserId
         )?.value
         #expect(vm.errorMessage == UserFacingError.offlineMessage)
